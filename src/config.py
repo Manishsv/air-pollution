@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -51,6 +51,15 @@ class OSMConfig:
 
 
 @dataclass(frozen=True)
+class QualityGates:
+    max_synthetic_aq_ratio_for_recommendations: float = 0.0
+    max_interpolated_aq_ratio_for_high_confidence: float = 0.5
+    max_avg_station_distance_km: float = 10.0
+    min_real_stations_required: int = 3
+    block_recommendations_if_synthetic: bool = True
+
+
+@dataclass(frozen=True)
 class BBox:
     north: float
     south: float
@@ -70,6 +79,8 @@ class AppConfig:
     lookback_days: int
     local_crs: str
     pm25_hotspot_thresholds: Dict[str, float]
+    pm25_categories_india: Dict[str, Tuple[float, float]]
+    quality_gates: QualityGates
     aq: AQConfig
     model: ModelConfig
     osm: OSMConfig
@@ -111,6 +122,8 @@ def load_config(config_path: str | Path) -> AppConfig:
     model_cfg = cfg.get("model", {}) or {}
     rf_cfg = (model_cfg.get("random_forest", {}) or {}) if isinstance(model_cfg, dict) else {}
     osm_cfg = cfg.get("osm", {}) or {}
+    gates_cfg = cfg.get("quality_gates", {}) or {}
+    cat_cfg = cfg.get("pm25_categories_india") or {}
     road_classes = osm_cfg.get("road_classes")
     if not road_classes:
         road_classes = [
@@ -124,6 +137,21 @@ def load_config(config_path: str | Path) -> AppConfig:
             "unclassified",
         ]
 
+    if not cat_cfg:
+        cat_cfg = {
+            "good": (0, 30),
+            "satisfactory": (31, 60),
+            "moderate": (61, 90),
+            "poor": (91, 120),
+            "very_poor": (121, 250),
+            "severe": (251, 999),
+        }
+    # normalize to tuples
+    pm25_categories_india = {}
+    for k, v in dict(cat_cfg).items():
+        if isinstance(v, (list, tuple)) and len(v) == 2:
+            pm25_categories_india[str(k)] = (float(v[0]), float(v[1]))
+
     return AppConfig(
         city_name=str(cfg.get("city_name", "Bengaluru, India")),
         fallback_city_name=str(cfg.get("fallback_city_name", "Delhi, India")),
@@ -135,6 +163,14 @@ def load_config(config_path: str | Path) -> AppConfig:
         lookback_days=int(cfg.get("lookback_days", 14)),
         local_crs=str(cfg.get("local_crs", "EPSG:32643")),
         pm25_hotspot_thresholds=dict(cfg.get("pm25_hotspot_thresholds", {})),
+        pm25_categories_india=pm25_categories_india,
+        quality_gates=QualityGates(
+            max_synthetic_aq_ratio_for_recommendations=float(gates_cfg.get("max_synthetic_aq_ratio_for_recommendations", 0.0)),
+            max_interpolated_aq_ratio_for_high_confidence=float(gates_cfg.get("max_interpolated_aq_ratio_for_high_confidence", 0.5)),
+            max_avg_station_distance_km=float(gates_cfg.get("max_avg_station_distance_km", 10.0)),
+            min_real_stations_required=int(gates_cfg.get("min_real_stations_required", 3)),
+            block_recommendations_if_synthetic=bool(gates_cfg.get("block_recommendations_if_synthetic", True)),
+        ),
         aq=AQConfig(
             idw_power=float(aq_cfg.get("idw_power", 2.0)),
             min_stations=int(aq_cfg.get("min_stations", 3)),

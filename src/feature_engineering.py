@@ -7,6 +7,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
+from .provenance import compute_data_quality_score, ensure_provenance_columns
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,7 @@ def build_static_features(
     # Keep geometry in WGS84 for downstream folium (but return both via columns)
     cells_wgs84 = cells.to_crs("EPSG:4326")
     cells_wgs84["geometry_projected_wkt"] = cells.geometry.to_wkt()
+    cells_wgs84["osm_source_type"] = "osm"
     return cells_wgs84
 
 
@@ -186,12 +188,15 @@ def build_panel_dataset(
     """
     Output columns include dynamic lags and target pm25_t_plus_{h}.
     """
+    aq_panel = ensure_provenance_columns(aq_panel)
     df = aq_panel.merge(weather_hourly, on="timestamp", how="left")
     if fire_panel is not None and not fire_panel.empty:
         df = df.merge(fire_panel, on=["h3_id", "timestamp"], how="left")
     else:
         df["fire_count_nearby"] = 0
         df["distance_to_nearest_fire_km"] = np.nan
+        df["fire_source_type"] = "unavailable"
+        df["fire_warning_flags"] = "FIRE_DATA_UNAVAILABLE"
 
     static_cols = [
         "h3_id",
@@ -207,9 +212,30 @@ def build_panel_dataset(
         "area_sqkm",
         "centroid_lat",
         "centroid_lon",
+        "osm_source_type",
     ]
     static_df = static_features_wgs84[static_cols].copy()
     df = df.merge(static_df, on="h3_id", how="left")
+    if "osm_source_type" not in df.columns:
+        df["osm_source_type"] = "unavailable"
+    df["osm_source_type"] = df["osm_source_type"].fillna("unavailable").astype(str)
+
+    # Normalize source type columns
+    df["aq_source_type"] = df["aq_source_type"].fillna("unavailable").astype(str)
+    if "weather_source_type" not in df.columns:
+        df["weather_source_type"] = "unavailable"
+    df["weather_source_type"] = df["weather_source_type"].fillna("unavailable").astype(str)
+    if "fire_source_type" not in df.columns:
+        df["fire_source_type"] = "unavailable"
+    df["fire_source_type"] = df["fire_source_type"].fillna("unavailable").astype(str)
+    df["warning_flags"] = df.get("warning_flags", "").fillna("").astype(str)
+    if "fire_warning_flags" in df.columns:
+        df["warning_flags"] = df.apply(
+            lambda r: (str(r["warning_flags"]) + ("; " if str(r["warning_flags"]).strip() else "") + str(r["fire_warning_flags"]).strip()).strip("; ").strip()
+            if str(r.get("fire_warning_flags") or "").strip()
+            else str(r["warning_flags"]),
+            axis=1,
+        )
 
     df = df.sort_values(["h3_id", "timestamp"]).reset_index(drop=True)
 
@@ -226,6 +252,18 @@ def build_panel_dataset(
     # Target
     h = int(forecast_horizon_hours)
     df[f"pm25_t_plus_{h}h"] = df.groupby("h3_id")["current_pm25"].shift(-h)
+
+    # Conservative quality score (row-wise)
+    df["data_quality_score"] = df.apply(
+        lambda r: compute_data_quality_score(
+            aq_source_type=str(r.get("aq_source_type")),
+            weather_source_type=str(r.get("weather_source_type")),
+            fire_source_type=str(r.get("fire_source_type")),
+            nearest_station_distance_km=float(r.get("nearest_station_distance_km")) if pd.notna(r.get("nearest_station_distance_km")) else None,
+            station_count_used=int(r.get("station_count_used")) if pd.notna(r.get("station_count_used")) else None,
+        ),
+        axis=1,
+    )
 
     # Minimal cleanup
     df = df.rename(columns={"current_pm25": "current_pm25"})

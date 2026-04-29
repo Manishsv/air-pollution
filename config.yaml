@@ -16,6 +16,22 @@ pm25_hotspot_thresholds:
   moderate: 60
   high: 90
   severe: 120
+
+# Default PM2.5 category labels aligned to Indian AQI-style breakpoints (µg/m³)
+pm25_categories_india:
+  good: [0, 30]
+  satisfactory: [31, 60]
+  moderate: [61, 90]
+  poor: [91, 120]
+  very_poor: [121, 250]
+  severe: [251, 999]
+
+quality_gates:
+  max_synthetic_aq_ratio_for_recommendations: 0.0
+  max_interpolated_aq_ratio_for_high_confidence: 0.5
+  max_avg_station_distance_km: 10
+  min_real_stations_required: 3
+  block_recommendations_if_synthetic: true
 aq:
   idw_power: 2.0
   min_stations: 3

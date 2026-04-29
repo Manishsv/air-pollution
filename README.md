@@ -1,15 +1,24 @@
-## Air Quality MVP (Bengaluru/Delhi) — hotspot detection + 12–24h PM2.5 forecasting
+## Probabilistic urban air-quality observability MVP (Bengaluru/Delhi)
 
-Local, reliable MVP that builds a **grid-based urban air-quality intelligence prototype**:
+This project is **not an operational air-quality management system**.
+
+It is a local, reliability-first prototype for:
+
+- **data fusion / observability** under sparse station coverage
+- **probabilistic PM2.5 forecasting** (baseline models + uncertainty estimates)
+- **provenance-first decision-support workflow design** (with safety gates)
+
+The output should be interpreted as **indicative** unless station coverage and data provenance are strong.
 
 - Boundary (bbox / ward polygon / full city)
 - H3 grid
 - OSM features → static grid covariates
-- AQ data (OpenAQ best-effort, **synthetic fallback** so pipeline always runs)
+- AQ data (OpenAQ v3 best-effort, **synthetic fallback** so pipeline always runs)
 - Weather data (Open-Meteo best-effort, **synthetic fallback**)
 - Optional fire signals (NASA FIRMS if `FIRMS_API_KEY` is set)
 - Baseline forecasting model (persistence + RandomForest + optional XGBoost)
-- Hotspot classification + intervention recommendations
+- **Data provenance + audit + safety gates** before any recommendations
+- Proxy-based **likely contributing factors** (not validated attribution)
 - GeoJSON exports + Folium HTML maps
 
 ### Project layout
@@ -65,6 +74,15 @@ Default config runs **fast `bbox` mode** (recommended for development):
 python main.py
 ```
 
+Useful CLI options:
+
+```bash
+python main.py --step audit
+python main.py --force-refresh aq
+python main.py --no-recommendations
+python main.py --sample
+```
+
 Outputs land in:
 
 - `data/processed/h3_grid.geojson`
@@ -72,12 +90,25 @@ Outputs land in:
 - `data/processed/model_dataset.csv`
 - `data/outputs/pm25_model.joblib`
 - `data/outputs/metrics.json`
+- `data/outputs/data_audit.json`
+- `data/outputs/scale_analysis.json`
 - `data/outputs/hotspot_recommendations.geojson`
 - `data/outputs/current_pm25_map.html`
 - `data/outputs/forecast_pm25_map.html`
 - `data/outputs/hotspot_recommendations_map.html`
 
 Open the HTML files in a browser.
+
+### When outputs should NOT be used
+
+Do **not** use outputs for real decisions when:
+
+- maps show **“WARNING: Synthetic AQ data used”**
+- real station coverage is low (audit flags low confidence)
+- the ML model **does not outperform** the persistence baseline (metrics warning)
+- most grid PM2.5 values are interpolated from sparse stations
+
+In those cases, the MVP will still generate maps, but recommendations are blocked or downgraded to **field verification** language.
 
 ### Spatial modes
 
@@ -122,28 +153,43 @@ cp .env.example .env
 
 - `OPENAQ_API_KEY=...`
 
+### Data provenance (first-class)
+
+Major datasets (AQ panel, model dataset, GeoJSON outputs) carry provenance fields such as:
+
+- `aq_source_type`: real | interpolated | synthetic | unavailable
+- `weather_source_type`: real | synthetic | unavailable
+- `fire_source_type`: real | unavailable
+- `interpolation_method`, `nearest_station_distance_km`, `station_count_used`
+- `data_quality_score`, `warning_flags`
+
+If synthetic data is used anywhere, outputs and maps are required to show visible warnings.
+
+### Data audit (before modelling)
+
+Before training the model, the pipeline writes:
+
+- `data/outputs/data_audit.json`
+
+This includes station counts, interpolated/synthetic ratios, nearest-station distance stats, and whether recommendations are allowed.
+
 ### How hotspot recommendations are generated
 
 This MVP generates recommendations in a deliberately **simple and explainable** way:
 
-1. **Forecast PM2.5 per H3 cell**
+1. **Forecast PM2.5 per H3 cell (with uncertainty)**
    - A baseline regressor predicts `forecast_pm25` for each H3 cell for \(t + forecast_horizon_hours\).
+   - For RandomForest, the MVP outputs quantiles (P10/P50/P90) and std as a simple uncertainty estimate.
 
-2. **Hotspot level = thresholding forecast PM2.5**
-   - `low/moderate/high/severe` is assigned by comparing `forecast_pm25` against `pm25_hotspot_thresholds` in `config.yaml`.
+2. **Category labels use Indian AQI-style PM2.5 breakpoints**
+   - The MVP outputs `pm25_category_india` based on `pm25_categories_india` in `config.yaml`.
 
-3. **Dominant driver (rule-based)**
-   - The MVP uses simple feature-based rules (not SHAP yet) to label a dominant driver:
-     - `fire_influence` if `fire_count_nearby > 0`
-     - `weather_dispersion` if `wind_speed_10m` is low
-     - `industrial_proxy` if industrial landuse area is high
-     - `traffic_proxy` if road density is high
-     - `built_environment_proxy` if built-up ratio is high
-     - `green_deficit_proxy` if green area is low while PM is high
-     - `unknown` otherwise
+3. **Likely contributing factors (proxy-based, rule-driven)**
+   - The MVP reports `likely_contributing_factors` using conservative proxy rules.
+   - It does **not** claim validated causal attribution.
 
-4. **Recommended action = mapping from driver → intervention text**
-   - Each driver maps to a fixed action string (see `src/recommendations.py`).
+4. **Safety gates**
+   - If provenance/audit gates fail (e.g., synthetic AQ), operational recommendations are blocked and replaced with an explicit reason.
 
 ### Known limitations (intentional for MVP reliability)
 
@@ -151,6 +197,7 @@ This MVP generates recommendations in a deliberately **simple and explainable** 
 - AQ interpolation is simple **inverse distance weighting**.
 - Model is a baseline tree regressor; no spatial-temporal deep learning.
 - OSM feature extraction uses straightforward spatial joins; for full-city scale you’d want spatial indexing + chunking.
+- Station coverage is often sparse for Indian cities in OpenAQ; replace with CPCB/CAAQMS for operational use.
 
 ### Replacing fallback AQ with CPCB/CAAQMS later
 

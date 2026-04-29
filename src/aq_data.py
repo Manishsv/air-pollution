@@ -397,9 +397,16 @@ def build_aq_panel(
     hours = _date_range_hours(end, lookback_days)
     h3_cells = h3_grid[["h3_id", "centroid_lat", "centroid_lon"]].copy()
 
-    # Station coords
-    st_meta = stations_hourly[["station_id", "latitude", "longitude"]].drop_duplicates()
+    # Station coords + source
+    st_meta_cols = ["station_id", "latitude", "longitude"]
+    if "data_source" in stations_hourly.columns:
+        st_meta_cols.append("data_source")
+    st_meta = stations_hourly[st_meta_cols].drop_duplicates()
     st_meta = st_meta.reset_index(drop=True)
+    if "data_source" in st_meta.columns:
+        st_meta["station_source_type"] = np.where(st_meta["data_source"].astype(str).str.contains("synthetic"), "synthetic", "real")
+    else:
+        st_meta["station_source_type"] = "unavailable"
 
     # Precompute distances from each cell centroid to each station
     dist = np.zeros((len(h3_cells), len(st_meta)), dtype=float)
@@ -418,12 +425,20 @@ def build_aq_panel(
 
         # Observed mean per cell for cells containing stations
         obs_by_cell = st_t.groupby("h3_id")["pm25"].mean()
+        obs_source = None
+        if "data_source" in st_t.columns:
+            # mark observed cells as synthetic if their station readings are synthetic
+            ssrc = st_t.groupby("h3_id")["data_source"].apply(lambda x: "synthetic" if x.astype(str).str.contains("synthetic").any() else "real")
+            obs_source = ssrc
 
         # IDW for all cells using stations available at time t
         st_t_meta = st_t.merge(st_meta, on=["station_id", "latitude", "longitude"], how="inner")
-        if len(st_t_meta["station_id"].unique()) < min_stations:
+        station_ids_available = st_t_meta["station_id"].unique().tolist()
+        if len(station_ids_available) < min_stations:
             # fallback: forward-fill by using obs or NaN
             idw_vals = np.full(len(h3_cells), np.nan, dtype=float)
+            nearest_km = np.full(len(h3_cells), np.nan, dtype=float)
+            station_count_used = len(station_ids_available)
         else:
             # Build vector of station values aligned to st_meta order
             vals = np.full(len(st_meta), np.nan, dtype=float)
@@ -435,6 +450,13 @@ def build_aq_panel(
             w = weights[:, valid]
             v = vals[valid]
             idw_vals = (w @ v) / np.sum(w, axis=1)
+            station_count_used = int(np.sum(valid))
+            # nearest distance to any station with a value at this time
+            nearest_km = np.min(dist[:, valid], axis=1) if station_count_used > 0 else np.full(len(h3_cells), np.nan, dtype=float)
+
+        all_available_sources = None
+        if "data_source" in st_t.columns:
+            all_available_sources = "synthetic" if st_t["data_source"].astype(str).str.contains("synthetic").all() else "real"
 
         out = pd.DataFrame(
             {
@@ -443,6 +465,11 @@ def build_aq_panel(
                 "current_pm25": idw_vals,
                 "pm25_observed_flag": 0,
                 "pm25_interpolated_flag": 1,
+                "aq_source_type": "interpolated",
+                "interpolation_method": f"idw(power={float(idw_power):.2f})",
+                "nearest_station_distance_km": nearest_km,
+                "station_count_used": station_count_used,
+                "warning_flags": "",
             }
         )
         if not obs_by_cell.empty:
@@ -453,11 +480,119 @@ def build_aq_panel(
                 out.loc[idx, "current_pm25"] = obs_by_cell.loc[idx].values
                 out.loc[idx, "pm25_observed_flag"] = 1
                 out.loc[idx, "pm25_interpolated_flag"] = 0
+                out.loc[idx, "aq_source_type"] = "real"
+                out.loc[idx, "interpolation_method"] = ""
+                if obs_source is not None:
+                    out.loc[idx, "aq_source_type"] = obs_source.loc[idx].values
             out = out.reset_index()
+
+        # If all available stations are synthetic, label all cells as synthetic (even if "interpolated")
+        if all_available_sources == "synthetic":
+            out["aq_source_type"] = "synthetic"
+            out["warning_flags"] = out["warning_flags"].apply(lambda s: (s + "; " if s else "") + "SYNTHETIC_AQ_USED")
+
+        # Warnings for sparse / far stations
+        if station_count_used < 3:
+            out["warning_flags"] = out["warning_flags"].apply(lambda s: (s + "; " if s else "") + "FEW_STATIONS_USED")
+        out.loc[out["nearest_station_distance_km"] > 10, "warning_flags"] = out.loc[out["nearest_station_distance_km"] > 10, "warning_flags"].apply(
+            lambda s: (s + "; " if s else "") + "FAR_FROM_STATIONS"
+        )
 
         panels.append(out)
 
     panel = pd.concat(panels, ignore_index=True)
     panel["current_pm25"] = panel["current_pm25"].astype(float).clip(lower=0)
     return panel
+
+
+def spatial_station_holdout_validation(
+    *,
+    stations_hourly: pd.DataFrame,
+    lookback_days: int,
+    idw_power: float = 2.0,
+    min_real_stations: int = 4,
+    holdout_station_id: Optional[str] = None,
+) -> dict:
+    """
+    Simple spatial diagnostic:
+    Hold out one REAL station and evaluate IDW reconstruction from remaining stations.
+    This does NOT validate the full grid+model pipeline, but provides a sanity check under sparse coverage.
+    """
+    if stations_hourly.empty:
+        return {
+            "spatial_validation_performed": False,
+            "spatial_validation_note": "Spatial validation skipped: no station data",
+        }
+
+    st = stations_hourly.copy()
+    st["station_source_type"] = np.where(st.get("data_source", "").astype(str).str.contains("synthetic"), "synthetic", "real")
+    real = st[st["station_source_type"] == "real"].copy()
+    if real["station_id"].nunique() < min_real_stations:
+        return {
+            "spatial_validation_performed": False,
+            "spatial_validation_note": "Spatial validation skipped: insufficient real stations",
+        }
+
+    # pick holdout deterministically
+    station_ids = sorted(real["station_id"].astype(str).unique().tolist())
+    hid = str(holdout_station_id) if holdout_station_id else station_ids[0]
+    if hid not in station_ids:
+        hid = station_ids[0]
+
+    held = real[real["station_id"].astype(str) == hid].copy()
+    others = real[real["station_id"].astype(str) != hid].copy()
+    if others["station_id"].nunique() < 3:
+        return {
+            "spatial_validation_performed": False,
+            "spatial_validation_note": "Spatial validation skipped: <3 remaining stations after holdout",
+        }
+
+    lat_h = float(held["latitude"].iloc[0])
+    lon_h = float(held["longitude"].iloc[0])
+
+    meta = others[["station_id", "latitude", "longitude"]].drop_duplicates().reset_index(drop=True)
+    d = meta.apply(lambda r: _haversine_km(lat_h, lon_h, float(r["latitude"]), float(r["longitude"])), axis=1).values
+    d = np.maximum(d.astype(float), 0.05)
+    w = 1.0 / np.power(d, float(idw_power))
+
+    # hourly compare
+    held = held[["timestamp", "pm25"]].copy()
+    held["timestamp"] = pd.to_datetime(held["timestamp"], utc=True).dt.floor("H")
+    held = held.groupby("timestamp", as_index=False)["pm25"].mean()
+
+    others["timestamp"] = pd.to_datetime(others["timestamp"], utc=True).dt.floor("H")
+    errors = []
+    for t, y in zip(held["timestamp"].values, held["pm25"].values):
+        o = others[others["timestamp"] == t]
+        if o.empty:
+            continue
+        # align station values to meta
+        vals = np.full(len(meta), np.nan, dtype=float)
+        for i, row in meta.iterrows():
+            v = o.loc[o["station_id"] == row["station_id"], "pm25"]
+            if len(v) > 0:
+                vals[i] = float(v.mean())
+        valid = ~np.isnan(vals)
+        if valid.sum() < 3:
+            continue
+        pred = float((w[valid] * vals[valid]).sum() / w[valid].sum())
+        errors.append((float(y), pred))
+
+    if not errors:
+        return {
+            "spatial_validation_performed": False,
+            "spatial_validation_note": "Spatial validation skipped: insufficient overlapping timestamps",
+        }
+
+    yt = np.array([e[0] for e in errors], dtype=float)
+    yp = np.array([e[1] for e in errors], dtype=float)
+    mae = float(np.mean(np.abs(yt - yp)))
+    rmse = float(np.sqrt(np.mean((yt - yp) ** 2)))
+    return {
+        "spatial_validation_performed": True,
+        "spatial_validation_holdout_station_id": hid,
+        "spatial_validation_mae": mae,
+        "spatial_validation_rmse": rmse,
+        "spatial_validation_note": "IDW reconstruction error at one held-out real station",
+    }
 

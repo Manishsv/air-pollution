@@ -86,6 +86,8 @@ def build_fire_features_panel(
         base = pd.MultiIndex.from_product([h3_grid["h3_id"].values, hours], names=["h3_id", "timestamp"]).to_frame(index=False)
         base["fire_count_nearby"] = 0
         base["distance_to_nearest_fire_km"] = np.nan
+        base["fire_source_type"] = "unavailable"
+        base["fire_warning_flags"] = "FIRE_DATA_UNAVAILABLE"
         return base
 
     try:
@@ -95,12 +97,16 @@ def build_fire_features_panel(
         base = pd.MultiIndex.from_product([h3_grid["h3_id"].values, hours], names=["h3_id", "timestamp"]).to_frame(index=False)
         base["fire_count_nearby"] = 0
         base["distance_to_nearest_fire_km"] = np.nan
+        base["fire_source_type"] = "unavailable"
+        base["fire_warning_flags"] = "FIRE_DATA_UNAVAILABLE"
         return base
 
     if fires.empty:
         base = pd.MultiIndex.from_product([h3_grid["h3_id"].values, hours], names=["h3_id", "timestamp"]).to_frame(index=False)
         base["fire_count_nearby"] = 0
         base["distance_to_nearest_fire_km"] = np.nan
+        base["fire_source_type"] = "unavailable"
+        base["fire_warning_flags"] = "FIRE_DATA_UNAVAILABLE"
         return base
 
     # Very simple: treat all fires as static over range; compute nearest distance per cell.
@@ -129,5 +135,7 @@ def build_fire_features_panel(
     per_cell = pd.DataFrame({"h3_id": h3_grid["h3_id"].values, "distance_to_nearest_fire_km": nearest_km, "fire_count_nearby": nearby_cnt})
     base = pd.MultiIndex.from_product([h3_grid["h3_id"].values, hours], names=["h3_id", "timestamp"]).to_frame(index=False)
     out = base.merge(per_cell, on="h3_id", how="left")
+    out["fire_source_type"] = "real"
+    out["fire_warning_flags"] = ""
     return out
 

@@ -63,6 +63,7 @@ def fetch_open_meteo_hourly(
         rad = np.deg2rad(df["wind_direction_10m"].values)
         df["wind_direction_sin"] = np.sin(rad)
         df["wind_direction_cos"] = np.cos(rad)
+        df["weather_source_type"] = "real"
         return df
     except Exception as e:
         logger.warning("Open-Meteo fetch failed: %s", e)
@@ -82,7 +83,7 @@ def generate_synthetic_weather(lookback_days: int, seed: int = 7) -> pd.DataFram
     wdir = (180 + 40 * np.sin(np.linspace(0, 2 * np.pi, len(hours))) + rng.normal(0, 25, size=len(hours))) % 360
     precip = np.clip(rng.gamma(0.6, 0.8, size=len(hours)) - 0.6, 0, None)
     rad = np.deg2rad(wdir)
-    return pd.DataFrame(
+    df = pd.DataFrame(
         {
             "timestamp": hours,
             "temperature_2m": temp.astype(float),
@@ -94,4 +95,6 @@ def generate_synthetic_weather(lookback_days: int, seed: int = 7) -> pd.DataFram
             "wind_direction_cos": np.cos(rad).astype(float),
         }
     )
+    df["weather_source_type"] = "synthetic"
+    return df
 

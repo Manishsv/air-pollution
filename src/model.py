@@ -132,6 +132,14 @@ def train_models(
     except Exception as e:
         logger.info("XGBoost unavailable or failed; continuing with RF. (%s)", e)
 
+    # Improvement vs persistence for each ML model
+    persist_rmse = metrics_all["persistence"]["RMSE"]
+    for k in list(metrics_all.keys()):
+        if k == "persistence":
+            continue
+        metrics_all[k]["RMSE_improvement_vs_persistence"] = float(persist_rmse - metrics_all[k]["RMSE"])
+        metrics_all[k]["MAE_improvement_vs_persistence"] = float(metrics_all["persistence"]["MAE"] - metrics_all[k]["MAE"])
+
     # Optional override
     if force_model:
         fm = str(force_model).strip().lower()
@@ -180,8 +188,27 @@ def predict_latest(
     latest = df[df["timestamp"] == latest_ts].copy()
     latest = latest.dropna(subset=["current_pm25"]).copy()
     X = latest[feature_cols].fillna(0.0).values
-    pred = model.predict(X)
-    latest["forecast_pm25"] = pred.astype(float)
+    # Probabilistic outputs where possible
+    pred = model.predict(X).astype(float)
+    latest["forecast_pm25_mean"] = pred
+    latest["forecast_pm25_p50"] = pred
+    latest["forecast_pm25_p10"] = np.nan
+    latest["forecast_pm25_p90"] = np.nan
+    latest["forecast_pm25_std"] = np.nan
+
+    # RandomForest: tree-level distribution
+    if hasattr(model, "estimators_"):
+        try:
+            tree_preds = np.stack([est.predict(X).astype(float) for est in model.estimators_], axis=0)  # (n_trees, n)
+            latest["forecast_pm25_mean"] = tree_preds.mean(axis=0)
+            latest["forecast_pm25_std"] = tree_preds.std(axis=0)
+            latest["forecast_pm25_p10"] = np.quantile(tree_preds, 0.10, axis=0)
+            latest["forecast_pm25_p50"] = np.quantile(tree_preds, 0.50, axis=0)
+            latest["forecast_pm25_p90"] = np.quantile(tree_preds, 0.90, axis=0)
+        except Exception:
+            pass
+
+    latest["uncertainty_band"] = (latest["forecast_pm25_p90"] - latest["forecast_pm25_p10"]).astype(float)
     latest["model_name"] = model_name
     return latest
 
