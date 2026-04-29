@@ -104,9 +104,46 @@ Controls in `config.yaml`:
 ### Data sources (MVP)
 
 - **Boundary & OSM features**: OpenStreetMap via `osmnx`
-- **AQ**: OpenAQ (best-effort) → **synthetic station fallback**
+- **AQ**: OpenAQ **v3** (best-effort; API key recommended) → **synthetic station fallback**
 - **Weather**: Open-Meteo archive API → **synthetic weather fallback**
 - **Fire events**: NASA FIRMS (optional; only if `FIRMS_API_KEY` is set)
+
+### OpenAQ v3 API key (recommended)
+
+OpenAQ **v2 is retired** and returns HTTP 410. The MVP uses **OpenAQ v3** which may require an API key (otherwise you may see HTTP 401 and the pipeline will fall back to synthetic AQ).
+
+1. Copy env file:
+
+```bash
+cp .env.example .env
+```
+
+2. Set:
+
+- `OPENAQ_API_KEY=...`
+
+### How hotspot recommendations are generated
+
+This MVP generates recommendations in a deliberately **simple and explainable** way:
+
+1. **Forecast PM2.5 per H3 cell**
+   - A baseline regressor predicts `forecast_pm25` for each H3 cell for \(t + forecast_horizon_hours\).
+
+2. **Hotspot level = thresholding forecast PM2.5**
+   - `low/moderate/high/severe` is assigned by comparing `forecast_pm25` against `pm25_hotspot_thresholds` in `config.yaml`.
+
+3. **Dominant driver (rule-based)**
+   - The MVP uses simple feature-based rules (not SHAP yet) to label a dominant driver:
+     - `fire_influence` if `fire_count_nearby > 0`
+     - `weather_dispersion` if `wind_speed_10m` is low
+     - `industrial_proxy` if industrial landuse area is high
+     - `traffic_proxy` if road density is high
+     - `built_environment_proxy` if built-up ratio is high
+     - `green_deficit_proxy` if green area is low while PM is high
+     - `unknown` otherwise
+
+4. **Recommended action = mapping from driver → intervention text**
+   - Each driver maps to a fixed action string (see `src/recommendations.py`).
 
 ### Known limitations (intentional for MVP reliability)
 
@@ -126,6 +163,22 @@ Then the pipeline will automatically:
 - map stations to H3
 - interpolate to all cells
 - rebuild the panel dataset and retrain the model
+
+### API call minimization and caching
+
+To avoid calling external APIs repeatedly for the same area/time window:
+
+- The pipeline caches each expensive artifact (boundary, grid, OSM, AQ, weather, dataset) under `data/processed/cache/`.
+- For **OpenAQ v3**, the MVP additionally caches:
+  - the **locations** response (bbox query, and a centroid+radius fallback query), and
+  - the **per-sensor hourly time series** (`/v3/sensors/{id}/hours`),
+  so reruns do not re-download the same data until `cache.ttl_days` expires.
+
+Controls:
+
+- `cache.enabled`: use cached artifacts when valid
+- `cache.force_refresh`: re-download and overwrite caches
+- `cache.ttl_days`: cache time-to-live in days
 
 ### How this can connect later to DIGIT / Airawat
 

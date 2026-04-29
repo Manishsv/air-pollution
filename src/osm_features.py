@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional, Sequence
 
 import geopandas as gpd
 import osmnx as ox
@@ -38,7 +38,7 @@ BUILDING_TAGS = {"building": True}
 
 ROAD_TAGS = {"highway": True}
 
-USEFUL_HIGHWAY_CLASSES = {
+DEFAULT_ROAD_CLASSES = (
     "motorway",
     "trunk",
     "primary",
@@ -47,7 +47,7 @@ USEFUL_HIGHWAY_CLASSES = {
     "residential",
     "service",
     "unclassified",
-}
+)
 
 
 def _safe_features_from_polygon(poly_wgs84: Polygon, tags: dict) -> gpd.GeoDataFrame:
@@ -80,12 +80,13 @@ def _clip_projected(gdf_wgs84: gpd.GeoDataFrame, boundary_projected: gpd.GeoData
     return gdf
 
 
-def _limit_rows(gdf: gpd.GeoDataFrame, max_rows: Optional[int]) -> gpd.GeoDataFrame:
+def _limit_rows(gdf: gpd.GeoDataFrame, max_rows: Optional[int], *, seed: int = 42) -> gpd.GeoDataFrame:
     if max_rows is None or max_rows <= 0 or gdf.empty:
         return gdf
     if len(gdf) <= max_rows:
         return gdf
-    return gdf.iloc[:max_rows].copy()
+    # Deterministic sampling (instead of head) so reruns are stable.
+    return gdf.sample(n=max_rows, random_state=int(seed)).copy()
 
 
 def _normalize_highway_col(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -111,9 +112,12 @@ def download_osm_features(
     boundary_projected: gpd.GeoDataFrame,
     local_crs: str,
     sample_mode: bool = True,
+    sample_seed: int = 42,
     max_buildings: int = 5000,
     max_roads: int = 5000,
     max_pois: int = 3000,
+    max_landuse: int = 3000,
+    road_classes: Optional[Sequence[str]] = None,
 ) -> Dict[str, gpd.GeoDataFrame]:
     """
     Returns projected GeoDataFrames in `local_crs`:
@@ -148,7 +152,8 @@ def download_osm_features(
     roads_proj = _clip_projected(roads_wgs84, boundary_projected, local_crs)
     roads_proj = _normalize_highway_col(roads_proj)
     if not roads_proj.empty and "highway_class" in roads_proj.columns:
-        roads_proj = roads_proj[roads_proj["highway_class"].isin(USEFUL_HIGHWAY_CLASSES)].copy()
+        allowed = set([str(x) for x in (road_classes or DEFAULT_ROAD_CLASSES)])
+        roads_proj = roads_proj[roads_proj["highway_class"].isin(allowed)].copy()
 
     buildings_proj = _clip_projected(buildings_wgs84, boundary_projected, local_crs)
     landuse_proj = _clip_projected(landuse_wgs84, boundary_projected, local_crs)
@@ -156,9 +161,10 @@ def download_osm_features(
 
     # Development sampling to keep bbox runs fast
     if sample_mode:
-        buildings_proj = _limit_rows(buildings_proj, max_buildings)
-        roads_proj = _limit_rows(roads_proj, max_roads)
-        pois_proj = _limit_rows(pois_proj, max_pois)
+        buildings_proj = _limit_rows(buildings_proj, max_buildings, seed=sample_seed)
+        roads_proj = _limit_rows(roads_proj, max_roads, seed=sample_seed)
+        pois_proj = _limit_rows(pois_proj, max_pois, seed=sample_seed)
+        landuse_proj = _limit_rows(landuse_proj, max_landuse, seed=sample_seed)
 
     return {
         "roads": roads_proj,

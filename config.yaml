@@ -1,35 +1,49 @@
-city_name: "Bengaluru, India"
-fallback_city_name: "Delhi, India"
-
-spatial_mode: "bbox"  # one of: bbox, ward, full_city
-
+city_name: Bengaluru, India
+fallback_city_name: Delhi, India
+spatial_mode: bbox
 bbox:
   north: 13.02
   south: 12.97
   east: 77.62
   west: 77.57
-
-# For ward mode (optional): provide a polygon GeoJSON path with a single feature.
 ward_polygon_path: null
-
-h3_resolution: 7
+h3_resolution: 8
 forecast_horizon_hours: 12
 lookback_days: 14
-local_crs: "EPSG:32643"
-
+local_crs: EPSG:32643
 pm25_hotspot_thresholds:
   low: 30
   moderate: 60
   high: 90
   severe: 120
-
+aq:
+  idw_power: 2.0
+  min_stations: 3
+model:
+  test_fraction: 0.2
+  force_model: null
+  random_forest:
+    n_estimators: 250
+    min_samples_leaf: 2
+    random_state: 42
+osm:
+  road_classes:
+  - motorway
+  - trunk
+  - primary
+  - secondary
+  - tertiary
+  - residential
+  - service
+  - unclassified
 cache:
   enabled: true
   force_refresh: false
   ttl_days: 30
-
 development:
   sample_mode: true
+  sample_seed: 42
   max_buildings: 5000
   max_roads: 5000
   max_pois: 3000
+  max_landuse: 3000

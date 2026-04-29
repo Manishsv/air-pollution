@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -18,9 +18,36 @@ class CacheConfig:
 @dataclass(frozen=True)
 class DevConfig:
     sample_mode: bool = True
+    sample_seed: int = 42
     max_buildings: int = 5000
     max_roads: int = 5000
     max_pois: int = 3000
+    max_landuse: int = 3000
+
+
+@dataclass(frozen=True)
+class AQConfig:
+    idw_power: float = 2.0
+    min_stations: int = 3
+
+
+@dataclass(frozen=True)
+class RandomForestConfig:
+    n_estimators: int = 250
+    min_samples_leaf: int = 2
+    random_state: int = 42
+
+
+@dataclass(frozen=True)
+class ModelConfig:
+    test_fraction: float = 0.2
+    force_model: Optional[str] = None  # random_forest | xgboost | None
+    random_forest: RandomForestConfig = field(default_factory=RandomForestConfig)
+
+
+@dataclass(frozen=True)
+class OSMConfig:
+    road_classes: List[str]
 
 
 @dataclass(frozen=True)
@@ -43,6 +70,9 @@ class AppConfig:
     lookback_days: int
     local_crs: str
     pm25_hotspot_thresholds: Dict[str, float]
+    aq: AQConfig
+    model: ModelConfig
+    osm: OSMConfig
     cache: CacheConfig
     development: DevConfig
     project_root: Path
@@ -77,6 +107,22 @@ def load_config(config_path: str | Path) -> AppConfig:
 
     cache_cfg = cfg.get("cache", {}) or {}
     dev_cfg = cfg.get("development", {}) or {}
+    aq_cfg = cfg.get("aq", {}) or {}
+    model_cfg = cfg.get("model", {}) or {}
+    rf_cfg = (model_cfg.get("random_forest", {}) or {}) if isinstance(model_cfg, dict) else {}
+    osm_cfg = cfg.get("osm", {}) or {}
+    road_classes = osm_cfg.get("road_classes")
+    if not road_classes:
+        road_classes = [
+            "motorway",
+            "trunk",
+            "primary",
+            "secondary",
+            "tertiary",
+            "residential",
+            "service",
+            "unclassified",
+        ]
 
     return AppConfig(
         city_name=str(cfg.get("city_name", "Bengaluru, India")),
@@ -89,6 +135,20 @@ def load_config(config_path: str | Path) -> AppConfig:
         lookback_days=int(cfg.get("lookback_days", 14)),
         local_crs=str(cfg.get("local_crs", "EPSG:32643")),
         pm25_hotspot_thresholds=dict(cfg.get("pm25_hotspot_thresholds", {})),
+        aq=AQConfig(
+            idw_power=float(aq_cfg.get("idw_power", 2.0)),
+            min_stations=int(aq_cfg.get("min_stations", 3)),
+        ),
+        model=ModelConfig(
+            test_fraction=float(model_cfg.get("test_fraction", 0.2)),
+            force_model=model_cfg.get("force_model"),
+            random_forest=RandomForestConfig(
+                n_estimators=int(rf_cfg.get("n_estimators", 250)),
+                min_samples_leaf=int(rf_cfg.get("min_samples_leaf", 2)),
+                random_state=int(rf_cfg.get("random_state", 42)),
+            ),
+        ),
+        osm=OSMConfig(road_classes=[str(x) for x in road_classes]),
         cache=CacheConfig(
             enabled=bool(cache_cfg.get("enabled", True)),
             force_refresh=bool(cache_cfg.get("force_refresh", False)),
@@ -96,9 +156,11 @@ def load_config(config_path: str | Path) -> AppConfig:
         ),
         development=DevConfig(
             sample_mode=bool(dev_cfg.get("sample_mode", True)),
+            sample_seed=int(dev_cfg.get("sample_seed", 42)),
             max_buildings=int(dev_cfg.get("max_buildings", 5000)),
             max_roads=int(dev_cfg.get("max_roads", 5000)),
             max_pois=int(dev_cfg.get("max_pois", 3000)),
+            max_landuse=int(dev_cfg.get("max_landuse", 3000)),
         ),
         project_root=project_root,
         data_raw_dir=data_raw_dir,

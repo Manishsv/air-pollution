@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -47,6 +47,10 @@ def train_models(
     dataset: pd.DataFrame,
     target_col: str,
     outputs_dir: Path,
+    *,
+    test_fraction: float = 0.2,
+    force_model: Optional[str] = None,  # random_forest | xgboost | None
+    rf_params: Optional[dict] = None,
 ) -> Tuple[ModelArtifacts, Dict[str, Dict[str, float]]]:
     """
     Trains:
@@ -72,7 +76,7 @@ def train_models(
 
     # Drop rows without target and core lags
     df = df.dropna(subset=[target_col, "current_pm25", "pm25_lag_1h", "pm25_lag_3h"]).copy()
-    train, test = _time_split(df)
+    train, test = _time_split(df, test_fraction=float(test_fraction))
 
     X_train = train[feature_cols].fillna(0.0).values
     y_train = train[target_col].values.astype(float)
@@ -86,12 +90,13 @@ def train_models(
     metrics_all["persistence"] = evaluate_regression(y_test, y_pred_persist)
 
     # 2) RandomForest
+    rf_params = rf_params or {}
     rf = RandomForestRegressor(
-        n_estimators=250,
-        random_state=42,
+        n_estimators=int(rf_params.get("n_estimators", 250)),
+        random_state=int(rf_params.get("random_state", 42)),
         n_jobs=-1,
         max_depth=None,
-        min_samples_leaf=2,
+        min_samples_leaf=int(rf_params.get("min_samples_leaf", 2)),
     )
     rf.fit(X_train, y_train)
     y_pred_rf = rf.predict(X_test)
@@ -100,6 +105,7 @@ def train_models(
     best_name = "random_forest"
     best_model = rf
     best_rmse = metrics_all[best_name]["RMSE"]
+    xgb_model = None
 
     # 3) XGBoost (optional)
     try:
@@ -116,6 +122,7 @@ def train_models(
             n_jobs=-1,
         )
         xgb.fit(X_train, y_train)
+        xgb_model = xgb
         y_pred_xgb = xgb.predict(X_test)
         metrics_all["xgboost"] = evaluate_regression(y_test, y_pred_xgb)
         if metrics_all["xgboost"]["RMSE"] < best_rmse:
@@ -124,6 +131,21 @@ def train_models(
             best_rmse = metrics_all["xgboost"]["RMSE"]
     except Exception as e:
         logger.info("XGBoost unavailable or failed; continuing with RF. (%s)", e)
+
+    # Optional override
+    if force_model:
+        fm = str(force_model).strip().lower()
+        if fm in {"random_forest", "xgboost"}:
+            if fm == "xgboost" and xgb_model is None:
+                logger.warning("force_model=xgboost requested but xgboost unavailable; using random_forest.")
+                best_name = "random_forest"
+                best_model = rf
+            else:
+                best_name = fm
+                best_model = rf if fm == "random_forest" else xgb_model
+            best_rmse = float(metrics_all.get(best_name, {}).get("RMSE", best_rmse))
+        else:
+            logger.warning("Unknown force_model=%s; ignoring.", force_model)
 
     outputs_dir.mkdir(parents=True, exist_ok=True)
     model_path = outputs_dir / "pm25_model.joblib"

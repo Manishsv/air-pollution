@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import time
+import hashlib
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -94,6 +98,227 @@ def fetch_openaq_pm25(city_name: str, lookback_days: int) -> pd.DataFrame:
         return df
     except Exception as e:
         logger.warning("OpenAQ fetch failed for %s: %s", city_name, e)
+        return pd.DataFrame()
+
+
+def _openaq_headers() -> dict:
+    key = os.getenv("OPENAQ_API_KEY", "").strip()
+    if key:
+        return {"X-API-Key": key}
+    return {}
+
+
+def _cache_valid(path: Path, ttl_days: int) -> bool:
+    if not path.exists():
+        return False
+    if ttl_days <= 0:
+        return True
+    age_seconds = time.time() - path.stat().st_mtime
+    return age_seconds <= ttl_days * 86400
+
+
+def _openaq_cache_dir(cache_dir: Optional[Path]) -> Optional[Path]:
+    if cache_dir is None:
+        return None
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def _hash_key(*parts: str) -> str:
+    s = "|".join(parts)
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()[:12]
+
+
+def fetch_openaq_pm25_v3(
+    *,
+    bbox_west_south_east_north: tuple[float, float, float, float],
+    lookback_days: int,
+    max_locations: int = 50,
+    max_sensors: int = 20,
+    cache_dir: Optional[Path] = None,
+    cache_ttl_days: int = 7,
+    force_refresh: bool = False,
+) -> pd.DataFrame:
+    """
+    OpenAQ v3 best-effort fetch using bbox.
+    Returns station-hourly records with:
+      station_id, station_name, latitude, longitude, timestamp, pm25, data_source
+
+    v3 approach:
+      - GET /v3/locations?bbox=...&parameters_id=2  (pm25)
+      - For each location, take pm25 sensors
+      - GET /v3/sensors/{id}/hours?datetime_from=...&datetime_to=...
+    """
+    west, south, east, north = bbox_west_south_east_north
+    end = _utc_now_hour()
+    start = end - timedelta(days=int(lookback_days))
+
+    base = "https://api.openaq.org/v3"
+    loc_url = f"{base}/locations"
+    # bbox is "minX,minY,maxX,maxY" in WGS84, 4dp precision recommended by docs
+    bbox_str = f"{west:.4f},{south:.4f},{east:.4f},{north:.4f}"
+    cache_dir = _openaq_cache_dir(cache_dir)
+    params_bbox = {
+        "bbox": bbox_str,
+        "parameters_id": "2",  # pm25
+        "limit": min(int(max_locations), 100),
+        "page": 1,
+        "sort_order": "asc",
+    }
+    # Alternative search if bbox returns 0: centroid + radius (max 25km per docs)
+    center_lat = (south + north) / 2.0
+    center_lon = (west + east) / 2.0
+    params_radius = {
+        "coordinates": f"{center_lat:.4f},{center_lon:.4f}",
+        "radius": 25000,
+        "parameters_id": "2",
+        "limit": min(int(max_locations), 100),
+        "page": 1,
+        "sort_order": "asc",
+    }
+
+    try:
+        # Cache locations response (query is bbox or radius)
+        locs = []
+        if cache_dir is not None:
+            loc_key = _hash_key("locs_bbox", bbox_str, str(max_locations), str(max_sensors))
+            loc_path = cache_dir / f"openaqv3_{loc_key}_locations.parquet"
+            if (not force_refresh) and _cache_valid(loc_path, cache_ttl_days):
+                loc_df = pd.read_parquet(loc_path)
+                locs = loc_df.to_dict(orient="records")
+        if not locs:
+            r = requests.get(loc_url, params=params_bbox, headers=_openaq_headers(), timeout=30)
+            r.raise_for_status()
+            js = r.json()
+            locs = js.get("results", []) or []
+            if cache_dir is not None and locs:
+                pd.DataFrame(locs).to_parquet(loc_path, index=False)
+
+        if not locs:
+            # Try centroid+radius search (useful when bbox is too tight or data coverage sparse)
+            if cache_dir is not None:
+                loc_key2 = _hash_key("locs_radius", f"{center_lat:.4f},{center_lon:.4f}", "25000", str(max_locations), str(max_sensors))
+                loc_path2 = cache_dir / f"openaqv3_{loc_key2}_locations.parquet"
+                if (not force_refresh) and _cache_valid(loc_path2, cache_ttl_days):
+                    loc_df = pd.read_parquet(loc_path2)
+                    locs = loc_df.to_dict(orient="records")
+            if not locs:
+                r = requests.get(loc_url, params=params_radius, headers=_openaq_headers(), timeout=30)
+                r.raise_for_status()
+                js = r.json()
+                locs = js.get("results", []) or []
+                if cache_dir is not None and locs:
+                    pd.DataFrame(locs).to_parquet(loc_path2, index=False)
+
+        if not locs:
+            logger.warning("OpenAQ v3 returned 0 locations for bbox=%s (and radius fallback).", bbox_str)
+            return pd.DataFrame()
+
+        # Collect pm25 sensors
+        sensors = []
+        for loc in locs[:max_locations]:
+            coords = loc.get("coordinates") or {}
+            lat = coords.get("latitude")
+            lon = coords.get("longitude")
+            if lat is None or lon is None:
+                continue
+            loc_id = loc.get("id")
+            loc_name = loc.get("name") or f"location_{loc_id}"
+            for s in (loc.get("sensors") or []):
+                p = (s.get("parameter") or {}).get("name")
+                if str(p).lower() != "pm25":
+                    continue
+                sensors.append(
+                    {
+                        "sensor_id": int(s.get("id")),
+                        "location_id": int(loc_id) if loc_id is not None else None,
+                        "station_name": str(loc_name),
+                        "latitude": float(lat),
+                        "longitude": float(lon),
+                    }
+                )
+                if len(sensors) >= max_sensors:
+                    break
+            if len(sensors) >= max_sensors:
+                break
+
+        if not sensors:
+            logger.warning("OpenAQ v3 locations found but 0 pm25 sensors (bbox=%s).", bbox_str)
+            return pd.DataFrame()
+
+        rows = []
+        dt_from = start.isoformat().replace("+00:00", "Z")
+        dt_to = end.isoformat().replace("+00:00", "Z")
+
+        for s in sensors:
+            sid = s["sensor_id"]
+            hours_url = f"{base}/sensors/{sid}/hours"
+            # Cache each sensor-hours pull (same bbox/time window often repeated)
+            sensor_rows = None
+            if cache_dir is not None:
+                h_key = _hash_key("hours", str(sid), dt_from, dt_to)
+                h_path = cache_dir / f"openaqv3_{h_key}_sensorhours.parquet"
+                if (not force_refresh) and _cache_valid(h_path, cache_ttl_days):
+                    sensor_rows = pd.read_parquet(h_path)
+
+            if sensor_rows is not None and not sensor_rows.empty:
+                rows.extend(sensor_rows.to_dict(orient="records"))
+                continue
+
+            page = 1
+            sensor_accum = []
+            while True:
+                pr = {
+                    "datetime_from": dt_from,
+                    "datetime_to": dt_to,
+                    "limit": 1000,
+                    "page": page,
+                }
+                resp = requests.get(hours_url, params=pr, headers=_openaq_headers(), timeout=30)
+                if resp.status_code == 429:
+                    logger.warning("OpenAQ v3 rate-limited (429).")
+                    break
+                resp.raise_for_status()
+                data = resp.json()
+                results = data.get("results", []) or []
+                if not results:
+                    break
+                for it in results:
+                    val = it.get("value")
+                    period = it.get("period") or {}
+                    dt_utc = ((period.get("datetimeFrom") or {}) or {}).get("utc")
+                    if val is None or dt_utc is None:
+                        continue
+                    rec = {
+                        "station_id": str(sid),
+                        "station_name": s["station_name"],
+                        "latitude": s["latitude"],
+                        "longitude": s["longitude"],
+                        "timestamp": pd.to_datetime(dt_utc, utc=True).floor("H"),
+                        "pm25": float(val),
+                        "data_source": "openaq_v3",
+                    }
+                    rows.append(rec)
+                    sensor_accum.append(rec)
+                # pagination stop: if less than limit returned, no more pages
+                if len(results) < 1000:
+                    break
+                page += 1
+
+            if cache_dir is not None and sensor_accum:
+                pd.DataFrame(sensor_accum).to_parquet(h_path, index=False)
+
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return df
+        df = (
+            df.groupby(["station_id", "station_name", "latitude", "longitude", "timestamp"], as_index=False)["pm25"]
+            .mean()
+            .assign(data_source="openaq_v3")
+        )
+        return df
+    except Exception as e:
+        logger.warning("OpenAQ v3 fetch failed (bbox=%s): %s", bbox_str, e)
         return pd.DataFrame()
 
 

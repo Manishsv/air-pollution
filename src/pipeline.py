@@ -122,9 +122,12 @@ def run_pipeline(cfg: AppConfig) -> Dict[str, Path]:
                 boundary_projected=bundle.boundary_projected,
                 local_crs=cfg.local_crs,
                 sample_mode=cfg.development.sample_mode,
+                sample_seed=cfg.development.sample_seed,
                 max_buildings=cfg.development.max_buildings,
                 max_roads=cfg.development.max_roads,
                 max_pois=cfg.development.max_pois,
+                max_landuse=cfg.development.max_landuse,
+                road_classes=cfg.osm.road_classes,
             )
             for k, gdf in osm_outputs.items():
                 path_k = cache_mod.cache_path(
@@ -186,11 +189,28 @@ def run_pipeline(cfg: AppConfig) -> Dict[str, Path]:
         stations_hourly = cache_mod.load_cached_dataframe(aq_station_cache)
         logger.info("Loaded cached AQ station data: %s", aq_station_cache.name)
     else:
-        stations_hourly = aq_data.fetch_openaq_pm25(cfg.city_name, cfg.lookback_days)
+        # OpenAQ v2 is retired; prefer v3 via bbox when possible.
+        stations_hourly = pd.DataFrame()
+        if bundle.bbox_tuple is not None:
+            # bundle.bbox_tuple is (south,north,west,east) → convert to (west,south,east,north)
+            south, north, west, east = bundle.bbox_tuple
+            stations_hourly = aq_data.fetch_openaq_pm25_v3(
+                bbox_west_south_east_north=(west, south, east, north),
+                lookback_days=cfg.lookback_days,
+                cache_dir=cfg.data_processed_dir / "cache",
+                cache_ttl_days=cfg.cache.ttl_days,
+                force_refresh=cfg.cache.force_refresh,
+            )
+        if stations_hourly.empty:
+            stations_hourly = aq_data.fetch_openaq_pm25(cfg.city_name, cfg.lookback_days)
+
         if stations_hourly.empty or stations_hourly["timestamp"].nunique() < 48:
             logger.warning("OpenAQ insufficient; generating synthetic AQ station data (documented).")
             poly = bundle.boundary_wgs84.geometry.iloc[0]
-            stations_hourly = aq_data.generate_synthetic_station_pm25(boundary_wgs84_polygon=poly, lookback_days=cfg.lookback_days)
+            stations_hourly = aq_data.generate_synthetic_station_pm25(
+                boundary_wgs84_polygon=poly,
+                lookback_days=cfg.lookback_days,
+            )
         cache_mod.save_cached_dataframe(stations_hourly, aq_station_cache)
 
     aq_panel_cache = cache_mod.cache_path(
@@ -212,6 +232,8 @@ def run_pipeline(cfg: AppConfig) -> Dict[str, Path]:
             stations_hourly=stations_hourly,
             lookback_days=cfg.lookback_days,
             h3_resolution=cfg.h3_resolution,
+            idw_power=cfg.aq.idw_power,
+            min_stations=cfg.aq.min_stations,
         )
         cache_mod.save_cached_dataframe(aq_panel, aq_panel_cache)
 
@@ -290,7 +312,18 @@ def run_pipeline(cfg: AppConfig) -> Dict[str, Path]:
 
     # 9) Train/evaluate + save model
     target_col = f"pm25_t_plus_{int(cfg.forecast_horizon_hours)}h"
-    artifacts, metrics_all = train_models(dataset, target_col=target_col, outputs_dir=outputs_dir)
+    artifacts, metrics_all = train_models(
+        dataset,
+        target_col=target_col,
+        outputs_dir=outputs_dir,
+        test_fraction=cfg.model.test_fraction,
+        force_model=cfg.model.force_model,
+        rf_params={
+            "n_estimators": cfg.model.random_forest.n_estimators,
+            "min_samples_leaf": cfg.model.random_forest.min_samples_leaf,
+            "random_state": cfg.model.random_forest.random_state,
+        },
+    )
 
     metrics_path = outputs_dir / "metrics.json"
     cache_mod.save_json(
