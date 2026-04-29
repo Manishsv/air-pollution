@@ -1,0 +1,15 @@
+geopandas
+shapely
+pyproj
+osmnx
+h3
+pandas
+numpy
+requests
+scikit-learn
+xgboost
+folium
+joblib
+pyyaml
+python-dotenv
+tqdm
