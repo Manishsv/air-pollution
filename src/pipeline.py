@@ -286,6 +286,16 @@ def run_pipeline(
     if _cache_ok(cfg, weather_cache, refresh_scope=refresh_scope, artifact="weather"):
         weather = cache_mod.load_cached_dataframe(weather_cache)
         logger.info("Loaded cached weather: %s", weather_cache.name)
+        # Schema guard: older caches may lack provenance columns
+        if "weather_source_type" not in weather.columns:
+            logger.warning("Cached weather missing provenance columns; rebuilding.")
+            centroid_lat = float(bundle.boundary_wgs84.geometry.iloc[0].centroid.y)
+            centroid_lon = float(bundle.boundary_wgs84.geometry.iloc[0].centroid.x)
+            weather = fetch_open_meteo_hourly(latitude=centroid_lat, longitude=centroid_lon, lookback_days=cfg.lookback_days)
+            if weather.empty or weather["timestamp"].nunique() < 48:
+                logger.warning("Weather API insufficient; generating synthetic weather.")
+                weather = generate_synthetic_weather(cfg.lookback_days)
+            cache_mod.save_cached_dataframe(weather, weather_cache)
     else:
         centroid_lat = float(bundle.boundary_wgs84.geometry.iloc[0].centroid.y)
         centroid_lon = float(bundle.boundary_wgs84.geometry.iloc[0].centroid.x)

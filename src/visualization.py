@@ -90,7 +90,6 @@ def save_pm25_map(
 
     center = [float(g["centroid_lat"].mean()), float(g["centroid_lon"].mean())]
     m = folium.Map(location=center, zoom_start=13, tiles="CartoDB positron")
-    folium.LayerControl().add_to(m)
 
     # Warning + legend panels
     wp = _warning_panel_html(audit)
@@ -143,6 +142,9 @@ def save_pm25_map(
             style_function=lambda *_args, s=style: s,
             popup=popup,
         ).add_to(m)
+
+    # Add layer control only after all layers exist (prevents JS reference errors)
+    folium.LayerControl().add_to(m)
 
     out_html.parent.mkdir(parents=True, exist_ok=True)
     m.save(str(out_html))

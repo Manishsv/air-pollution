@@ -133,8 +133,8 @@ def fetch_openaq_pm25_v3(
     *,
     bbox_west_south_east_north: tuple[float, float, float, float],
     lookback_days: int,
-    max_locations: int = 50,
-    max_sensors: int = 20,
+    max_locations: int = 100,
+    max_sensors: int = 80,
     cache_dir: Optional[Path] = None,
     cache_ttl_days: int = 7,
     force_refresh: bool = False,
@@ -178,39 +178,59 @@ def fetch_openaq_pm25_v3(
     }
 
     try:
+        def _to_list(x):
+            if x is None:
+                return []
+            if isinstance(x, list):
+                return x
+            try:
+                return list(x)
+            except Exception:
+                return []
+
         # Cache locations response (query is bbox or radius)
         locs = []
         if cache_dir is not None:
             loc_key = _hash_key("locs_bbox", bbox_str, str(max_locations), str(max_sensors))
             loc_path = cache_dir / f"openaqv3_{loc_key}_locations.parquet"
             if (not force_refresh) and _cache_valid(loc_path, cache_ttl_days):
-                loc_df = pd.read_parquet(loc_path)
-                locs = loc_df.to_dict(orient="records")
-        if not locs:
+                try:
+                    loc_df = pd.read_parquet(loc_path)
+                    locs = loc_df.to_dict(orient="records")
+                except Exception:
+                    locs = []
+        if len(locs) == 0:
             r = requests.get(loc_url, params=params_bbox, headers=_openaq_headers(), timeout=30)
             r.raise_for_status()
             js = r.json()
-            locs = js.get("results", []) or []
-            if cache_dir is not None and locs:
+            locs = _to_list(js.get("results", []) or [])
+            if cache_dir is not None and len(locs) > 0:
                 pd.DataFrame(locs).to_parquet(loc_path, index=False)
+        else:
+            locs = _to_list(locs)
 
-        if not locs:
+        if len(locs) == 0:
             # Try centroid+radius search (useful when bbox is too tight or data coverage sparse)
             if cache_dir is not None:
                 loc_key2 = _hash_key("locs_radius", f"{center_lat:.4f},{center_lon:.4f}", "25000", str(max_locations), str(max_sensors))
                 loc_path2 = cache_dir / f"openaqv3_{loc_key2}_locations.parquet"
                 if (not force_refresh) and _cache_valid(loc_path2, cache_ttl_days):
-                    loc_df = pd.read_parquet(loc_path2)
-                    locs = loc_df.to_dict(orient="records")
-            if not locs:
+                    try:
+                        loc_df = pd.read_parquet(loc_path2)
+                        locs = loc_df.to_dict(orient="records")
+                    except Exception:
+                        locs = []
+            if len(locs) == 0:
                 r = requests.get(loc_url, params=params_radius, headers=_openaq_headers(), timeout=30)
                 r.raise_for_status()
                 js = r.json()
-                locs = js.get("results", []) or []
-                if cache_dir is not None and locs:
+                locs = _to_list(js.get("results", []) or [])
+                if cache_dir is not None and len(locs) > 0:
                     pd.DataFrame(locs).to_parquet(loc_path2, index=False)
+            else:
+                locs = _to_list(locs)
 
-        if not locs:
+        if len(locs) == 0:
             logger.warning("OpenAQ v3 returned 0 locations for bbox=%s (and radius fallback).", bbox_str)
             return pd.DataFrame()
 
@@ -224,7 +244,8 @@ def fetch_openaq_pm25_v3(
                 continue
             loc_id = loc.get("id")
             loc_name = loc.get("name") or f"location_{loc_id}"
-            for s in (loc.get("sensors") or []):
+            sensors_list = _to_list(loc.get("sensors", []))
+            for s in sensors_list:
                 p = (s.get("parameter") or {}).get("name")
                 if str(p).lower() != "pm25":
                     continue
@@ -259,54 +280,64 @@ def fetch_openaq_pm25_v3(
                 h_key = _hash_key("hours", str(sid), dt_from, dt_to)
                 h_path = cache_dir / f"openaqv3_{h_key}_sensorhours.parquet"
                 if (not force_refresh) and _cache_valid(h_path, cache_ttl_days):
-                    sensor_rows = pd.read_parquet(h_path)
+                    try:
+                        sensor_rows = pd.read_parquet(h_path)
+                    except Exception:
+                        sensor_rows = None
 
             if sensor_rows is not None and not sensor_rows.empty:
                 rows.extend(sensor_rows.to_dict(orient="records"))
                 continue
 
-            page = 1
-            sensor_accum = []
-            while True:
-                pr = {
-                    "datetime_from": dt_from,
-                    "datetime_to": dt_to,
-                    "limit": 1000,
-                    "page": page,
-                }
-                resp = requests.get(hours_url, params=pr, headers=_openaq_headers(), timeout=30)
-                if resp.status_code == 429:
-                    logger.warning("OpenAQ v3 rate-limited (429).")
-                    break
-                resp.raise_for_status()
-                data = resp.json()
-                results = data.get("results", []) or []
-                if not results:
-                    break
-                for it in results:
-                    val = it.get("value")
-                    period = it.get("period") or {}
-                    dt_utc = ((period.get("datetimeFrom") or {}) or {}).get("utc")
-                    if val is None or dt_utc is None:
-                        continue
-                    rec = {
-                        "station_id": str(sid),
-                        "station_name": s["station_name"],
-                        "latitude": s["latitude"],
-                        "longitude": s["longitude"],
-                        "timestamp": pd.to_datetime(dt_utc, utc=True).floor("H"),
-                        "pm25": float(val),
-                        "data_source": "openaq_v3",
+            try:
+                page = 1
+                sensor_accum = []
+                while True:
+                    pr = {
+                        "datetime_from": dt_from,
+                        "datetime_to": dt_to,
+                        "limit": 1000,
+                        "page": page,
                     }
-                    rows.append(rec)
-                    sensor_accum.append(rec)
-                # pagination stop: if less than limit returned, no more pages
-                if len(results) < 1000:
-                    break
-                page += 1
+                    resp = requests.get(hours_url, params=pr, headers=_openaq_headers(), timeout=30)
+                    if resp.status_code == 429:
+                        logger.warning("OpenAQ v3 rate-limited (429).")
+                        break
+                    if resp.status_code >= 500:
+                        logger.warning("OpenAQ v3 server error for sensor_id=%s (status=%s). Skipping sensor.", sid, resp.status_code)
+                        break
+                    resp.raise_for_status()
+                    data = resp.json()
+                    results = data.get("results", []) or []
+                    if not results:
+                        break
+                    for it in results:
+                        val = it.get("value")
+                        period = it.get("period") or {}
+                        dt_utc = ((period.get("datetimeFrom") or {}) or {}).get("utc")
+                        if val is None or dt_utc is None:
+                            continue
+                        rec = {
+                            "station_id": str(sid),
+                            "station_name": s["station_name"],
+                            "latitude": s["latitude"],
+                            "longitude": s["longitude"],
+                            "timestamp": pd.to_datetime(dt_utc, utc=True).floor("H"),
+                            "pm25": float(val),
+                            "data_source": "openaq_v3",
+                        }
+                        rows.append(rec)
+                        sensor_accum.append(rec)
+                    # pagination stop: if less than limit returned, no more pages
+                    if len(results) < 1000:
+                        break
+                    page += 1
 
-            if cache_dir is not None and sensor_accum:
-                pd.DataFrame(sensor_accum).to_parquet(h_path, index=False)
+                if cache_dir is not None and len(sensor_accum) > 0:
+                    pd.DataFrame(sensor_accum).to_parquet(h_path, index=False)
+            except Exception as e:
+                logger.warning("OpenAQ v3 sensor-hours failed for sensor_id=%s; skipping. (%s)", sid, e)
+                continue
 
         df = pd.DataFrame(rows)
         if df.empty:
@@ -318,7 +349,8 @@ def fetch_openaq_pm25_v3(
         )
         return df
     except Exception as e:
-        logger.warning("OpenAQ v3 fetch failed (bbox=%s): %s", bbox_str, e)
+        # Include traceback for debugging intermittent cache/type issues.
+        logger.exception("OpenAQ v3 fetch failed (bbox=%s): %s", bbox_str, e)
         return pd.DataFrame()
 
 
@@ -437,8 +469,14 @@ def build_aq_panel(
         if len(station_ids_available) < min_stations:
             # fallback: forward-fill by using obs or NaN
             idw_vals = np.full(len(h3_cells), np.nan, dtype=float)
-            nearest_km = np.full(len(h3_cells), np.nan, dtype=float)
             station_count_used = len(station_ids_available)
+            # still compute nearest distance to any available station(s) (honesty for sparse coverage)
+            if station_count_used > 0:
+                # map station ids to st_meta indices
+                idxs = [int(st_meta.index[st_meta["station_id"] == sid][0]) for sid in station_ids_available if (st_meta["station_id"] == sid).any()]
+                nearest_km = np.min(dist[:, idxs], axis=1) if idxs else np.full(len(h3_cells), np.nan, dtype=float)
+            else:
+                nearest_km = np.full(len(h3_cells), np.nan, dtype=float)
         else:
             # Build vector of station values aligned to st_meta order
             vals = np.full(len(st_meta), np.nan, dtype=float)
@@ -482,6 +520,7 @@ def build_aq_panel(
                 out.loc[idx, "pm25_interpolated_flag"] = 0
                 out.loc[idx, "aq_source_type"] = "real"
                 out.loc[idx, "interpolation_method"] = ""
+                out.loc[idx, "nearest_station_distance_km"] = 0.0
                 if obs_source is not None:
                     out.loc[idx, "aq_source_type"] = obs_source.loc[idx].values
             out = out.reset_index()
@@ -511,6 +550,7 @@ def spatial_station_holdout_validation(
     lookback_days: int,
     idw_power: float = 2.0,
     min_real_stations: int = 4,
+    min_other_stations: int = 2,
     holdout_station_id: Optional[str] = None,
 ) -> dict:
     """
@@ -533,11 +573,34 @@ def spatial_station_holdout_validation(
             "spatial_validation_note": "Spatial validation skipped: insufficient real stations",
         }
 
-    # pick holdout deterministically
+    # Pick holdout station. If not provided, pick the station with the most
+    # overlap hours where at least 3 other stations have readings (so the IDW
+    # reconstruction is actually evaluable).
     station_ids = sorted(real["station_id"].astype(str).unique().tolist())
-    hid = str(holdout_station_id) if holdout_station_id else station_ids[0]
-    if hid not in station_ids:
-        hid = station_ids[0]
+    if holdout_station_id and str(holdout_station_id) in station_ids:
+        hid = str(holdout_station_id)
+    else:
+        tmp = real.copy()
+        tmp["timestamp"] = pd.to_datetime(tmp["timestamp"], utc=True).dt.floor("H")
+        # For each hour, how many distinct stations report?
+        n_by_t = tmp.groupby("timestamp")["station_id"].nunique()
+        # Candidate hours where at least (1 holdout + N others) stations report.
+        # We default N=2 to keep this diagnostic usable under sparse/patchy coverage.
+        need = int(max(2, min_other_stations)) + 1
+        good_hours = set(n_by_t[n_by_t >= need].index)
+        if not good_hours:
+            return {
+                "spatial_validation_performed": False,
+                "spatial_validation_note": f"Spatial validation skipped: no hours with >={need} simultaneous real stations",
+            }
+        # Score each station by number of good_hours it appears in
+        score = (
+            tmp[tmp["timestamp"].isin(good_hours)]
+            .groupby("station_id")["timestamp"]
+            .nunique()
+            .sort_values(ascending=False)
+        )
+        hid = str(score.index[0]) if len(score) else station_ids[0]
 
     held = real[real["station_id"].astype(str) == hid].copy()
     others = real[real["station_id"].astype(str) != hid].copy()
@@ -562,7 +625,9 @@ def spatial_station_holdout_validation(
 
     others["timestamp"] = pd.to_datetime(others["timestamp"], utc=True).dt.floor("H")
     errors = []
-    for t, y in zip(held["timestamp"].values, held["pm25"].values):
+    for row in held.itertuples(index=False):
+        t = row.timestamp  # pandas Timestamp (tz-aware)
+        y = float(row.pm25)
         o = others[others["timestamp"] == t]
         if o.empty:
             continue
@@ -573,7 +638,7 @@ def spatial_station_holdout_validation(
             if len(v) > 0:
                 vals[i] = float(v.mean())
         valid = ~np.isnan(vals)
-        if valid.sum() < 3:
+        if valid.sum() < int(max(2, min_other_stations)):
             continue
         pred = float((w[valid] * vals[valid]).sum() / w[valid].sum())
         errors.append((float(y), pred))

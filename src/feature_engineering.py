@@ -189,9 +189,40 @@ def build_panel_dataset(
     Output columns include dynamic lags and target pm25_t_plus_{h}.
     """
     aq_panel = ensure_provenance_columns(aq_panel)
+    aq_panel = aq_panel.copy()
+    weather_hourly = weather_hourly.copy()
+    aq_panel["timestamp"] = pd.to_datetime(aq_panel["timestamp"], utc=True, errors="coerce")
+    weather_hourly["timestamp"] = pd.to_datetime(weather_hourly["timestamp"], utc=True, errors="coerce")
+
     df = aq_panel.merge(weather_hourly, on="timestamp", how="left")
+    # Coalesce weather provenance if merge created suffixes
+    if "weather_source_type_y" in df.columns:
+        df["weather_source_type"] = df["weather_source_type_y"]
+    elif "weather_source_type_x" in df.columns and "weather_source_type" not in df.columns:
+        df["weather_source_type"] = df["weather_source_type_x"]
+    for c in ["weather_source_type_x", "weather_source_type_y"]:
+        if c in df.columns:
+            df = df.drop(columns=[c])
     if fire_panel is not None and not fire_panel.empty:
+        fire_panel = fire_panel.copy()
+        fire_panel["timestamp"] = pd.to_datetime(fire_panel["timestamp"], utc=True, errors="coerce")
         df = df.merge(fire_panel, on=["h3_id", "timestamp"], how="left")
+        # Coalesce fire provenance if merge created suffixes
+        if "fire_source_type_y" in df.columns:
+            df["fire_source_type"] = df["fire_source_type_y"]
+        elif "fire_source_type_x" in df.columns and "fire_source_type" not in df.columns:
+            df["fire_source_type"] = df["fire_source_type_x"]
+        for c in ["fire_source_type_x", "fire_source_type_y"]:
+            if c in df.columns:
+                df = df.drop(columns=[c])
+
+        if "fire_warning_flags_y" in df.columns:
+            df["fire_warning_flags"] = df["fire_warning_flags_y"]
+        elif "fire_warning_flags_x" in df.columns and "fire_warning_flags" not in df.columns:
+            df["fire_warning_flags"] = df["fire_warning_flags_x"]
+        for c in ["fire_warning_flags_x", "fire_warning_flags_y"]:
+            if c in df.columns:
+                df = df.drop(columns=[c])
     else:
         df["fire_count_nearby"] = 0
         df["distance_to_nearest_fire_km"] = np.nan
@@ -216,6 +247,14 @@ def build_panel_dataset(
     ]
     static_df = static_features_wgs84[static_cols].copy()
     df = df.merge(static_df, on="h3_id", how="left")
+    # Coalesce OSM provenance if merge created suffixes
+    if "osm_source_type_y" in df.columns:
+        df["osm_source_type"] = df["osm_source_type_y"]
+    elif "osm_source_type_x" in df.columns and "osm_source_type" not in df.columns:
+        df["osm_source_type"] = df["osm_source_type_x"]
+    for c in ["osm_source_type_x", "osm_source_type_y"]:
+        if c in df.columns:
+            df = df.drop(columns=[c])
     if "osm_source_type" not in df.columns:
         df["osm_source_type"] = "unavailable"
     df["osm_source_type"] = df["osm_source_type"].fillna("unavailable").astype(str)

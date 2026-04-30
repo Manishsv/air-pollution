@@ -30,19 +30,17 @@ def fetch_firms_fire_events(
     """
     # FIRMS API endpoints vary; keep this optional and non-blocking.
     # If this fails, caller should fallback to empty.
+    # FIRMS Area API (CSV) format (see https://firms.modaps.eosdis.nasa.gov/api/area/):
+    #   /api/area/csv/{MAP_KEY}/{SOURCE}/{WEST,SOUTH,EAST,NORTH}/{DAY_RANGE}
+    # DAY_RANGE is limited (typically 1..5). For longer lookbacks, caller should
+    # either accept truncation or implement paging by date.
     south, north, west, east = bbox
-    end = _utc_now_hour()
-    start = end - timedelta(days=int(lookback_days))
+    day_range = int(max(1, min(int(lookback_days), 5)))
+    source = "VIIRS_SNPP_NRT"
+    area = f"{west},{south},{east},{north}"
 
-    url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"  # may be blocked without auth
-    params = {
-        "key": api_key,
-        "bbox": f"{west},{south},{east},{north}",
-        "start": start.strftime("%Y-%m-%d"),
-        "end": end.strftime("%Y-%m-%d"),
-        "source": "VIIRS_SNPP_NRT",
-    }
-    r = requests.get(url, params=params, timeout=30)
+    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{api_key}/{source}/{area}/{day_range}"
+    r = requests.get(url, timeout=30)
     r.raise_for_status()
     # If it is CSV, pandas can read from text
     from io import StringIO
@@ -105,8 +103,8 @@ def build_fire_features_panel(
         base = pd.MultiIndex.from_product([h3_grid["h3_id"].values, hours], names=["h3_id", "timestamp"]).to_frame(index=False)
         base["fire_count_nearby"] = 0
         base["distance_to_nearest_fire_km"] = np.nan
-        base["fire_source_type"] = "unavailable"
-        base["fire_warning_flags"] = "FIRE_DATA_UNAVAILABLE"
+        base["fire_source_type"] = "real"
+        base["fire_warning_flags"] = "NO_FIRES_DETECTED"
         return base
 
     # Very simple: treat all fires as static over range; compute nearest distance per cell.

@@ -1,16 +1,17 @@
-city_name: Bengaluru, India
-fallback_city_name: Delhi, India
+city_name: London, UK
+fallback_city_name: Los Angeles, US
 spatial_mode: bbox
 bbox:
-  north: 13.02
-  south: 12.97
-  east: 77.62
-  west: 77.57
+  # Central London bbox (high OpenAQ PM2.5 location density)
+  north: 51.54
+  south: 51.49
+  east: -0.08
+  west: -0.19
 ward_polygon_path: null
 h3_resolution: 8
 forecast_horizon_hours: 12
-lookback_days: 14
-local_crs: EPSG:32643
+lookback_days: 30
+local_crs: EPSG:27700
 pm25_hotspot_thresholds:
   low: 30
   moderate: 60
