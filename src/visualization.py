@@ -223,3 +223,64 @@ def save_hotspot_recommendations_map(
     out_html.parent.mkdir(parents=True, exist_ok=True)
     m.save(str(out_html))
 
+
+def _rank_fill_hex(rank_norm: float) -> str:
+    """rank_norm in [0,1] higher = lower priority (later rank). pale -> stronger."""
+    rank_norm = max(0.0, min(1.0, float(rank_norm)))
+    r = int(253 - rank_norm * 90)
+    g = int(235 - rank_norm * 130)
+    b = int(208 - rank_norm * 120)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def save_sensor_siting_candidates_map(*, candidates: gpd.GeoDataFrame, out_html: Path) -> None:
+    """Map top-ranked H3 cells for deploying an extra sensor — uncertainty-focused, not hottest-spot."""
+    if candidates.empty:
+        logger.warning("No sensor siting candidates; skipping map %s", out_html.name)
+        return
+
+    c = candidates.to_crs("EPSG:4326").copy()
+    bnds = c.total_bounds
+    ctr = [(float(bnds[1]) + float(bnds[3])) / 2.0, (float(bnds[0]) + float(bnds[2])) / 2.0]
+    m = folium.Map(location=ctr, zoom_start=13, tiles="CartoDB positron")
+
+    banner = (
+        "<div style=\"position: fixed; top: 10px; left: 10px; z-index: 9999; "
+        "background: rgba(255,248,235,0.97); padding: 10px 12px; border: 2px solid #f39c12; "
+        "border-radius: 6px; max-width: 520px; font-size: 12px;\">"
+        "<b>Sensor siting candidates</b><br>"
+        "Ranks reduce expected map uncertainty / improve coverage proxies (modes: coverage · hotspot_discovery · equity). "
+        "This does <u>not</u> identify the most polluted locations. Validate in the field before deployment."
+        "</div>"
+    )
+    m.get_root().html.add_child(folium.Element(banner))
+
+    rnk = pd.to_numeric(c["candidate_rank"], errors="coerce")
+    rmin, rmax = float(rnk.min()), float(rnk.max())
+    for _, row in c.iterrows():
+        rank_i = float(row.get("candidate_rank") or 1)
+        frac = (rank_i - rmin) / (rmax - rmin) if rmax > rmin else 0.0
+        fill = _rank_fill_hex(frac)
+
+        popup_html = (
+            "<b>Sensor candidate</b><br>"
+            f"<b>candidate_rank</b>: {int(row.get('candidate_rank') or 0)}<br>"
+            f"<b>siting_score</b>: {float(row.get('siting_score') or 0):.4f}<br>"
+            f"<b>scoring_mode</b>: {row.get('scoring_mode')}<br>"
+            f"<b>rationale_flags</b>: {row.get('rationale_flags')}<br>"
+            f"<b>planning_confidence</b>: {row.get('planning_confidence')}"
+        )
+        if str(row.get("warning_flags") or "").strip():
+            popup_html += f"<br><b>warning_flags</b>: {row.get('warning_flags')}"
+        popup = folium.Popup(popup_html, max_width=420)
+        sty = {"fillColor": fill, "color": "#2c3e50", "weight": 2, "fillOpacity": 0.62}
+        folium.GeoJson(
+            row.geometry.__geo_interface__,
+            style_function=lambda _f, s=sty: s,
+            popup=popup,
+        ).add_to(m)
+
+    folium.LayerControl().add_to(m)
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    m.save(str(out_html))
+

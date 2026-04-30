@@ -16,7 +16,7 @@ from .osm_features import download_osm_features
 from .provenance import dataset_provenance_summary
 from .recommendations import attach_recommendations
 from .scale_analysis import analyze_h3_resolution
-from .visualization import save_hotspot_recommendations_map, save_pm25_map
+from .visualization import save_hotspot_recommendations_map, save_pm25_map, save_sensor_siting_candidates_map
 from .weather_data import fetch_open_meteo_hourly, generate_synthetic_weather
 
 
@@ -38,16 +38,33 @@ def _cache_ok(cfg: AppConfig, path: Path, *, refresh_scope: str = "none", artifa
 def run_pipeline(
     cfg: AppConfig,
     *,
-    step: str = "all",  # audit | model | visualize | all
+    step: str = "all",  # audit | model | visualize | all | sensor-siting
     refresh_scope: str = "none",  # none | aq | all
     no_recommendations: bool = False,
     sample_mode_override: bool | None = None,
+    sensor_siting_mode: str | None = None,
 ) -> Dict[str, Path]:
     processed_dir = cfg.data_processed_dir
     outputs_dir = cfg.data_outputs_dir
 
     processed_dir.mkdir(parents=True, exist_ok=True)
     outputs_dir.mkdir(parents=True, exist_ok=True)
+
+    if step == "sensor-siting":
+        if not getattr(cfg.sensor_siting, "enabled", True):
+            logger.warning("sensor_siting.disabled in config; skipping sensor siting.")
+            return {"metrics_json": outputs_dir / "metrics.json"}
+        from .sensor_siting import run_sensor_siting
+
+        cand, _summary = run_sensor_siting(cfg=cfg, mode_override=sensor_siting_mode or None)
+        siting_geo = outputs_dir / "sensor_siting_candidates.geojson"
+        siting_map = outputs_dir / "sensor_siting_candidates_map.html"
+        save_sensor_siting_candidates_map(candidates=cand, out_html=siting_map)
+        return {
+            "metrics_json": outputs_dir / "metrics.json",
+            "sensor_siting_candidates_geojson": siting_geo,
+            "sensor_siting_candidates_map_html": siting_map,
+        }
 
     # 1) Boundary bundle (also provides cache key parts)
     bbox_input = None
@@ -496,7 +513,18 @@ def run_pipeline(
     save_pm25_map(grid_geo=grid_geo, data_df=recs, value_col="forecast_pm25_mean", out_html=forecast_map, title="Forecast PM2.5 (mean)", audit=audit)
     save_hotspot_recommendations_map(grid_geo=grid_geo, recs_df=recs, out_html=recs_map, audit=audit)
 
-    return {
+    ss_outputs: Dict[str, Path] = {}
+    if bool(getattr(cfg.sensor_siting, "enabled", True)) and step in ("all", "visualize"):
+        from .sensor_siting import run_sensor_siting
+
+        cand, _summ = run_sensor_siting(cfg=cfg, mode_override=sensor_siting_mode or None)
+        ss_geo_path = outputs_dir / "sensor_siting_candidates.geojson"
+        ss_map_path = outputs_dir / "sensor_siting_candidates_map.html"
+        save_sensor_siting_candidates_map(candidates=cand, out_html=ss_map_path)
+        ss_outputs["sensor_siting_candidates_geojson"] = ss_geo_path
+        ss_outputs["sensor_siting_candidates_map_html"] = ss_map_path
+
+    base_out = {
         "h3_grid_geojson": h3_grid_out,
         "static_features_geojson": static_out,
         "model_dataset_csv": dataset_out,
@@ -509,4 +537,6 @@ def run_pipeline(
         "forecast_pm25_map_html": forecast_map,
         "hotspot_recommendations_map_html": recs_map,
     }
+    base_out.update(ss_outputs)
+    return base_out
 

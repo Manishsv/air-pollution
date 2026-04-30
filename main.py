@@ -24,7 +24,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Probabilistic urban air-quality observability MVP")
     ap.add_argument("--sample", action="store_true", help="Run in sample mode (limits OSM features)")
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
-    ap.add_argument("--step", choices=["all", "audit", "model", "visualize"], default="all", help="Stop after a step")
+    ap.add_argument(
+        "--step",
+        choices=["all", "audit", "model", "visualize", "sensor-siting"],
+        default="all",
+        help="Stop after a step (sensor-siting reads existing outputs)",
+    )
+    ap.add_argument(
+        "--sensor-siting-mode",
+        choices=["coverage", "hotspot_discovery", "equity"],
+        default=None,
+        help="Override config sensor_siting.mode (coverage prioritizes distant/interpolated; equity uses urban proxies)",
+    )
     ap.add_argument("--no-recommendations", action="store_true", help="Disable operational recommendations")
     args = ap.parse_args()
 
@@ -43,6 +54,7 @@ def main() -> None:
         refresh_scope=args.force_refresh,
         no_recommendations=bool(args.no_recommendations),
         sample_mode_override=True if args.sample else None,
+        sensor_siting_mode=args.sensor_siting_mode,
     )
     logging.getLogger(__name__).info("Done. Outputs:")
     for k, v in outputs.items():

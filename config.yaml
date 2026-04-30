@@ -64,3 +64,13 @@ development:
   max_roads: 5000
   max_pois: 3000
   max_landuse: 3000
+
+# Planning support: ranks H3 cells where an extra sensor could reduce uncertainty
+# (coverage / equity proxies). Not “most polluted” spots.
+sensor_siting:
+  enabled: true
+  mode: coverage
+  top_k: 20
+  min_distance_from_existing_station_km: 1.0
+  redundancy_penalty_enabled: true
+  apply_min_spacing_if_stations_known: true

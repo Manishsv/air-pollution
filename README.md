@@ -21,6 +21,72 @@ The output should be interpreted as **indicative** unless station coverage and d
 - Proxy-based **likely contributing factors** (not validated attribution)
 - GeoJSON exports + Folium HTML maps
 
+### Algorithm (simple overview)
+
+The algorithm is intentionally simple:
+
+**Break the area into small grid cells, collect signals for each cell, estimate pollution now and later, then explain the uncertainty and suggest cautious actions.**
+
+1) **Divide the area into grid cells**
+- We use **H3** hexagonal cells. Each cell is one small unit of analysis.
+
+2) **Add static city features (proxies)**
+- From **OpenStreetMap (OSM)** (current implementation), we extract per-cell proxies such as:
+  - **roads** → traffic/emission proxy
+  - **buildings / built-up ratio** → built environment proxy
+  - **land use** → industrial / commercial / residential / green areas
+  - **POIs** → activity proxy
+- You can swap/augment these with other building/landcover sources later (e.g., Microsoft/Google building footprints), but the MVP currently uses OSM for reliability.
+
+3) **Add air-quality readings (PM2.5)**
+- From **OpenAQ/CPCB-like station feeds** (OpenAQ v3 in this MVP), we ingest station-hourly PM2.5.
+- Cells with stations get **observed** values.
+- Cells without stations get **estimated** values from nearby stations using **IDW (inverse distance weighting)** and are marked clearly as **interpolated** (with distance + station count recorded).
+- If live AQ fails, the pipeline uses a **documented synthetic fallback** so the workflow is still runnable end-to-end.
+
+4) **Add weather**
+- We add wind, humidity, rain, temperature (Open-Meteo). Weather matters because pollution can disperse, accumulate, or advect.
+- If live weather fails, a **synthetic fallback** is used (with provenance flags).
+
+5) **Add optional fire/burning signals**
+- If `FIRMS_API_KEY` is set, we pull satellite fire detections (NASA FIRMS) as a coarse burning proxy.
+- If no detections exist, we record that as **real/no-fires-detected** (not “missing data”).
+
+6) **Build a table (panel dataset)**
+- Each row is:
+
+  **(grid cell, time)**  
+  + static proxies (roads, buildings, land use, POIs)  
+  + current PM2.5 + PM2.5 lags  
+  + weather  
+  + fire proxy  
+  → **PM2.5 after 12 hours** (configurable horizon)
+
+7) **Train a simple model**
+- First compare against a baseline: **future PM2.5 = current PM2.5** (persistence).
+- Then train a baseline ML model like **RandomForest / XGBoost**.
+
+8) **Forecast PM2.5 + uncertainty**
+- For each grid cell, we predict PM2.5 at \(t + horizon\).
+- We also output uncertainty (RandomForest quantiles / band heuristics), not just one number.
+
+9) **Mark confidence (provenance + audit gates)**
+- The system checks:
+  - Was AQ **real / interpolated / synthetic**?
+  - How far is the nearest station? How many stations were used?
+  - How uncertain is the forecast band?
+- Outputs explicitly report **what we predict** and **how much to trust it**.
+
+10) **Suggest cautious actions**
+- Based on **likely contributing factors** (proxy-based, non-causal):
+  - high road density → traffic management
+  - high built-up/dust proxy → road sweeping / construction inspection
+  - fire signal → field verification
+  - low wind → advisory / preventive measures
+  - low confidence → verify before acting
+
+**Honest one-line version:** the system does not directly “know” pollution causes. It combines measured PM2.5, weather, and city-form proxies to forecast likely hotspots and recommend cautious, confidence-rated actions.
+
 ### Project layout
 
 ```
@@ -50,6 +116,7 @@ air_quality_mvp/
     model.py
     recommendations.py
     visualization.py
+    sensor_siting.py
     pipeline.py
   main.py
 ```
@@ -81,6 +148,10 @@ python main.py --step audit
 python main.py --force-refresh aq
 python main.py --no-recommendations
 python main.py --sample
+python main.py --step sensor-siting
+python main.py --sensor-siting-mode coverage
+python main.py --sensor-siting-mode hotspot_discovery
+python main.py --sensor-siting-mode equity
 ```
 
 Outputs land in:
@@ -96,8 +167,19 @@ Outputs land in:
 - `data/outputs/current_pm25_map.html`
 - `data/outputs/forecast_pm25_map.html`
 - `data/outputs/hotspot_recommendations_map.html`
+- `data/outputs/sensor_siting_candidates.geojson` (if `sensor_siting.enabled` and after a full run)
+- `data/outputs/sensor_siting_candidates_map.html`
+- A `sensor_siting_summary` block inside `data/outputs/metrics.json` when sensor siting runs
 
 Open the HTML files in a browser.
+
+### Sensor siting support
+
+The `src/sensor_siting.py` step helps **prioritize candidate H3 cells for adding a new AQ sensor**.
+
+**This module does not find the most polluted places.** It ranks candidate cells where an **additional** sensor might **reduce map uncertainty**, improve spatial coverage proxies, or meet an **equity-style** objective (urban exposure proxies using OSM static features such as roads, POIs, built-up fraction, low green fraction). Modes (`config.sensor_siting.mode` or `--sensor-siting-mode`) are **`coverage`**, **`hotspot_discovery`** (forecast mean × uncertainty proxies — still not “hottest pollution” as ground truth), and **`equity`**.
+
+**Limitations:** Results assume sparse interpolation and imperfect uncertainty bands; IDW/neighbor summaries are **not** ground-truth dispersion. Outputs are **planning support only**; **field validation** is required before deployment. If the audit shows synthetic AQ or failing quality gates, candidates are still written but flagged with **`planning_confidence: low`** and a fixed demonstration warning banner.
 
 ### When outputs should NOT be used
 
@@ -226,9 +308,3 @@ Controls:
 - `cache.enabled`: use cached artifacts when valid
 - `cache.force_refresh`: re-download and overwrite caches
 - `cache.ttl_days`: cache time-to-live in days
-
-### How this can connect later to DIGIT / Airawat
-
-- **DIGIT**: surface `hotspot_recommendations.geojson` as a layer + drive a simple “work order” workflow from hotspot cells.
-- **Airawat**: swap in higher quality emissions inventories / dispersion signals and calibrate the forecast model with validated station data.
-

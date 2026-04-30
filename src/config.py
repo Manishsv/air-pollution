@@ -60,6 +60,18 @@ class QualityGates:
 
 
 @dataclass(frozen=True)
+class SensorSitingConfig:
+    """Candidate locations for additional sensors — planning support only."""
+
+    enabled: bool = True
+    mode: str = "coverage"  # coverage | hotspot_discovery | equity
+    top_k: int = 20
+    min_distance_from_existing_station_km: float = 1.0
+    redundancy_penalty_enabled: bool = True
+    apply_min_spacing_if_stations_known: bool = True
+
+
+@dataclass(frozen=True)
 class BBox:
     north: float
     south: float
@@ -86,6 +98,7 @@ class AppConfig:
     osm: OSMConfig
     cache: CacheConfig
     development: DevConfig
+    sensor_siting: SensorSitingConfig
     project_root: Path
     data_raw_dir: Path
     data_processed_dir: Path
@@ -123,6 +136,7 @@ def load_config(config_path: str | Path) -> AppConfig:
     rf_cfg = (model_cfg.get("random_forest", {}) or {}) if isinstance(model_cfg, dict) else {}
     osm_cfg = cfg.get("osm", {}) or {}
     gates_cfg = cfg.get("quality_gates", {}) or {}
+    ss_cfg = cfg.get("sensor_siting", {}) or {}
     cat_cfg = cfg.get("pm25_categories_india") or {}
     road_classes = osm_cfg.get("road_classes")
     if not road_classes:
@@ -189,6 +203,14 @@ def load_config(config_path: str | Path) -> AppConfig:
             enabled=bool(cache_cfg.get("enabled", True)),
             force_refresh=bool(cache_cfg.get("force_refresh", False)),
             ttl_days=int(cache_cfg.get("ttl_days", 30)),
+        ),
+        sensor_siting=SensorSitingConfig(
+            enabled=bool(ss_cfg.get("enabled", True)),
+            mode=str(ss_cfg.get("mode", "coverage")),
+            top_k=int(ss_cfg.get("top_k", 20)),
+            min_distance_from_existing_station_km=float(ss_cfg.get("min_distance_from_existing_station_km", 1.0)),
+            redundancy_penalty_enabled=bool(ss_cfg.get("redundancy_penalty_enabled", True)),
+            apply_min_spacing_if_stations_known=bool(ss_cfg.get("apply_min_spacing_if_stations_known", True)),
         ),
         development=DevConfig(
             sample_mode=bool(dev_cfg.get("sample_mode", True)),
