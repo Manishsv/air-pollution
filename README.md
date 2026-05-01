@@ -7,6 +7,12 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
 - **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
 - **Specifications**: [`specifications/README.md`](specifications/README.md)
+- **Specs-first development**: [`docs/SPECS_FIRST_DEVELOPMENT.md`](docs/SPECS_FIRST_DEVELOPMENT.md)
+- **Vision**: [`docs/AIR_OS_VISION.md`](docs/AIR_OS_VISION.md)
+- **Actor model**: [`docs/ACTOR_MODEL.md`](docs/ACTOR_MODEL.md)
+- **Use-case roadmap**: [`docs/USE_CASE_ROADMAP.md`](docs/USE_CASE_ROADMAP.md)
+- **Data-source discovery**: [`docs/DATA_SOURCE_CATALOG.md`](docs/DATA_SOURCE_CATALOG.md)
+- **Specs policy (machine-readable)**: [`specifications/spec_policy.yaml`](specifications/spec_policy.yaml)
 
 ### What is AirOS?
 

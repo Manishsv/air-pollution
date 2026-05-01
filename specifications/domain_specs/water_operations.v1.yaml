@@ -1,0 +1,226 @@
+domain_id: water_operations
+version: v1
+status: stub
+
+purpose: >
+  Support water utility operations by monitoring supply interruptions, pressure/flow anomalies, tank levels,
+  leakage indicators, and complaint clusters. Outputs are decision support and must be bounded by provenance,
+  reliability, and human review; field verification is required before operational action when confidence is low.
+
+target_actors:
+  - water_utility_operator
+  - ward_engineer
+  - operations_center
+  - field_inspector
+  - city_administrator
+
+supported_decisions:
+  - decision_id: prioritize_leakage_investigation
+    description: Prioritize areas/assets for leakage investigation based on anomaly signals and complaints.
+    decision_scope: network
+    operational_risk: medium
+  - decision_id: respond_to_supply_interruption
+    description: Coordinate response to suspected supply interruptions with evidence and verification steps.
+    decision_scope: ward
+    operational_risk: high
+  - decision_id: schedule_asset_inspection
+    description: Queue assets (valves, tanks, pumps, meters) for inspection based on reliability/anomaly context.
+    decision_scope: asset
+    operational_risk: medium
+
+canonical_entities:
+  - entity_type: water_asset
+    description: Valve, pump, reservoir, tank, pipe segment, meter, or related water network asset.
+    examples: [valve_12, tank_7]
+  - entity_type: service_area
+    description: Supply zone/area used for operational grouping.
+    examples: [zone_A3]
+  - entity_type: ward
+    description: Administrative unit for operations coordination.
+    examples: [ward_9]
+
+observations:
+  - observed_property: pressure_bar
+    description: Water pressure measurement at a sensor or asset.
+    typical_sources: [pressure_sensor, scada]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: flow_lps
+    description: Water flow rate at a meter/segment.
+    typical_sources: [flow_meter, scada]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: tank_level_m
+    description: Tank/reservoir level.
+    typical_sources: [tank_level_sensor, scada]
+    required_provenance_fields: [source_id, collected_at]
+  - observed_property: supply_interruption
+    description: Interruption event/indicator (reported or detected).
+    typical_sources: [call_center_ticket, scada_alarm, field_report]
+    required_provenance_fields: [source_id, collected_at, ticket_id]
+  - observed_property: complaint_ticket
+    description: Water complaint record (low pressure, no water, quality issues).
+    typical_sources: [complaint_system]
+    required_provenance_fields: [source_id, collected_at, ticket_id]
+
+features:
+  - feature_id: pressure_drop_anomaly_score
+    description: Anomaly score for sustained pressure drop relative to baseline.
+    inputs: [pressure_bar]
+  - feature_id: night_flow_leakage_proxy
+    description: Proxy leakage indicator from elevated night flow (requires calibration).
+    inputs: [flow_lps]
+  - feature_id: complaint_cluster_density
+    description: Spatio-temporal clustering of complaint tickets.
+    inputs: [complaint_ticket]
+
+allowed_variables:
+  - variable: pressure_bar
+    description: Water pressure.
+    type: number
+    unit: bar
+    value_range: 0..20
+    allowed_values: []
+    notes: Must include sensor/asset reference and reliability fields.
+  - variable: flow_lps
+    description: Flow rate.
+    type: number
+    unit: lps
+    value_range: 0..10000
+    allowed_values: []
+    notes: Baseline vs anomaly must be explicit in decision packets.
+  - variable: tank_level_m
+    description: Tank/reservoir level.
+    type: number
+    unit: m
+    value_range: 0..100
+    allowed_values: []
+    notes: Use asset-specific min/max if available.
+  - variable: supply_interruption
+    description: Whether supply interruption is suspected/confirmed.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [suspected, confirmed, resolved]
+    notes: Confirmed requires authoritative source or field verification.
+  - variable: leakage_anomaly_level
+    description: Human-facing leakage anomaly category.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [low, medium, high]
+    notes: Proxy only; never a conclusion without verification.
+  - variable: complaint_cluster_level
+    description: Complaint clustering category.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [none, mild, significant]
+    notes: Must include sampling/coverage caveats.
+
+units:
+  - unit: bar
+    symbol: bar
+    description: Pressure unit.
+  - unit: lps
+    symbol: L/s
+    description: Liters per second flow rate.
+  - unit: m
+    symbol: m
+    description: Meters level/height.
+  - unit: none
+    symbol: ""
+    description: Unitless category/flag.
+
+thresholds_or_categories:
+  - id: leakage_anomaly_level_categories
+    variable: leakage_anomaly_level
+    type: categories
+    definition: >
+      Stub categories based on night flow proxy and pressure anomalies. Final thresholds require calibration
+      with network topology, demand patterns, and verified leakage incidents.
+    levels:
+      - level: low
+        criteria: night_flow_leakage_proxy is low
+        severity: low
+      - level: medium
+        criteria: night_flow_leakage_proxy is medium or pressure_drop_anomaly_score is medium
+        severity: medium
+      - level: high
+        criteria: night_flow_leakage_proxy is high or pressure_drop_anomaly_score is high
+        severity: high
+
+safety_gates:
+  - gate_id: require_field_verification_before_operational_action
+    description: Do not dispatch repair crews or change network operations solely from proxy outputs when uncertain.
+    when_to_block: operational_actions
+    required_evidence: [field_verification_result or authoritative_scada_confirmation]
+    override_policy: human_approval_only
+  - gate_id: block_if_low_provenance_or_synthetic
+    description: If core inputs are synthetic/unknown provenance, only allow “verify” and “data quality” tasks.
+    when_to_block: operational_recommendations
+    required_evidence: [provenance_summary with synthetic=false]
+    override_policy: none
+  - gate_id: minimum_source_reliability
+    description: Require minimum reliability for sensor-driven operational decisions.
+    when_to_block: operational_recommendations
+    required_evidence: [source_reliability_score >= 0.8]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields: [source_id, source_type, license, collected_at, ingested_at]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status, source_reliability_issues]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+
+decision_packet_profile:
+  profile_id: decision_packet_water_operations_stub
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+    - field_verification
+
+dashboard_consumer_requirements:
+  required_payload_sections: [summary, map_layers, alerts_or_queue, decision_packet_links]
+  required_warnings: [show_synthetic_data_banner_if_present, show_low_reliability_banner_if_present]
+
+human_review_prompts:
+  - prompt: Is the interruption confirmed by SCADA/sensor data, or only by complaints?
+    applies_when: supply_interruption in [suspected, confirmed]
+    required_response: free_text
+  - prompt: Could this anomaly be explained by planned maintenance or supply schedule changes?
+    applies_when: leakage_anomaly_level in [medium, high]
+    required_response: yes/no
+  - prompt: What field verification step is required before dispatch (pressure check, valve inspection, leak sound test)?
+    applies_when: leakage_anomaly_level == high
+    required_response: free_text
+
+field_verification_requirements:
+  required_before_operational_action:
+    - verify_pressure_and_flow_at_nearby_points
+    - verify_asset_status_valves_pumps_tanks
+    - confirm_complaints_or_ticket_details
+  evidence_to_capture: [sensor_reading, site_visit_note, ticket_id, photo]
+
+blocked_uses:
+  - automated_network_operations_changes_without_human_review
+  - treat_proxy_leakage_signals_as_confirmed_leak_without_verification
+  - public_reporting_of_sensitive_customer_complaints
+
+open_questions:
+  - Which SCADA/utility sources will be authoritative per city, and what are their reliability baselines?
+  - How will network topology be represented as canonical entities (pipes, valves, zones)?
+  - What privacy constraints apply to complaint tickets in consumer contracts?
+

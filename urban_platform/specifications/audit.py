@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 from jsonschema import Draft202012Validator
+import yaml
 
 from urban_platform.decision_support.explainability import sanitize_for_json
 from urban_platform.specifications.conformance import SPEC_ROOT, load_manifest, validator_for_schema_file
@@ -113,6 +114,83 @@ def audit_schema_validity(*, validated_at: str) -> list[dict[str, Any]]:
                     contract_type="schema_file",
                     status="invalid",
                     errors=[{"path": "$", "message": str(exc), "schema": str(schema_path.name)}],
+                )
+            )
+    return rows
+
+
+def _validate_domain_spec_yaml(path: Path) -> list[str]:
+    """
+    Lightweight structure check for domain spec YAML stubs.
+
+    This is intentionally minimal: it does not enforce semantics, only presence of required top-level keys.
+    """
+    required_keys = [
+        "domain_id",
+        "version",
+        "status",
+        "purpose",
+        "target_actors",
+        "supported_decisions",
+        "canonical_entities",
+        "observations",
+        "features",
+        "allowed_variables",
+        "units",
+        "thresholds_or_categories",
+        "safety_gates",
+        "provenance_requirements",
+        "source_reliability_requirements",
+        "decision_packet_profile",
+        "dashboard_consumer_requirements",
+        "human_review_prompts",
+        "field_verification_requirements",
+        "blocked_uses",
+        "open_questions",
+    ]
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(doc, dict):
+        return ["Domain spec must be a YAML mapping/object at the top level"]
+    missing = [k for k in required_keys if k not in doc]
+    errs: list[str] = []
+    if missing:
+        errs.append(f"Missing required top-level keys: {missing}")
+    if doc.get("version") not in {"v1"}:
+        errs.append("version must be 'v1' for *.v1.yaml stubs")
+    return errs
+
+
+def audit_domain_specs(*, validated_at: str) -> list[dict[str, Any]]:
+    """
+    Validate that domain specs exist and follow the required top-level structure.
+    """
+    rows: list[dict[str, Any]] = []
+    dom_dir = SPEC_ROOT / "domain_specs"
+    if not dom_dir.exists():
+        return rows
+    for p in sorted(dom_dir.glob("*.v1.yaml")):
+        artifact_or_api = f"domain_spec:{p.relative_to(SPEC_ROOT)}"
+        try:
+            problems = _validate_domain_spec_yaml(p)
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(p.name),
+                    contract_type="domain_spec",
+                    status="valid" if not problems else "invalid",
+                    errors=[{"path": "$", "message": msg, "schema": str(p.name)} for msg in problems],
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(p.name),
+                    contract_type="domain_spec",
+                    status="invalid",
+                    errors=[{"path": "$", "message": str(exc), "schema": str(p.name)}],
                 )
             )
     return rows

@@ -1,0 +1,225 @@
+domain_id: property_buildings
+version: v1
+status: stub
+
+purpose: >
+  Provide decision support for property and building intelligence by harmonizing property records,
+  building footprints, permits, and land-use layers into reviewable mismatch signals. This domain is
+  high-risk: enforcement or tax actions must be gated by human review and field verification.
+
+target_actors:
+  - property_tax_department
+  - town_planning_department
+  - building_permission_department
+  - ward_officer
+  - field_inspector
+
+supported_decisions:
+  - decision_id: prioritize_field_verification_for_mismatch
+    description: Prioritize properties/buildings for field verification based on mismatch strength and evidence.
+    decision_scope: parcel
+    operational_risk: high
+  - decision_id: identify_under_assessment_candidates
+    description: Identify candidates where assessed value/area may be inconsistent with observed footprint signals.
+    decision_scope: ward
+    operational_risk: high
+  - decision_id: permit_compliance_review_queue
+    description: Queue potential permit compliance cases for review (not enforcement).
+    decision_scope: building
+    operational_risk: high
+
+canonical_entities:
+  - entity_type: property_record
+    description: Property registry entry (owner/details may be sensitive; consumer outputs must respect privacy).
+    examples: [prop_000123]
+  - entity_type: building
+    description: Building geometry/footprint entity (OSM or authoritative footprint sources).
+    examples: [bldg_778]
+  - entity_type: permit
+    description: Building permit / approval record.
+    examples: [permit_2025_0911]
+  - entity_type: parcel
+    description: Parcel/plot boundary if available.
+    examples: [parcel_42_19]
+  - entity_type: ward
+    description: Administrative unit for operational prioritization.
+    examples: [ward_12]
+
+observations:
+  - observed_property: assessed_builtup_area_sq_m
+    description: Built-up area from property assessment records.
+    typical_sources: [property_registry]
+    required_provenance_fields: [source_id, collected_at, license]
+  - observed_property: footprint_area_sq_m
+    description: Building footprint area derived from geometry.
+    typical_sources: [building_footprint_feed, osm]
+    required_provenance_fields: [source_id, collected_at, license]
+  - observed_property: permit_status
+    description: Permit status for a building/project.
+    typical_sources: [permit_system]
+    required_provenance_fields: [source_id, collected_at]
+  - observed_property: land_use_category
+    description: Land use classification (zoning or observed).
+    typical_sources: [zoning_layer, planning_gis]
+    required_provenance_fields: [source_id, license]
+
+features:
+  - feature_id: footprint_vs_assessment_area_ratio
+    description: Ratio comparing footprint-derived area to assessed built-up area (proxy; not ground truth).
+    inputs: [footprint_area_sq_m, assessed_builtup_area_sq_m]
+  - feature_id: mismatch_score_property_building
+    description: Composite mismatch score combining area ratio, permit status mismatches, and land-use conflicts.
+    inputs: [footprint_vs_assessment_area_ratio, permit_status, land_use_category]
+  - feature_id: under_assessment_candidate_flag
+    description: Conservative flag for “candidate for review”, not a conclusion.
+    inputs: [mismatch_score_property_building]
+
+allowed_variables:
+  - variable: assessed_builtup_area_sq_m
+    description: Assessed built-up area from registry.
+    type: number
+    unit: sq_m
+    value_range: 0..1000000
+    allowed_values: []
+    notes: Must carry provenance; may be missing or outdated.
+  - variable: footprint_area_sq_m
+    description: Area from building footprint geometry.
+    type: number
+    unit: sq_m
+    value_range: 0..1000000
+    allowed_values: []
+    notes: Geometry source must be explicit; OSM footprints are best-effort.
+  - variable: land_use_category
+    description: Land use category.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [residential, commercial, industrial, mixed, institutional, public, open_space, unknown]
+    notes: Categories are stub; must be aligned to city’s official zoning taxonomy where available.
+  - variable: permit_status
+    description: Permit status.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [unknown, approved, pending, rejected, expired]
+    notes: Must include authoritative system provenance.
+  - variable: mismatch_level
+    description: Human-facing mismatch category used to prioritize review.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [low, medium, high]
+    notes: Must not be interpreted as wrongdoing; “high” means “review first”.
+  - variable: under_assessment_candidate
+    description: Candidate flag for potential under-assessment (review-only).
+    type: boolean
+    unit: none
+    value_range: null
+    allowed_values: []
+    notes: Forbidden for automated tax action; requires human review + verification.
+
+units:
+  - unit: sq_m
+    symbol: m²
+    description: Square meters area.
+  - unit: none
+    symbol: ""
+    description: Unitless category/flag.
+
+thresholds_or_categories:
+  - id: mismatch_level_categories
+    variable: mismatch_level
+    type: categories
+    definition: >
+      Stub categories based on footprint vs assessment ratio and missing permit signals. Final thresholds
+      must be city-calibrated and reviewed for bias and fairness.
+    levels:
+      - level: low
+        criteria: footprint_vs_assessment_area_ratio <= 1.1
+        severity: low
+      - level: medium
+        criteria: footprint_vs_assessment_area_ratio > 1.1 and <= 1.3
+        severity: medium
+      - level: high
+        criteria: footprint_vs_assessment_area_ratio > 1.3
+        severity: high
+
+safety_gates:
+  - gate_id: require_field_verification_before_enforcement_or_tax_action
+    description: No enforcement/tax action may be taken solely from mismatch outputs.
+    when_to_block: enforcement, tax_reassessment, penalties
+    required_evidence: [field_verification_result, reviewer_approval]
+    override_policy: human_approval_only
+  - gate_id: privacy_and_sensitivity_guardrail
+    description: Consumer outputs must avoid exposing sensitive personal identifiers by default.
+    when_to_block: public_reporting, broad_dashboard_sharing
+    required_evidence: [consumer_contract_privacy_review]
+    override_policy: human_approval_only
+  - gate_id: block_if_low_provenance_or_low_reliability
+    description: If inputs are outdated/unknown provenance, restrict to “data cleanup” tasks only.
+    when_to_block: high_priority_review_queue
+    required_evidence: [provenance_summary, reliability_ok]
+    override_policy: none
+
+provenance_requirements:
+  required_fields: [source_id, source_type, license, collected_at, ingested_at]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status, source_reliability_issues]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+
+decision_packet_profile:
+  profile_id: decision_packet_property_buildings_stub
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+    - field_verification
+
+dashboard_consumer_requirements:
+  required_payload_sections: [summary, map_layers, alerts_or_queue, decision_packet_links]
+  required_warnings:
+    - show_low_provenance_banner_if_present
+    - show_low_reliability_banner_if_present
+    - do_not_display_sensitive_identifiers_by_default
+
+human_review_prompts:
+  - prompt: Is the mismatch explainable by legitimate data issues (stale record, missing permits, geometry error)?
+    applies_when: mismatch_level in [medium, high]
+    required_response: free_text
+  - prompt: Do we have any authoritative corroboration (permits, surveys) beyond best-effort footprints?
+    applies_when: under_assessment_candidate == true
+    required_response: yes/no
+  - prompt: Are there fairness/bias risks in prioritizing this area (coverage gaps, informal settlements)?
+    applies_when: mismatch_level == high
+    required_response: free_text
+
+field_verification_requirements:
+  required_before_operational_action:
+    - verify_building_existence_and_approximate_area
+    - verify_occupancy_or_use_if_relevant_and_legal
+    - verify_permit_documents_or_status
+  evidence_to_capture: [photo, site_visit_note, ticket_id]
+
+blocked_uses:
+  - automated_enforcement_or_tax_reassessment_without_human_review
+  - publish_sensitive_property_details_to_public_dashboards
+  - treat_mismatch_score_as_proof_of_non_compliance
+
+open_questions:
+  - What minimum privacy standard should consumer contracts enforce for property identifiers?
+  - Which authoritative footprint/parcel sources will be used per city (beyond OSM)?
+  - How will mismatch thresholds be calibrated and audited for fairness?
+

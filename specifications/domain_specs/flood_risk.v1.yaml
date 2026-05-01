@@ -1,0 +1,222 @@
+domain_id: flood_risk
+version: v1
+status: stub
+
+purpose: >
+  Provide decision support for flood risk, waterlogging, and flood incidents by combining rainfall intensity,
+  low-lying area exposure, drainage asset status, and incident reports into reviewable, confidence-rated outputs.
+  This domain is high-risk: emergency actions must be gated by human review and field verification unless
+  authoritative sources and reliability thresholds are met.
+
+target_actors:
+  - disaster_management_cell
+  - stormwater_department_engineer
+  - ward_officer
+  - emergency_response_team
+  - field_inspector
+
+supported_decisions:
+  - decision_id: deploy_field_teams_for_waterlogging
+    description: Prioritize wards/assets for inspection and dewatering response based on risk and evidence.
+    decision_scope: ward
+    operational_risk: high
+  - decision_id: issue_public_advisory
+    description: Recommend advisory messaging for areas with elevated short-term flood risk.
+    decision_scope: city
+    operational_risk: high
+  - decision_id: inspect_drainage_assets
+    description: Select drain/culvert assets for inspection/cleaning based on predicted risk and asset context.
+    decision_scope: asset
+    operational_risk: medium
+
+canonical_entities:
+  - entity_type: drainage_asset
+    description: Drain, culvert, inlet, outfall, pump, or related stormwater asset.
+    examples: [drain_123, culvert_88]
+  - entity_type: low_lying_area
+    description: A known low-lying polygon/zone with higher waterlogging exposure.
+    examples: [zone_low_lying_12]
+  - entity_type: road_segment
+    description: Road segment that can become impassable due to waterlogging.
+    examples: [road_seg_901]
+  - entity_type: ward
+    description: Administrative boundary used for operational routing.
+    examples: [ward_42]
+
+observations:
+  - observed_property: rainfall_intensity_mm_per_hr
+    description: Rainfall intensity at a location/time window (observed or forecasted).
+    typical_sources: [weather_forecast, rain_gauge]
+    required_provenance_fields: [source_id, source_type, collected_at, license]
+  - observed_property: water_depth_m
+    description: Estimated or observed standing water depth at a point (sensor) or reported by field/citizens.
+    typical_sources: [water_level_sensor, field_report, citizen_report]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: flood_incident
+    description: Flood/waterlogging incident record (event-like observation).
+    typical_sources: [call_center_ticket, field_report, emergency_dispatch]
+    required_provenance_fields: [source_id, collected_at, ticket_id]
+  - observed_property: drain_blockage_indicator
+    description: Indicator that a drain/culvert is blocked or constrained.
+    typical_sources: [inspection_report, sensor_proxy]
+    required_provenance_fields: [source_id, collected_at]
+
+features:
+  - feature_id: low_lying_exposure_index
+    description: Static/slow-changing exposure proxy from elevation/DEM and historical waterlogging zones.
+    inputs: [elevation_m, low_lying_area_polygons, historical_incidents]
+  - feature_id: rainfall_accumulation_last_3h_mm
+    description: Rolling accumulation of rainfall as a trigger proxy for waterlogging.
+    inputs: [rainfall_intensity_mm_per_hr]
+  - feature_id: drainage_asset_risk_context
+    description: Asset context (capacity proxy, nearby low-lying zones, historical incidents).
+    inputs: [drainage_asset, low_lying_exposure_index, historical_incidents]
+
+allowed_variables:
+  - variable: rainfall_intensity_mm_per_hr
+    description: Rainfall intensity.
+    type: number
+    unit: mm_per_hr
+    value_range: 0..500
+    allowed_values: []
+    notes: Includes forecasted values; must include provenance that distinguishes observed vs forecast.
+  - variable: rainfall_accumulation_last_3h_mm
+    description: Rolling rainfall accumulation (derived feature).
+    type: number
+    unit: mm
+    value_range: 0..1000
+    allowed_values: []
+    notes: Derived; must record the aggregation window.
+  - variable: water_depth_m
+    description: Standing water depth.
+    type: number
+    unit: m
+    value_range: 0..5
+    allowed_values: []
+    notes: Sensor vs report must be distinguished in provenance.
+  - variable: flood_risk_level
+    description: Categorical flood risk level for an area/asset/time window.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [low, moderate, high, severe]
+    notes: Category must be computed from thresholds_or_categories rules and must include confidence.
+  - variable: drain_blockage_indicator
+    description: Whether a drain appears blocked (binary or graded).
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [unknown, clear, partially_blocked, blocked]
+    notes: Operational action requires validation unless sourced from recent inspection.
+
+units:
+  - unit: mm_per_hr
+    symbol: mm/hr
+    description: Millimeters per hour rainfall intensity.
+  - unit: mm
+    symbol: mm
+    description: Millimeters rainfall accumulation.
+  - unit: m
+    symbol: m
+    description: Meters water depth.
+  - unit: none
+    symbol: ""
+    description: Unitless category/flag.
+
+thresholds_or_categories:
+  - id: flood_risk_level_categories
+    variable: flood_risk_level
+    type: categories
+    definition: >
+      Stub risk categories based on rainfall accumulation and exposure proxies. Final implementation must
+      be city-calibrated and validated against historical incidents.
+    levels:
+      - level: low
+        criteria: rainfall_accumulation_last_3h_mm < 20
+        severity: low
+      - level: moderate
+        criteria: rainfall_accumulation_last_3h_mm >= 20 and < 50
+        severity: medium
+      - level: high
+        criteria: rainfall_accumulation_last_3h_mm >= 50 and < 100
+        severity: high
+      - level: severe
+        criteria: rainfall_accumulation_last_3h_mm >= 100
+        severity: critical
+
+safety_gates:
+  - gate_id: require_field_verification_for_emergency_action
+    description: Emergency actions must not be triggered solely by model/proxy outputs.
+    when_to_block: emergency_response_dispatch, enforcement, forced_evacuations
+    required_evidence: [field_verification_result or authoritative_sensor_confirmation]
+    override_policy: human_approval_only
+  - gate_id: block_if_provenance_unknown_or_synthetic
+    description: If core inputs are synthetic/unknown, only allow “verify” tasks, not operational recommendations.
+    when_to_block: operational_recommendations
+    required_evidence: [provenance_summary with synthetic=false]
+    override_policy: none
+  - gate_id: minimum_source_reliability
+    description: For sensor-driven variables (e.g., water_depth_m), require minimum source reliability.
+    when_to_block: operational_recommendations
+    required_evidence: [source_reliability_score >= 0.8]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields: [source_id, source_type, license, collected_at, ingested_at]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status, source_reliability_issues]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+
+decision_packet_profile:
+  profile_id: decision_packet_flood_risk_stub
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+    - field_verification
+
+dashboard_consumer_requirements:
+  required_payload_sections: [summary, map_layers, alerts_or_queue, decision_packet_links]
+  required_warnings: [show_synthetic_data_banner_if_present, show_low_reliability_banner_if_present]
+
+human_review_prompts:
+  - prompt: Is this risk driven by authoritative sensors, or by forecast/proxies only?
+    applies_when: flood_risk_level in [high, severe]
+    required_response: yes/no
+  - prompt: Do we have recent field confirmation of waterlogging at the highlighted location?
+    applies_when: recommended_next_actions includes dispatch
+    required_response: yes/no
+  - prompt: Are there known drainage assets nearby that plausibly explain the alert (blockage/maintenance pending)?
+    applies_when: flood_risk_level in [moderate, high, severe]
+    required_response: free_text
+
+field_verification_requirements:
+  required_before_operational_action:
+    - verify_waterlogging_presence_and_depth
+    - verify_drainage_asset_status_if_applicable
+    - capture_photos_or_sensor_readings
+  evidence_to_capture: [photo, site_visit_note, ticket_id]
+
+blocked_uses:
+  - automatic_emergency_dispatch_without_human_review
+  - treat_forecast_or_synthetic_inputs_as_confirmed_flood_incident
+  - enforcement_actions_based_on_proxy_only
+
+open_questions:
+  - Which authoritative rainfall/water-level sources will be primary for each city?
+  - How will low-lying exposure be computed and validated (DEM resolution, calibration)?
+  - What are the minimum coverage/reliability thresholds to permit public advisories?
+

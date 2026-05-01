@@ -1,0 +1,63 @@
+specs_first: true
+
+mandatory_conformance:
+  provider_inputs: true
+  platform_objects: true
+  domain_profiles: true
+  consumer_outputs: true
+
+paths:
+  provider_contracts: specifications/provider_contracts
+  platform_objects: specifications/platform_objects
+  domain_specs: specifications/domain_specs
+  consumer_contracts: specifications/consumer_contracts
+
+required_sequence:
+  - define_use_case
+  - identify_actor
+  - identify_decision
+  - define_or_reuse_provider_contract
+  - define_or_reuse_platform_object
+  - define_or_reuse_domain_spec
+  - define_or_reuse_consumer_contract
+  - register_in_manifest
+  - add_conformance_check
+  - implement_code
+  - run_conformance
+  - attach_evidence
+
+blocked_without_specs:
+  # Provider-facing capabilities
+  - connector
+  - edge_publisher
+  - file_ingestion
+
+  # Canonical platform surface area
+  - platform_object
+  - platform_object_extension
+  - domain_field
+  - domain_variable
+  - domain_threshold
+  - domain_category
+  - decision_packet_extension
+
+  # Consumer-facing capabilities
+  - dashboard
+  - dashboard_payload
+  - sdk_method
+  - api_endpoint
+  - map_layer
+  - report
+  - public_report
+  - decision_packet
+  - field_task
+
+  # Decision-support / automation surfaces
+  - model_output
+  - alert_rule
+
+notes:
+  policy_files_kept_aligned:
+    - specifications/spec_policy.yaml
+    - specifications/specs_policy.yaml
+

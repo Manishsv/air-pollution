@@ -1,0 +1,136 @@
+domain_id: <snake_case_domain_id>
+version: v1
+status: stub   # stub | draft | stable | deprecated
+
+purpose: >
+  <One-paragraph purpose statement. What decisions does this domain enable, and what is the safety posture?>
+
+target_actors:
+  - <actor_1>
+  - <actor_2>
+
+supported_decisions:
+  - decision_id: <snake_case_decision_id>
+    description: <What decision is supported?>
+    decision_scope: <ward|city|asset|grid_cell|corridor|parcel|building|network>
+    operational_risk: <low|medium|high>
+
+canonical_entities:
+  # Canonical platform entities this domain uses (or will require).
+  - entity_type: <entity_type>
+    description: <what it represents>
+    examples: []
+
+observations:
+  # Canonical platform observations this domain expects to normalize into.
+  - observed_property: <variable_name>
+    description: <what is observed>
+    typical_sources: []
+    required_provenance_fields: []
+
+features:
+  # Derived/reusable features; should map to platform Feature objects where applicable.
+  - feature_id: <snake_case_feature_id>
+    description: <what it represents>
+    inputs: []
+
+allowed_variables:
+  # Domain-level variable dictionary. Variables should ultimately align to canonical Observation fields.
+  - variable: <variable_name>
+    description: <meaning>
+    type: <number|integer|string|boolean|enum|object>
+    unit: <unit_key_or_none>
+    value_range: <min..max or null>
+    allowed_values: []   # for enums
+    notes: <optional>
+
+units:
+  # Domain-approved unit dictionary. Use explicit unit keys so providers/consumers can map consistently.
+  - unit: <unit_key>
+    symbol: <symbol>
+    description: <what it measures>
+
+thresholds_or_categories:
+  # Risk categories, breakpoints, and thresholds that dashboards/packets may use.
+  - id: <threshold_or_category_id>
+    variable: <variable_name>
+    type: <thresholds|categories>
+    definition: <high-level definition>
+    levels:
+      - level: <level_name>
+        criteria: <expression-like text>
+        severity: <low|medium|high|critical>
+
+safety_gates:
+  # Conditions that must pass before operational recommendations are allowed.
+  - gate_id: <snake_case_gate_id>
+    description: <what the gate enforces>
+    when_to_block: <what is blocked if gate fails>
+    required_evidence: []
+    override_policy: <none|human_approval_only>
+
+provenance_requirements:
+  required_fields:
+    - source_id
+    - source_type
+    - license
+    - collected_at
+    - ingested_at
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields:
+    - source_reliability_score
+    - source_reliability_status
+    - source_reliability_issues
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+
+decision_packet_profile:
+  profile_id: <domain_profile_id>
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+    - field_verification
+
+dashboard_consumer_requirements:
+  # Requirements that any dashboard consumer contract must satisfy.
+  required_payload_sections:
+    - summary
+    - map_layers
+    - alerts_or_queue
+    - decision_packet_links
+  required_warnings:
+    - show_synthetic_data_banner_if_present
+    - show_low_reliability_banner_if_present
+
+human_review_prompts:
+  # Questions shown to reviewers to prevent over-automation.
+  - prompt: <question>
+    applies_when: <condition text>
+    required_response: <yes/no/free_text/structured>
+
+field_verification_requirements:
+  required_before_operational_action:
+    - <verification_step>
+  evidence_to_capture:
+    - <photo|sensor_reading|site_visit_note|signature|ticket_id>
+
+blocked_uses:
+  # Explicitly forbidden interpretations/actions.
+  - <blocked_use>
+
+open_questions:
+  - <question>
+
