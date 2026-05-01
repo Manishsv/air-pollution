@@ -15,6 +15,7 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 from conformance_probe import probe_conformance  # noqa: E402
+from domain_maturity_probe import probe_domain_maturity  # noqa: E402
 from spec_policy_probe import probe_spec_policy  # noqa: E402
 
 
@@ -185,6 +186,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
     folders = report.get("expected_spec_folders", {})
     governance = report.get("governance", {})
     conformance = report.get("conformance", {})
+    domain_maturity = report.get("domain_maturity")
 
     risks = report.get("risks", [])
     next_task = report.get("recommended_next_task", "UNKNOWN")
@@ -232,6 +234,24 @@ def _render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"  - `{e}`")
     lines.append("")
 
+    if domain_maturity is not None:
+        lines.append("### Domain maturity")
+        lines.append(f"- **domain**: `{domain_maturity.get('domain')}`")
+        lines.append(f"- **maturity_stage**: `{domain_maturity.get('maturity_stage')}`")
+        lines.append(f"- **completed_items**: `{len(domain_maturity.get('completed_items') or [])}`")
+        lines.append(f"- **missing_items**: `{len(domain_maturity.get('missing_items') or [])}`")
+        if domain_maturity.get("missing_items"):
+            lines.append("- **missing**:")
+            for p in domain_maturity["missing_items"]:
+                lines.append(f"  - `{p}`")
+        lines.append("- **recommended_next_task**:")
+        lines.append(f"  - {domain_maturity.get('recommended_next_task')}")
+        if domain_maturity.get("errors"):
+            lines.append("- **domain_maturity_errors**:")
+            for e in domain_maturity["errors"]:
+                lines.append(f"  - `{e}`")
+        lines.append("")
+
     lines.append("### Risks")
     if risks:
         for r in risks:
@@ -262,6 +282,12 @@ def _write_reports(repo_root: Path, report: dict[str, Any]) -> tuple[Path, Path]
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local specs-first supervisor review (no external LLM).")
     parser.add_argument(
+        "--domain",
+        type=str,
+        default=None,
+        help="Optional domain key to report maturity for (e.g. flood_risk).",
+    )
+    parser.add_argument(
         "--run-conformance",
         action="store_true",
         help="If set, run `python main.py --step conformance` before reporting.",
@@ -274,6 +300,9 @@ def main() -> int:
     spec_folders = _probe_spec_folders(repo_root)
     governance = _probe_repo_governance(repo_root)
     conformance = probe_conformance(repo_root, run=bool(args.run_conformance))
+    domain_maturity = (
+        probe_domain_maturity(repo_root, args.domain) if args.domain else None
+    )
 
     risks = _risk_register(
         spec_policy_loaded=policy.loaded,
@@ -292,6 +321,7 @@ def main() -> int:
         "expected_spec_folders": spec_folders,
         "governance": asdict(governance),
         "conformance": conformance.to_dict(),
+        "domain_maturity": domain_maturity.to_dict() if domain_maturity else None,
         "risks": risks,
         "recommended_next_task": _recommended_next_task(
             spec_folders=spec_folders,
