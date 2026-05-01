@@ -1,0 +1,49 @@
+{
+  "city_id": "demo_city",
+  "generated_at": "2026-05-01T18:30:00Z",
+  "risk_summary": {
+    "overall_risk_level": "high",
+    "time_window": "next_3_hours",
+    "headline": "Heavy rainfall and low-lying exposure: prioritize ward_42 verification."
+  },
+  "map_layers": [
+    {
+      "layer_id": "flood_risk_areas",
+      "layer_type": "polygon",
+      "title": "Flood risk areas",
+      "source_packet_ids": ["pkt_flood_0001"]
+    }
+  ],
+  "risk_areas": [
+    {
+      "area_id": "ward_42",
+      "risk_level": "high",
+      "confidence_score": 0.62,
+      "uncertainty": { "notes": "Forecast uncertainty; incident unverified." },
+      "geometry_geojson": null
+    }
+  ],
+  "active_warnings": [
+    {
+      "warning_id": "requires_field_verification",
+      "severity": "high",
+      "message": "Outputs are decision support. Field verification required before emergency action."
+    }
+  ],
+  "data_quality_summary": {
+    "synthetic_data_used": false,
+    "confidence_note": "One unverified incident report; rainfall from gauge network; limited water-depth sensors."
+  },
+  "recommended_review_queue": [
+    {
+      "packet_id": "pkt_flood_0001",
+      "priority": "high",
+      "reason": "High risk level with unverified incident near underpass."
+    }
+  ],
+  "provenance_summary": {
+    "sources": ["City Rain Gauge Network", "311 Flood Incidents", "Stormwater Assets"],
+    "synthetic_used": false
+  }
+}
+

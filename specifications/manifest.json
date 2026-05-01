@@ -94,6 +94,24 @@
       "schema_path": "provider_contracts/video_camera_people_count_feed.v1.schema.json",
       "stability": "documented"
     },
+    "provider_rainfall_observation_feed": {
+      "description": "Raw ingestion contract: rainfall observations (intensity/accumulation) as emitted by providers.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/rainfall_observation_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_flood_incident_feed": {
+      "description": "Raw ingestion contract: flood/waterlogging incident records (tickets/dispatch/field reports).",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/flood_incident_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_drainage_asset_feed": {
+      "description": "Raw ingestion contract: drainage assets (drains/culverts/inlets/outfalls/pumps).",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/drainage_asset_feed.v1.schema.json",
+      "stability": "documented"
+    },
 
     "platform_observation": {
       "description": "Normalized internal observation object (matches standards.schemas Observation).",
@@ -162,6 +180,24 @@
       "schema_path": "consumer_contracts/source_reliability_response.v1.schema.json",
       "stability": "documented"
     },
+    "consumer_flood_risk_dashboard": {
+      "description": "Consumer contract: flood risk dashboard payload (situational awareness + review queue).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/flood_risk_dashboard.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_flood_decision_packet": {
+      "description": "Consumer contract: flood decision packet profile (domain_id=flood_risk).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/flood_decision_packet.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_field_verification_task": {
+      "description": "Consumer contract: field verification task (referenced by decision packets and review workflows).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/field_verification_task.v1.schema.json",
+      "stability": "documented"
+    },
 
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
@@ -174,6 +210,28 @@
       "contract_type": "openapi",
       "schema_path": "openapi/provider_ingestion_api.v1.yaml",
       "stability": "documented"
+    }
+  },
+  "examples": {
+    "example_flood_rainfall_observation": {
+      "schema_name": "provider_rainfall_observation_feed",
+      "path": "examples/flood/rainfall_observation.sample.json"
+    },
+    "example_flood_incident": {
+      "schema_name": "provider_flood_incident_feed",
+      "path": "examples/flood/flood_incident.sample.json"
+    },
+    "example_flood_drainage_asset": {
+      "schema_name": "provider_drainage_asset_feed",
+      "path": "examples/flood/drainage_asset.sample.json"
+    },
+    "example_flood_risk_dashboard": {
+      "schema_name": "consumer_flood_risk_dashboard",
+      "path": "examples/flood/flood_risk_dashboard.sample.json"
+    },
+    "example_flood_decision_packet": {
+      "schema_name": "consumer_flood_decision_packet",
+      "path": "examples/flood/flood_decision_packet.sample.json"
     }
   }
 }

@@ -9,6 +9,7 @@ from urban_platform.decision_support.explainability import sanitize_for_json
 from urban_platform.specifications.audit import (
     audit_api_responses,
     audit_domain_specs,
+    audit_examples,
     audit_manifest,
     audit_output_artifacts,
     audit_schema_validity,
@@ -151,6 +152,7 @@ def run_conformance(
     if mode == "full":
         results.extend(audit_schema_validity(validated_at=validated_at))
         results.extend(audit_domain_specs(validated_at=validated_at))
+        results.extend(audit_examples(validated_at=validated_at))
         results.extend(audit_manifest(validated_at=validated_at))
 
     results.extend(audit_output_artifacts(base_path=base_path, validated_at=validated_at))

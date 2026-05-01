@@ -1,0 +1,33 @@
+{
+  "provider_id": "city_call_center",
+  "source_name": "311 Flood Incidents",
+  "source_type": "government_system_extract",
+  "license": "restricted_internal",
+  "source_metadata": {
+    "system": "311",
+    "city_id": "demo_city"
+  },
+  "records": [
+    {
+      "incident_time": "2026-05-01T18:20:00Z",
+      "incident_id": "INC-2026-000019",
+      "incident_type": "waterlogging",
+      "severity": "high",
+      "status": "open",
+      "description": "Waterlogging near underpass; vehicles stuck.",
+      "reported_by": "citizen",
+      "quality_flag": "unverified",
+      "provenance": {
+        "source_id": "311",
+        "ticket_id": "311-998812",
+        "synthetic": false
+      },
+      "latitude": 12.975,
+      "longitude": 77.59,
+      "source_metadata": {
+        "ward_id": "ward_42"
+      }
+    }
+  ]
+}
+

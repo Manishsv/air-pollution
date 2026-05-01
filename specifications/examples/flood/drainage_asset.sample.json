@@ -1,0 +1,32 @@
+{
+  "provider_id": "stormwater_asset_register",
+  "source_name": "Stormwater Assets",
+  "source_type": "government_system_extract",
+  "license": "restricted_internal",
+  "source_metadata": {
+    "system": "asset_registry",
+    "city_id": "demo_city"
+  },
+  "records": [
+    {
+      "asset_id": "DRAIN-0012",
+      "entity_id": "drainage_asset_0012",
+      "asset_type": "drain",
+      "asset_status": "needs_cleaning",
+      "capacity": 120,
+      "capacity_unit": "L/s",
+      "last_inspected_at": "2026-04-20T10:00:00Z",
+      "quality_flag": "ok",
+      "provenance": {
+        "source_id": "asset_registry",
+        "synthetic": false
+      },
+      "latitude": 12.973,
+      "longitude": 77.592,
+      "source_metadata": {
+        "ward_id": "ward_42"
+      }
+    }
+  ]
+}
+

@@ -13,3 +13,6 @@ data/outputs/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
+tools/ai_dev_supervisor/reports/*.json
+tools/ai_dev_supervisor/reports/*.md
+!tools/ai_dev_supervisor/reports/.gitkeep

@@ -1,0 +1,32 @@
+{
+  "provider_id": "imd_like_rain_gauges",
+  "source_name": "City Rain Gauge Network",
+  "source_type": "sensor_feed",
+  "license": "restricted_internal",
+  "source_metadata": {
+    "city_id": "demo_city",
+    "timezone": "Asia/Kolkata"
+  },
+  "records": [
+    {
+      "observation_time": "2026-05-01T18:00:00Z",
+      "entity_id": "rain_gauge_17",
+      "observed_property": "rainfall_intensity_mm_per_hr",
+      "value": 42.5,
+      "unit": "mm/hr",
+      "quality_flag": "ok",
+      "provenance": {
+        "source_id": "gauge_17",
+        "collection_method": "tipping_bucket",
+        "ingest_mode": "api",
+        "synthetic": false
+      },
+      "latitude": 12.9716,
+      "longitude": 77.5946,
+      "source_metadata": {
+        "station_name": "Gauge 17"
+      }
+    }
+  ]
+}
+

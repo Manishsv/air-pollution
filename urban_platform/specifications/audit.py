@@ -196,6 +196,96 @@ def audit_domain_specs(*, validated_at: str) -> list[dict[str, Any]]:
     return rows
 
 
+def audit_examples(*, validated_at: str) -> list[dict[str, Any]]:
+    """
+    Validate example/fixture JSON files registered in specifications/manifest.json.
+
+    Examples are required to stay in sync with the schemas they illustrate.
+    """
+    rows: list[dict[str, Any]] = []
+    m = load_manifest()
+    examples = m.get("examples") or {}
+    arts = m.get("artifacts") or {}
+    for ex_name, meta in examples.items():
+        schema_name = (meta or {}).get("schema_name")
+        rel_path = (meta or {}).get("path")
+        errors: list[dict[str, Any]] = []
+        if not schema_name:
+            errors.append({"path": "$.schema_name", "message": "Missing schema_name", "schema": str(ex_name)})
+        if not rel_path:
+            errors.append({"path": "$.path", "message": "Missing path", "schema": str(ex_name)})
+
+        artifact_or_api = f"example:{ex_name}"
+        if errors:
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(schema_name or ex_name),
+                    contract_type="example",
+                    status="invalid",
+                    errors=errors,
+                )
+            )
+            continue
+
+        ex_path = (SPEC_ROOT / str(rel_path)).resolve()
+        if not ex_path.exists():
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(schema_name),
+                    contract_type="example",
+                    status="invalid",
+                    errors=[{"path": "$.path", "message": f"Missing file: {rel_path}", "schema": str(ex_name)}],
+                )
+            )
+            continue
+
+        if str(schema_name) not in arts:
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(schema_name),
+                    contract_type="example",
+                    status="invalid",
+                    errors=[{"path": "$.schema_name", "message": f"Unknown schema_name in manifest artifacts: {schema_name}", "schema": str(ex_name)}],
+                )
+            )
+            continue
+
+        data, load_err = _read_json(ex_path)
+        if load_err is not None:
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=str(ex_path),
+                    schema_name=str(schema_name),
+                    contract_type="example",
+                    status="invalid",
+                    errors=[{"path": "$", "message": load_err, "schema": str(schema_name)}],
+                )
+            )
+            continue
+
+        schema_rel = arts[str(schema_name)]["schema_path"]
+        v = validator_for_schema_file(str((SPEC_ROOT / schema_rel).resolve()))
+        errs = _collect_validator_errors(v, data, schema_name=str(schema_name))
+        rows.append(
+            _report_row(
+                validated_at=validated_at,
+                artifact_or_api=str(ex_path),
+                schema_name=str(schema_name),
+                contract_type="example",
+                status="valid" if not errs else "invalid",
+                errors=errs,
+            )
+        )
+    return rows
+
+
 def audit_manifest(*, validated_at: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     m = load_manifest()

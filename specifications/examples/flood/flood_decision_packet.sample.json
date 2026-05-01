@@ -1,0 +1,67 @@
+{
+  "packet_id": "pkt_flood_0001",
+  "domain_id": "flood_risk",
+  "timestamp": "2026-05-01T18:30:00Z",
+  "area_id": "ward_42",
+  "risk_assessment": {
+    "risk_level": "high",
+    "time_window": "next_3_hours",
+    "primary_driver": "rainfall_intensity_mm_per_hr"
+  },
+  "evidence": {
+    "inputs": [
+      {
+        "type": "rainfall_observation",
+        "observed_property": "rainfall_intensity_mm_per_hr",
+        "value": 42.5,
+        "unit": "mm/hr",
+        "observation_time": "2026-05-01T18:00:00Z",
+        "source": "City Rain Gauge Network"
+      },
+      {
+        "type": "incident",
+        "incident_type": "waterlogging",
+        "incident_time": "2026-05-01T18:20:00Z",
+        "quality_flag": "unverified"
+      }
+    ],
+    "notes": "This packet is decision support only; verify on ground before escalation."
+  },
+  "provenance": {
+    "sources": [
+      { "source_name": "City Rain Gauge Network", "synthetic": false },
+      { "source_name": "311 Flood Incidents", "synthetic": false }
+    ]
+  },
+  "confidence": {
+    "confidence_score": 0.62,
+    "recommendation_allowed": false,
+    "recommendation_block_reason": "Field verification required for high-risk actions."
+  },
+  "uncertainty": {
+    "notes": "Incident is unverified; rainfall forecast uncertainty."
+  },
+  "recommended_action": "Dispatch field verification team to underpass area; inspect nearby drains for blockage.",
+  "review_guidance": {
+    "review_prompts": [
+      "Is the incident corroborated by field teams or authoritative sensors?",
+      "Are there known low-lying zones or drainage assets nearby?"
+    ],
+    "when_not_to_act": [
+      "Do not issue emergency orders based on unverified incidents or proxy-only signals."
+    ]
+  },
+  "safety_gates": [
+    {
+      "gate_id": "require_field_verification_for_emergency_action",
+      "status": "blocked",
+      "message": "Unverified incident; requires field verification before emergency action."
+    }
+  ],
+  "blocked_uses": [
+    "automatic_emergency_dispatch_without_human_review",
+    "treat_forecast_or_synthetic_inputs_as_confirmed_incident"
+  ],
+  "field_verification_required": true
+}
+
