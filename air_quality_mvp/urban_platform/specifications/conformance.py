@@ -68,6 +68,8 @@ def assert_conforms(instance: Any, *, schema_name: str, version: str = "v1") -> 
     if schema_name not in artifacts:
         raise KeyError(f"Unknown artifact {schema_name!r} in specifications/manifest.json")
     rel = artifacts[schema_name]["schema_path"]
+    if str(rel).lower().endswith((".yaml", ".yml")):
+        raise ValueError(f"{schema_name!r} points to an OpenAPI contract, not a JSON Schema: {rel}")
     path = (SPEC_ROOT / rel).resolve()
     v = validator_for_schema_file(str(path))
     v.validate(instance)

@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: Urban Platform API
+  version: v1
+  description: |
+    Consumer-facing platform API (read-only in the MVP). This file is a stub contract
+    intended for stabilization via conformance testing.
+paths:
+  /observations:
+    get:
+      summary: Query observations
+      responses:
+        "200":
+          description: Observation response
+  /features:
+    get:
+      summary: Query features
+      responses:
+        "200":
+          description: Feature response
+  /entities:
+    get:
+      summary: Query entities
+      responses:
+        "200":
+          description: Entity response
+  /recommendations:
+    get:
+      summary: Query recommendations
+      responses:
+        "200":
+          description: Recommendation response
+  /decision-packets:
+    get:
+      summary: Query decision packets
+      responses:
+        "200":
+          description: Decision packet response
+  /source-reliability:
+    get:
+      summary: Query source reliability
+      responses:
+        "200":
+          description: Source reliability response
+  /metrics:
+    get:
+      summary: Get metrics
+      responses:
+        "200":
+          description: Metrics JSON
+  /conformance-report:
+    get:
+      summary: Get conformance report
+      responses:
+        "200":
+          description: Conformance report JSON
+

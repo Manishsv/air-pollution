@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/v1/metrics",
+  "title": "Metrics",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "best_model",
+    "best_metrics",
+    "all_models",
+    "target_col",
+    "data_audit",
+    "provenance_summary"
+  ],
+  "properties": {
+    "best_model": { "type": "string" },
+    "best_metrics": { "type": "object", "additionalProperties": true },
+    "all_models": {
+      "type": "object",
+      "additionalProperties": { "type": "object", "additionalProperties": true }
+    },
+    "target_col": { "type": "string" },
+    "data_audit": { "type": "object", "additionalProperties": true },
+    "provenance_summary": { "type": "object", "additionalProperties": true },
+    "scale_analysis": { "type": "object", "additionalProperties": true },
+    "spatial_cross_validation": { "type": "object", "additionalProperties": true },
+    "source_reliability_summary": { "type": "object", "additionalProperties": true },
+    "h3_resolution_assessment": { "type": "object", "additionalProperties": true },
+    "provenance_low_confidence_ratio": { "type": ["number", "null"] },
+    "uncertainty_method": { "type": "string" },
+    "model_warning_flags": { "type": "string" }
+  }
+}

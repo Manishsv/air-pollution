@@ -1,37 +1,69 @@
-# Output specifications (v1)
+# Specifications (v1)
 
-Machine-readable contracts for **urban sensing** pipelines (air quality, traffic, flood, heat, noise, …). **Conformance tests** load JSON Schema files and fail CI when a **declared profile** drifts without a version bump.
+Machine-readable contracts are grouped into **three contract families** (plus OpenAPI stubs). The goal is to keep **provider ingestion**, **internal platform objects**, and **consumer outputs/APIs** stable via conformance testing *without renaming runtime pipeline fields*.
 
-## Domain-neutral vs profile schemas
+See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTED.md`](../GETTING_STARTED.md).
 
-- **`urban_decision_packet_core`** — Portable **decision packet** shell: identifiers, H3 location, human review fields, and **opaque** `prediction` / `provenance` / `evidence` objects. Use this when adding a new hazard so dashboards and APIs can share structure before field names stabilize.
-- **`decision_packet_air_quality`** (alias **`decision_packet`**) — **Strict profile** for the current PM2.5 MVP (India category bands, AQ-specific evidence keys, weather/fire hooks). Breaking changes here should bump `v2` or add a new profile file, not silently edit v1.
-- **`data_audit` / `provenance_summary` (v1)** — Still **named for the AQ rollout** (`pm25`, stations, cells). Reuse the *ideas* (coverage, interpolation, gates); for other domains, add parallel schemas (e.g. `data_audit.profile.flood.v1.schema.json`) and register them in `manifest.json` when those pipelines exist.
+## Contract families
 
-## Layout
+- **Provider contracts** (`provider_contracts/`)
+  - Validate **raw incoming** feeds from upstream systems.
+  - Shape: provider metadata + records/events/features with timestamp + geometry (or lat/lon), observed_property/feature_type, value/unit, quality_flag, provenance, and license/source_metadata.
 
-- `json_schema/v1/` — JSON Schema (draft 2020-12): `*.schema.json` and `*.profile.*.v1.schema.json` for strict domains.
-- `manifest.json` — maps artifact id → schema path + stability tier.
+- **Platform object schemas** (`platform_objects/`)
+  - Validate **normalized internal records**.
+  - These align to `urban_platform.standards.schemas.py` canonical objects:
+    - Observation, Entity, Feature, Event
+    - Source reliability (per-entity reliability table)
 
-## Stability tiers
+- **Consumer contracts** (`consumer_contracts/`)
+  - Validate what **applications/dashboards/workflows** consume.
+  - Includes:
+    - `urban_decision_packet_core` (domain-neutral shell)
+    - strict profiles like air-quality decision packets
+    - response wrappers for API-style payloads (`*_response.v1.schema.json`)
 
-- **Stable** — required keys enforced for that artifact; optional fields via `additionalProperties` where noted.
-- **Documented** — minimal required subset at the root; extensions allowed.
+- **OpenAPI stubs** (`openapi/`)
+  - Machine-readable API descriptions (not JSON Schema). These are versioned contracts for endpoint shapes and will be refined over time.
 
-## Running conformance tests
+## Backward compatibility
+
+The legacy schemas under `json_schema/v1/` remain the **canonical** files used by the runtime pipeline conformance validation today, and the manifest keeps the existing aliases working:
+
+- `decision_packet`
+- `decision_packet_air_quality`
+- `decision_packets`
+- `source_reliability`
+
+## Rules
+
+- **Provider contracts validate ingestion.**
+- **Platform object schemas validate normalized data.**
+- **Consumer contracts validate what applications see.**
+
+## Conformance audit (recommended)
 
 From `air_quality_mvp/`:
 
 ```bash
-python -m pytest tests/test_conformance_schemas.py -q
+python main.py --step conformance
 ```
 
-## Evolving the spec
+This writes a single report to:
 
-1. Prefer **additive** optional properties under the same profile version.
-2. New domain with different shapes: add **`decision_packet.profile.<domain>.v1.schema.json`**, register in `manifest.json`, and add fixtures + `assert_conforms(..., schema_name="decision_packet_profile_<domain>")` tests.
-3. Breaking renames: new directory **`json_schema/v2/`** and manifest `spec_version` / paths.
+- `data/outputs/conformance_report.json`
 
-## Relationship to `urban_platform.standards`
+The report includes:
 
-Tabular **observation** tables are validated in code (`validate_observations`, …). JSON Schemas here cover **serialized JSON artifacts** under `data/outputs/` and decision packet files.
+- schema validity (all contract-family JSON Schemas parse and are Draft 2020-12 valid)
+- manifest hygiene (paths exist; `contract_type` is present)
+- artifact validation (`data/outputs/*.json`)
+- local API/SDK response validation (wrapped into consumer response envelopes where applicable)
+
+## Running tests
+
+From `air_quality_mvp/`:
+
+```bash
+python -m pytest -q
+```

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/platform_object/v1/event",
+  "title": "Platform object: Event (v1)",
+  "description": "Canonical normalized event record (matches urban_platform.standards.schemas Event required columns).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["event_id", "event_type", "spatial_unit_id", "timestamp", "severity", "confidence", "recommended_action"],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_type": { "type": "string", "minLength": 1 },
+    "spatial_unit_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "severity": { "type": ["string", "number", "null"] },
+    "confidence": { "type": ["number", "null"] },
+    "recommended_action": { "type": "string" }
+  }
+}
+

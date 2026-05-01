@@ -91,8 +91,50 @@ def _queue_df(packets: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def main():
-    client = UrbanPlatformClient(base_path=".")
+def render_crowd_tab(client: UrbanPlatformClient) -> None:
+    st.title("Crowd Monitor")
+    st.caption("Edge-derived people counts (no video stored). Shows latest 5-second window count per device.")
+
+    df = client.get_observations(variable="people_count")
+    if df is None or df.empty:
+        st.info("No people_count observations found yet. Run the edge publisher + ingestion routine first.")
+        return
+
+    # Normalize timestamp and drop invalid rows
+    df = df.copy()
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        df = df[df["timestamp"].notna()]
+
+    if df.empty or "entity_id" not in df.columns:
+        st.info("No valid crowd observations found yet.")
+        return
+
+    # Latest per entity_id
+    latest = (
+        df.sort_values("timestamp", ascending=True)
+        .groupby(df["entity_id"].astype(str), as_index=False)
+        .tail(1)
+        .reset_index(drop=True)
+    )
+    latest = latest.rename(columns={"timestamp": "latest_timestamp", "value": "latest_people_count"})
+    cols = [c for c in ["entity_id", "latest_people_count", "latest_timestamp", "quality_flag", "source"] if c in latest.columns]
+
+    c1, c2 = st.columns(2)
+    c1.metric("Devices reporting", int(latest["entity_id"].nunique()))
+    c2.metric("Total latest count", float(pd.to_numeric(latest.get("latest_people_count"), errors="coerce").fillna(0).sum()))
+
+    st.subheader("Latest people count by device")
+    st.dataframe(latest[cols].sort_values("entity_id"), hide_index=True, use_container_width=True)
+
+
+def render_heat_tab() -> None:
+    st.title("Heat (placeholder)")
+    st.caption("This tab is reserved for a future heat use case (provider contracts → platform objects → consumer outputs).")
+    st.info("Not implemented yet.")
+
+
+def render_air_pollution_tab(client: UrbanPlatformClient) -> None:
     metrics = client.get_metrics()
     audit = client.get_data_audit()
     reliability = client.get_source_reliability()
@@ -222,7 +264,11 @@ def main():
                         st.session_state["selected_area_label"] = str(dfq.iloc[ridx]["Area"])
                 except Exception:
                     # Fallback for older Streamlit versions: keep a simple dropdown.
-                    selected_area = st.selectbox("Select Area", options=dfq["Area"].astype(str).tolist(), index=int(dfq["Area"].astype(str).tolist().index(st.session_state["selected_area_label"])))
+                    selected_area = st.selectbox(
+                        "Select Area",
+                        options=dfq["Area"].astype(str).tolist(),
+                        index=int(dfq["Area"].astype(str).tolist().index(st.session_state["selected_area_label"])),
+                    )
                     st.session_state["selected_packet_id"] = area_to_packet.get(str(selected_area))
                     st.session_state["selected_area_label"] = str(selected_area)
                     st.dataframe(dfq[show_cols], width="stretch", hide_index=True)
@@ -312,10 +358,20 @@ def main():
                     ml["sensor_siting"] = st.checkbox("Sensor siting candidates", value=bool(ml.get("sensor_siting", False)))
 
                     st.session_state["high_uncertainty_threshold"] = st.slider(
-                        "High-uncertainty threshold (band)", 10.0, 200.0, float(st.session_state.get("high_uncertainty_threshold", 50.0)), 5.0
+                        "High-uncertainty threshold (band)",
+                        10.0,
+                        200.0,
+                        float(st.session_state.get("high_uncertainty_threshold", 50.0)),
+                        5.0,
                     )
                     st.session_state["max_cells_for_map"] = int(
-                        st.number_input("Max cells to render", min_value=50, max_value=2000, value=int(st.session_state.get("max_cells_for_map", 400)), step=50)
+                        st.number_input(
+                            "Max cells to render",
+                            min_value=50,
+                            max_value=2000,
+                            value=int(st.session_state.get("max_cells_for_map", 400)),
+                            step=50,
+                        )
                     )
 
                 features_df = None
@@ -390,6 +446,17 @@ def main():
                 with st.container(height=780):
                     st.subheader("Audit log (session)")
                     st.dataframe(pd.DataFrame(st.session_state.get("action_log", [])), width="stretch", hide_index=True)
+
+
+def main():
+    client = UrbanPlatformClient(base_path=".")
+    use_case_tabs = st.tabs(["Air Pollution", "Heat", "Crowd"])
+    with use_case_tabs[0]:
+        render_air_pollution_tab(client)
+    with use_case_tabs[1]:
+        render_heat_tab()
+    with use_case_tabs[2]:
+        render_crowd_tab(client)
 
 
 if __name__ == "__main__":

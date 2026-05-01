@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/v1/scale_analysis",
+  "title": "ScaleAnalysis",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "h3_resolution",
+    "avg_cell_area_sqkm",
+    "number_of_cells",
+    "number_of_real_stations",
+    "station_density_per_100_sqkm",
+    "avg_cells_per_station",
+    "resolution_warning",
+    "resolution_assessment",
+    "recommended_resolution"
+  ],
+  "properties": {
+    "h3_resolution": { "type": "integer" },
+    "avg_cell_area_sqkm": { "type": ["number", "null"] },
+    "number_of_cells": { "type": "integer" },
+    "number_of_real_stations": { "type": "integer" },
+    "station_density_per_100_sqkm": { "type": "number" },
+    "avg_cells_per_station": { "type": "number" },
+    "resolution_warning": { "type": "string" },
+    "resolution_assessment": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["warning"],
+      "properties": {
+        "warning": { "type": "string" }
+      }
+    },
+    "recommended_resolution": { "type": "integer" }
+  }
+}

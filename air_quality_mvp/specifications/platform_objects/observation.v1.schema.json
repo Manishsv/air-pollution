@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/platform_object/v1/observation",
+  "title": "Platform object: Observation (v1)",
+  "description": "Canonical normalized observation record (matches urban_platform.standards.schemas Observation required columns).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["observation_id", "entity_id", "observed_property", "value", "unit", "timestamp", "source", "quality_flag"],
+  "properties": {
+    "observation_id": { "type": "string", "minLength": 1 },
+    "entity_id": { "type": "string", "minLength": 1 },
+    "observed_property": { "type": "string", "minLength": 1 },
+    "value": { "type": ["number", "string", "null"] },
+    "unit": { "type": "string" },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "quality_flag": { "type": "string" }
+  }
+}
+

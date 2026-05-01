@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/v1/source_reliability",
+  "title": "SourceReliabilityFile",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "entity_id",
+      "entity_type",
+      "variable",
+      "source",
+      "status",
+      "reliability_score",
+      "observation_count",
+      "completeness_ratio",
+      "flatline_detected",
+      "impossible_value_detected",
+      "spike_detected",
+      "duplicate_timestamp_ratio",
+      "peer_disagreement_score",
+      "reliability_issues"
+    ],
+    "properties": {
+      "entity_id": { "type": "string" },
+      "entity_type": { "type": "string" },
+      "variable": { "type": "string" },
+      "source": { "type": "string" },
+      "status": { "type": "string" },
+      "reliability_score": { "type": "number" },
+      "last_seen": { "type": ["string", "null"] },
+      "observation_count": { "type": "integer" },
+      "expected_observation_count": { "type": "number" },
+      "completeness_ratio": { "type": "number" },
+      "stale_hours": { "type": "number" },
+      "flatline_detected": { "type": "boolean" },
+      "impossible_value_detected": { "type": "boolean" },
+      "spike_detected": { "type": "boolean" },
+      "duplicate_timestamp_ratio": { "type": "number" },
+      "peer_disagreement_score": { "type": "number" },
+      "reliability_issues": { "type": "string" },
+      "point_lat": { "type": ["number", "null"] },
+      "point_lon": { "type": ["number", "null"] }
+    }
+  }
+}

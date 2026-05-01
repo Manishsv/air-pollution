@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Provider Ingestion API
+  version: v1
+  description: |
+    Provider-side ingestion API (not implemented in the MVP). This file is a stub
+    contract for future ingestion endpoints.
+paths:
+  /ingest/air-quality-observations:
+    post:
+      summary: Ingest air quality observations (raw provider feed)
+      responses:
+        "202":
+          description: Accepted
+  /ingest/weather-observations:
+    post:
+      summary: Ingest weather observations (raw provider feed)
+      responses:
+        "202":
+          description: Accepted
+  /ingest/fire-events:
+    post:
+      summary: Ingest fire events (raw provider feed)
+      responses:
+        "202":
+          description: Accepted
+  /ingest/building-footprints:
+    post:
+      summary: Ingest building footprints (raw provider feed)
+      responses:
+        "202":
+          description: Accepted
+  /ingest/road-network:
+    post:
+      summary: Ingest road network (raw provider feed)
+      responses:
+        "202":
+          description: Accepted
+

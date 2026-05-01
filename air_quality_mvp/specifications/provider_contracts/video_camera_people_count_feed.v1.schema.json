@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/video_camera_people_count_feed",
+  "title": "Provider contract: video camera people-count feed (v1)",
+  "description": "Raw provider feed for laptop/webcam people counting aggregated over 5-second windows. Privacy-first: stores counts + provenance, not media.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "license", "source_metadata", "records"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "const": "video_camera" },
+    "license": { "type": "string", "minLength": 1 },
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["privacy_mode"],
+      "properties": {
+        "privacy_mode": { "type": "string", "const": "no_media_persisted" },
+        "device_model": { "type": "string" },
+        "os": { "type": "string" },
+        "app_version": { "type": "string" }
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "entity_id",
+          "timestamp",
+          "window_seconds",
+          "observed_property",
+          "value",
+          "unit",
+          "quality_flag",
+          "provenance"
+        ],
+        "properties": {
+          "entity_id": { "type": "string", "minLength": 1 },
+          "timestamp": { "type": "string", "format": "date-time", "minLength": 1 },
+          "window_seconds": { "type": "number", "const": 5 },
+          "observed_property": { "type": "string", "const": "people_count" },
+          "value": { "type": "integer", "minimum": 0 },
+          "unit": { "type": "string", "const": "count" },
+          "quality_flag": { "type": "string", "minLength": 1 },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["model_name"],
+            "properties": {
+              "model_name": { "type": "string", "minLength": 1 },
+              "model_version": { "type": "string" },
+              "inference_device": { "type": "string" },
+              "confidence": { "type": ["number", "null"] }
+            }
+          },
+          "geometry": { "type": "object", "additionalProperties": true },
+          "latitude": { "type": ["number", "null"] },
+          "longitude": { "type": ["number", "null"] },
+          "record_metadata": { "type": "object", "additionalProperties": true }
+        }
+      }
+    }
+  }
+}
+

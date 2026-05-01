@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/platform_object/v1/entity",
+  "title": "Platform object: Entity (v1)",
+  "description": "Canonical normalized entity record (matches urban_platform.standards.schemas Entity required columns).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["entity_id", "entity_type", "geometry", "attributes", "source", "confidence"],
+  "properties": {
+    "entity_id": { "type": "string", "minLength": 1 },
+    "entity_type": { "type": "string", "minLength": 1 },
+    "geometry": { "type": ["object", "string", "null"], "additionalProperties": true },
+    "attributes": { "type": "object", "additionalProperties": true },
+    "source": { "type": "string", "minLength": 1 },
+    "confidence": { "type": ["number", "null"] }
+  }
+}
+

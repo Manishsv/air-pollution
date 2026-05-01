@@ -1,52 +1,179 @@
 {
   "spec_version": "v1",
   "json_schema_dialect": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Urban sensing platform output contracts. Domain-neutral cores plus optional strict profiles per hazard/modality (air quality, traffic, flood, heat, …).",
+  "description": "Urban platform contracts grouped by family: provider ingestion, internal platform objects, and consumer-facing outputs/APIs. Backward-compatible aliases preserved.",
   "artifacts": {
     "urban_decision_packet_core": {
       "description": "Domain-neutral decision packet shell (H3 cell, review workflow, generic prediction/evidence blobs). Use for new domains before adding a strict profile.",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/urban_decision_packet_core.v1.schema.json",
       "stability": "stable"
     },
     "decision_packet": {
       "description": "Alias for the default strict profile (air quality PM2.5 MVP). Prefer `decision_packet_air_quality` in new integrations.",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/decision_packet.profile.air_quality.v1.schema.json",
       "stability": "stable"
     },
     "decision_packet_air_quality": {
       "description": "Strict profile: PM2.5, India bands, AQ + weather + fire provenance fields emitted by the current pipeline.",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/decision_packet.profile.air_quality.v1.schema.json",
       "stability": "stable"
     },
     "decision_packets": {
       "description": "Root array for decision_packets.json (items follow the default strict profile in v1).",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/decision_packets.schema.json",
       "stability": "stable"
     },
     "data_audit": {
       "description": "Grid + observation coverage audit for the AQ pipeline (v1 field names are AQ-oriented). Other domains should add e.g. `data_audit.profile.traffic.v1.schema.json`.",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/data_audit.schema.json",
       "stability": "stable"
     },
     "metrics": {
       "description": "Run metrics envelope (minimal required subset); model blocks vary by domain.",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/metrics.schema.json",
       "stability": "documented"
     },
     "provenance_summary": {
       "description": "Compact provenance object embedded in packets/metrics (v1 keys lean on spatial + station language from AQ).",
+      "contract_type": "platform_object",
       "schema_path": "json_schema/v1/provenance_summary.schema.json",
       "stability": "stable"
     },
     "source_reliability": {
       "description": "Per-entity reliability table (variable-agnostic: pm25, speed_mph, water_depth_m, …).",
+      "contract_type": "platform_object",
       "schema_path": "json_schema/v1/source_reliability.schema.json",
       "stability": "stable"
     },
     "scale_analysis": {
       "description": "H3 resolution vs observation density (reusable across domains that use H3 + point sensors).",
+      "contract_type": "consumer",
       "schema_path": "json_schema/v1/scale_analysis.schema.json",
       "stability": "stable"
+    },
+
+    "provider_air_quality_observation_feed": {
+      "description": "Raw ingestion contract: AQ observations as emitted by providers.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/air_quality_observation_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_weather_observation_feed": {
+      "description": "Raw ingestion contract: weather observations as emitted by providers.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/weather_observation_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_fire_event_feed": {
+      "description": "Raw ingestion contract: fire events as emitted by providers.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/fire_event_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_building_footprint_feed": {
+      "description": "Raw ingestion contract: building footprints / polygons.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/building_footprint_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_road_network_feed": {
+      "description": "Raw ingestion contract: road network / linework.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/road_network_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_video_camera_people_count_feed": {
+      "description": "People count feed from video cameras.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/video_camera_people_count_feed.v1.schema.json",
+      "stability": "documented"
+    },
+
+    "platform_observation": {
+      "description": "Normalized internal observation object (matches standards.schemas Observation).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/observation.v1.schema.json",
+      "stability": "stable"
+    },
+    "platform_entity": {
+      "description": "Normalized internal entity object (matches standards.schemas Entity).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/entity.v1.schema.json",
+      "stability": "stable"
+    },
+    "platform_feature": {
+      "description": "Normalized internal feature object (matches standards.schemas Feature).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/feature.v1.schema.json",
+      "stability": "stable"
+    },
+    "platform_event": {
+      "description": "Normalized internal event object (matches standards.schemas Event).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/event.v1.schema.json",
+      "stability": "stable"
+    },
+
+    "consumer_urban_decision_packet_core": {
+      "description": "Consumer contract: core decision packet shell (copy of current core schema).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/urban_decision_packet_core.v1.schema.json",
+      "stability": "stable"
+    },
+    "consumer_decision_packet_air_quality": {
+      "description": "Consumer contract: strict air-quality decision packet profile (copy of current profile).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/decision_packet.profile.air_quality.v1.schema.json",
+      "stability": "stable"
+    },
+    "consumer_decision_packets_air_quality": {
+      "description": "Consumer contract: decision packets array for air-quality profile.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/decision_packets.profile.air_quality.v1.schema.json",
+      "stability": "stable"
+    },
+    "consumer_recommendation_response": {
+      "description": "Consumer contract: recommendations API response wrapper.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/recommendation_response.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_observation_response": {
+      "description": "Consumer contract: observations API response wrapper.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/observation_response.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_feature_response": {
+      "description": "Consumer contract: features API response wrapper.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/feature_response.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_source_reliability_response": {
+      "description": "Consumer contract: source reliability API response wrapper.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/source_reliability_response.v1.schema.json",
+      "stability": "documented"
+    },
+
+    "openapi_platform_api": {
+      "description": "OpenAPI stub for consumer-facing platform API.",
+      "contract_type": "openapi",
+      "schema_path": "openapi/platform_api.v1.yaml",
+      "stability": "documented"
+    },
+    "openapi_provider_ingestion_api": {
+      "description": "OpenAPI stub for provider ingestion API.",
+      "contract_type": "openapi",
+      "schema_path": "openapi/provider_ingestion_api.v1.yaml",
+      "stability": "documented"
     }
   }
 }

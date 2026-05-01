@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/platform_object/v1/feature",
+  "title": "Platform object: Feature (v1)",
+  "description": "Canonical normalized feature record (matches urban_platform.standards.schemas Feature required columns).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["feature_id", "spatial_unit_id", "feature_name", "value", "unit", "source", "confidence"],
+  "properties": {
+    "feature_id": { "type": "string", "minLength": 1 },
+    "spatial_unit_id": { "type": "string", "minLength": 1 },
+    "feature_name": { "type": "string", "minLength": 1 },
+    "value": { "type": ["number", "string", "null"] },
+    "unit": { "type": "string" },
+    "source": { "type": "string", "minLength": 1 },
+    "confidence": { "type": ["number", "null"] }
+  }
+}
+

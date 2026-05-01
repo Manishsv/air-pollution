@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/fire_event_feed",
+  "title": "Provider contract: fire event feed (v1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "events", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["timestamp", "geometry", "event_type", "severity", "quality_flag", "provenance"],
+        "properties": {
+          "timestamp": { "type": "string", "minLength": 1 },
+          "geometry": { "type": "object", "additionalProperties": true },
+          "event_type": { "type": "string" },
+          "severity": { "type": ["string", "number", "null"] },
+          "quality_flag": { "type": "string" },
+          "provenance": { "type": "object", "additionalProperties": true }
+        }
+      }
+    }
+  }
+}

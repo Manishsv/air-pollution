@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/building_footprint_feed",
+  "title": "Provider contract: building footprint feed (v1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "features", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["timestamp", "geometry", "feature_type", "quality_flag", "provenance"],
+        "properties": {
+          "timestamp": { "type": "string", "minLength": 1 },
+          "geometry": { "type": "object", "additionalProperties": true },
+          "feature_type": { "type": "string" },
+          "value": { "type": ["number", "string", "null"] },
+          "unit": { "type": "string" },
+          "quality_flag": { "type": "string" },
+          "provenance": { "type": "object", "additionalProperties": true }
+        }
+      }
+    }
+  }
+}
+

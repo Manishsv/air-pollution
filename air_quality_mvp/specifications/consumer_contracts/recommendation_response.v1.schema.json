@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/recommendation_response",
+  "title": "Consumer contract: recommendation response (v1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "generated_at": { "type": ["string", "null"] },
+    "count": { "type": ["integer", "null"] }
+  }
+}
+

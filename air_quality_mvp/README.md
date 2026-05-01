@@ -2,6 +2,8 @@
 
 This project is **not an operational air-quality management system**.
 
+See [`GETTING_STARTED.md`](GETTING_STARTED.md) for setup, API keys, running the pipeline, and the dashboard.
+
 It is a local, reliability-first prototype for:
 
 - **data fusion / observability** under sparse station coverage
@@ -159,6 +161,16 @@ Default config runs **fast `bbox` mode** (recommended for development):
 python main.py
 ```
 
+### Conformance audit (contracts)
+
+Run a full specification conformance audit (schemas, manifest, outputs, local API/SDK responses):
+
+```bash
+python main.py --step conformance
+```
+
+This writes `data/outputs/conformance_report.json`.
+
 Useful CLI options:
 
 ```bash
@@ -171,6 +183,16 @@ python main.py --sensor-siting-mode coverage
 python main.py --sensor-siting-mode hotspot_discovery
 python main.py --sensor-siting-mode equity
 ```
+
+### Review dashboard (Streamlit)
+
+Run the dashboard UI:
+
+```bash
+streamlit run review_dashboard/app.py
+```
+
+The dashboard uses the **SDK** (`UrbanPlatformClient`) to read persisted artifacts and supports tabs for multiple use cases (e.g., Air Pollution + Crowd).
 
 Outputs land in:
 
@@ -194,6 +216,16 @@ Outputs land in:
 - A `sensor_siting_summary` block inside `data/outputs/metrics.json` when sensor siting runs
 
 Open the HTML files in a browser.
+
+### Crowd (camera people_count) example
+
+This repo also includes a privacy-first “Crowd” example:
+
+- Edge publisher writes provider-contract JSONL: `data/edge/video_camera_people_count.jsonl`
+- File ingestion normalizes into `data/processed/observation_store.parquet`
+- Dashboard “Crowd” tab shows latest `people_count` per `entity_id`
+
+See [`GETTING_STARTED.md`](GETTING_STARTED.md) for the exact commands (dummy publisher and YOLO mode).
 
 ### Human review and decision packets
 
