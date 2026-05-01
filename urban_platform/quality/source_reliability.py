@@ -87,6 +87,7 @@ def assess_source_reliability(
     expected_frequency_minutes: int = 60,
     lookback_hours: int = 72,
     current_time: Optional[datetime] = None,
+    live_mode: bool = True,
     peer_distance_km: float = 5.0,
 ) -> pd.DataFrame:
     """
@@ -117,13 +118,22 @@ def assess_source_reliability(
             ]
         )
 
-    now = pd.to_datetime(current_time, utc=True) if current_time is not None else _utc_now()
-    lookback_start = now - pd.Timedelta(hours=int(lookback_hours))
-
     df = observation_store_df.copy()
     # Normalize columns
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df[df["timestamp"].notna()].copy()
+
+    # Batch runs should use the dataset's "effective now" so cached/historical runs don't look stale.
+    if current_time is not None:
+        now = pd.to_datetime(current_time, utc=True)
+    else:
+        if live_mode:
+            now = _utc_now()
+        else:
+            mx = df["timestamp"].max()
+            now = mx if pd.notna(mx) else _utc_now()
+
+    lookback_start = now - pd.Timedelta(hours=int(lookback_hours))
     df = df[df["timestamp"] >= lookback_start].copy()
     if df.empty:
         return pd.DataFrame()
@@ -150,7 +160,14 @@ def assess_source_reliability(
         point_lat = float(lat.iloc[0]) if len(lat) else np.nan
         point_lon = float(lon.iloc[0]) if len(lon) else np.nan
 
-        observation_count = int(len(g))
+        # Reliability should reflect the source feed's cadence, not downstream spatial broadcast.
+        # If a global observation was broadcast to many grid cells, collapse it to one row per timestamp.
+        if "grid_id" in g.columns and g["grid_id"].nunique(dropna=True) > 1:
+            g_for_series = g.groupby("timestamp", as_index=False).head(1)
+        else:
+            g_for_series = g
+
+        observation_count = int(g_for_series["timestamp"].nunique()) if "timestamp" in g_for_series.columns else int(len(g_for_series))
         last_seen = pd.to_datetime(g["timestamp"].max(), utc=True)
         stale_hours = float((now - last_seen) / pd.Timedelta(hours=1)) if pd.notna(last_seen) else float("inf")
 
@@ -158,18 +175,21 @@ def assess_source_reliability(
         completeness_ratio = float(observation_count / expected_count) if expected_count > 0 else 0.0
         completeness_ratio = float(max(0.0, min(1.0, completeness_ratio)))
 
-        # Duplicate timestamps
-        dup_ratio = float(g["timestamp"].duplicated().mean()) if observation_count > 0 else 0.0
+        # Duplicate timestamps (ignore duplicates introduced purely by spatial broadcast to multiple grid cells)
+        if "grid_id" in g.columns:
+            dup_ratio = float(g.duplicated(subset=["timestamp", "grid_id"]).mean()) if len(g) else 0.0
+        else:
+            dup_ratio = float(g["timestamp"].duplicated().mean()) if len(g) else 0.0
 
         # Flatline
-        flatline = _flatline_detected(pd.to_numeric(g["value"], errors="coerce"))
+        flatline = _flatline_detected(pd.to_numeric(g_for_series["value"], errors="coerce"))
 
         # Impossible values
-        vals = pd.to_numeric(g["value"], errors="coerce").dropna()
+        vals = pd.to_numeric(g_for_series["value"], errors="coerce").dropna()
         impossible = bool(vals.apply(lambda v: _impossible_value(str(variable), float(v))).any()) if len(vals) else False
 
         # Spike
-        spike = _spike_detected(str(variable), g[["timestamp", "value"]])
+        spike = _spike_detected(str(variable), g_for_series[["timestamp", "value"]])
 
         # Peer disagreement (latest reading vs peer median)
         peer_disagreement_score = 0.0

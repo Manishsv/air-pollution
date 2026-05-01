@@ -115,8 +115,9 @@ The algorithm is intentionally simple:
 ### Project layout
 
 ```
-air_quality_mvp/
+<repo root>/
   README.md
+  GETTING_STARTED.md
   requirements.txt
   .env.example
   config.yaml
@@ -125,9 +126,10 @@ air_quality_mvp/
     processed/
       cache/
     outputs/
+    edge/
   notebooks/
     01_exploration.ipynb
-  src/
+  src/                    # legacy pipeline modules (backward compatible)
     __init__.py
     cache.py
     config.py
@@ -143,7 +145,7 @@ air_quality_mvp/
     visualization.py
     sensor_siting.py
     pipeline.py
-  urban_platform/
+  urban_platform/          # layered platform architecture
     connectors/
     standards/
     registries/
@@ -154,6 +156,15 @@ air_quality_mvp/
     applications/
     outputs/
     common/
+  review_dashboard/
+    app.py
+    components/
+  specifications/
+    manifest.json
+    provider_contracts/
+    platform_objects/
+    consumer_contracts/
+    openapi/
   main.py
 ```
 
@@ -169,7 +180,6 @@ The current reference air-pollution pipeline still uses raw fetchers internally 
 - **Python**: 3.10+ recommended
 
 ```bash
-cd air_quality_mvp
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

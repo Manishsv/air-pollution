@@ -43,7 +43,7 @@ The legacy schemas under `json_schema/v1/` remain the **canonical** files used b
 
 ## Conformance audit (recommended)
 
-From `air_quality_mvp/`:
+From the **repo root**:
 
 ```bash
 python main.py --step conformance
@@ -62,7 +62,7 @@ The report includes:
 
 ## Running tests
 
-From `air_quality_mvp/`:
+From the **repo root**:
 
 ```bash
 python -m pytest -q

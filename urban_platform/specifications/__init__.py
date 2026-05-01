@@ -7,6 +7,7 @@ from urban_platform.specifications.conformance import (
     schema_dir,
     validator_for_schema_file,
 )
+from urban_platform.specifications.engine import run_conformance
 from urban_platform.specifications.runtime_validation import validate_artifact, validate_output_artifacts
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "validator_for_schema_file",
     "validate_artifact",
     "validate_output_artifacts",
+    "run_conformance",
 ]

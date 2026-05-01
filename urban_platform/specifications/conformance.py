@@ -8,7 +8,7 @@ from typing import Any, Iterator
 from jsonschema import Draft202012Validator
 from jsonschema.validators import RefResolver
 
-# air_quality_mvp/urban_platform/specifications/conformance.py -> parents[2] == air_quality_mvp
+# repo root/urban_platform/specifications/conformance.py -> parents[2] == repo root
 _MVP_ROOT = Path(__file__).resolve().parents[2]
 SPEC_ROOT = _MVP_ROOT / "specifications"
 MANIFEST_PATH = SPEC_ROOT / "manifest.json"

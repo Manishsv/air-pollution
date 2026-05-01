@@ -24,6 +24,7 @@ from urban_platform.connectors.weather.open_meteo import fetch_open_meteo as fet
 from urban_platform.decision_support.recommendations import generate_recommendations
 from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
 from urban_platform.fabric.observation_store import build_observation_table
+from urban_platform.fabric.event_store import build_event_store, persist_event_store
 from urban_platform.fabric.feature_store import build_feature_store, pivot_feature_store_for_model
 from urban_platform.models.air_quality_forecast import predict_forecast, run_spatial_cross_validation, train_forecast_model
 from urban_platform.processing.interpolation import build_aq_panel_from_observation_table, build_weather_hourly_from_observation_table
@@ -318,7 +319,9 @@ def run_pipeline(
     observation_table = build_observation_table(all_obs, h3_grid)
 
     # 6.6) Source reliability assessment + observation quality adjustment
-    reliability_df = assess_source_reliability(observation_table)
+    # Batch semantics: use the dataset's timestamp horizon as "now" to avoid marking cached/historical
+    # data as stale/offline. Also protects weather/global observations that are broadcast to all grid cells.
+    reliability_df = assess_source_reliability(observation_table, live_mode=False)
     reliability_path = outputs_dir / "source_reliability.json"
     try:
         import json as _json
@@ -715,6 +718,13 @@ def run_pipeline(
         if pid_by_h3:
             recs = recs.copy()
             recs["packet_id"] = recs["h3_id"].astype(str).map(pid_by_h3).fillna("")
+
+    # 10.6) Persist decision-support events (event_store)
+    try:
+        event_df = build_event_store(decision_packets=packets if isinstance(packets, list) else [], reliability_df=reliability_df if "reliability_df" in locals() else None)
+        persist_event_store(event_df, base_path=cfg.project_root, write_json=True)
+    except Exception:
+        logger.exception("Event store persistence failed (continuing).")
 
     # 11) Maps
     current_map = outputs_dir / "current_pm25_map.html"

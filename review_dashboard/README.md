@@ -4,7 +4,7 @@ This Streamlit dashboard is a **human review console** for officials and operati
 
 ### Run
 
-From the `air_quality_mvp/` directory:
+From the **repo root**:
 
 ```bash
 streamlit run review_dashboard/app.py

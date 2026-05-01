@@ -84,6 +84,15 @@ class UrbanPlatformClient:
     def get_source_reliability(self, entity_id: str | None = None, variable: str | None = None, status: str | None = None) -> pd.DataFrame:
         return local_api.get_source_reliability(entity_id=entity_id, variable=variable, status=status, base_dir=self._base)
 
+    def get_events(
+        self,
+        event_type: str | None = None,
+        severity: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> pd.DataFrame:
+        return local_api.get_events(event_type=event_type, severity=severity, start_time=start_time, end_time=end_time, base_dir=self._base)
+
     def get_metrics(self) -> dict:
         p = (self._base / "data" / "outputs" / "metrics.json")
         return local_api._read_json(p)  # type: ignore[attr-defined]

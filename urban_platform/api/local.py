@@ -28,6 +28,7 @@ def _paths(base_dir: Optional[Path] = None) -> dict[str, Path]:
         "metrics_json": base / "data" / "outputs" / "metrics.json",
         "decision_packets_json": base / "data" / "outputs" / "decision_packets.json",
         "source_reliability_json": base / "data" / "outputs" / "source_reliability.json",
+        "event_store": base / "data" / "processed" / "event_store.parquet",
     }
 
 
@@ -221,10 +222,37 @@ def get_entities(entity_type: str | None = None, bbox=None, *, base_dir: Path | 
 
 def get_events(event_type: str | None = None, severity: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None, *, base_dir: Path | None = None) -> pd.DataFrame:
     """
-    Events are not persisted yet in the MVP; return an empty table with canonical columns.
+    Query persisted decision-support events from `data/processed/event_store.parquet`.
     """
-    _ = (event_type, severity, start_time, end_time, base_dir)
-    return pd.DataFrame(columns=["event_id", "event_type", "spatial_unit_id", "timestamp", "severity", "confidence", "recommended_action"])
+    p = _paths(base_dir)
+    path = p["event_store"]
+    if not path.exists():
+        return pd.DataFrame(
+            columns=[
+                "event_id",
+                "event_type",
+                "spatial_unit_id",
+                "timestamp",
+                "severity",
+                "confidence",
+                "actionability_level",
+                "recommended_action",
+                "source_packet_id",
+                "source_h3_id",
+                "status",
+                "provenance_summary",
+                "warning_flags",
+            ]
+        )
+    df = pd.read_parquet(path)
+    if df.empty:
+        return df
+    if event_type is not None and "event_type" in df.columns:
+        df = df[df["event_type"].astype(str).str.lower() == str(event_type).lower()]
+    if severity is not None and "severity" in df.columns:
+        df = df[df["severity"].astype(str).str.lower() == str(severity).lower()]
+    df = _time_filter(df, start_time, end_time)
+    return df.reset_index(drop=True)
 
 
 def get_decision_packets(

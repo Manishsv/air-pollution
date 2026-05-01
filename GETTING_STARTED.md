@@ -9,7 +9,7 @@ This project is a local-first “urban platform” prototype. It can run end-to-
 
 ### Setup
 
-From `air_quality_mvp/`:
+From the **repo root**:
 
 ```bash
 python -m venv .venv
@@ -65,7 +65,7 @@ This writes:
 
 ### View the dashboard
 
-From `air_quality_mvp/`:
+From the **repo root**:
 
 ```bash
 streamlit run review_dashboard/app.py

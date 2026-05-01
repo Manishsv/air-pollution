@@ -441,19 +441,8 @@ def run_conformance_audit(base_path: Path | str) -> dict[str, Any]:
     Writes:
       <base_path>/data/outputs/conformance_report.json
     """
-    validated_at = _now()
-    out_dir = _outputs_dir(base_path)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Backward-compatible wrapper: delegate to the unified engine (full mode).
+    from urban_platform.specifications.engine import run_conformance
 
-    rows: list[dict[str, Any]] = []
-    rows.extend(audit_schema_validity(validated_at=validated_at))
-    rows.extend(audit_manifest(validated_at=validated_at))
-    rows.extend(audit_output_artifacts(base_path=base_path, validated_at=validated_at))
-    rows.extend(audit_api_responses(base_path=base_path, validated_at=validated_at))
-
-    report = {"validated_at": validated_at, "results": rows}
-    path = out_dir / "conformance_report.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(sanitize_for_json(report), f, indent=2, default=str, allow_nan=False)
-    return report
+    return run_conformance(base_path, mode="full")
 

@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from urban_platform.decision_support.explainability import sanitize_for_json
 from urban_platform.specifications.conformance import SPEC_ROOT, load_manifest, validator_for_schema_file
 
 logger = logging.getLogger(__name__)
@@ -191,29 +189,8 @@ def validate_output_artifacts(base_path: Path | str) -> dict[str, Any]:
 
     ``base_path`` is the project root (same as SDK / pipeline ``project_root``).
     """
-    out_dir = _outputs_dir(base_path)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Backward-compatible entrypoint: runtime mode uses the unified engine and keeps the same top-level keys
+    # required by the dashboard and SDK (`validated_at`, `artifacts`).
+    from urban_platform.specifications.engine import run_conformance
 
-    report: dict[str, Any] = {
-        "validated_at": datetime.now(timezone.utc).isoformat(),
-        "artifacts": {
-            "decision_packets": _validate_decision_packets(out_dir),
-            "data_audit": _single_file_artifact(out_dir=out_dir, file_name="data_audit.json", manifest_schema_key="data_audit"),
-            "metrics": _single_file_artifact(out_dir=out_dir, file_name="metrics.json", manifest_schema_key="metrics"),
-            "source_reliability": _single_file_artifact(
-                out_dir=out_dir, file_name="source_reliability.json", manifest_schema_key="source_reliability"
-            ),
-            "scale_analysis": _single_file_artifact(
-                out_dir=out_dir, file_name="scale_analysis.json", manifest_schema_key="scale_analysis"
-            ),
-        },
-    }
-
-    report_path = out_dir / "conformance_report.json"
-    try:
-        with open(report_path, "w", encoding="utf-8") as f:
-            json.dump(sanitize_for_json(report), f, indent=2, default=str, allow_nan=False)
-    except Exception:
-        logger.exception("Failed to write conformance_report.json")
-
-    return report
+    return run_conformance(base_path, mode="runtime")
