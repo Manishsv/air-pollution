@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from src.config import load_config
 from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
+from urban_platform.specifications.audit import run_conformance_audit
 
 
 def setup_logging() -> None:
@@ -26,7 +27,7 @@ def main() -> None:
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
     ap.add_argument(
         "--step",
-        choices=["all", "audit", "model", "visualize", "sensor-siting"],
+        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance"],
         default="all",
         help="Stop after a step (sensor-siting reads existing outputs)",
     )
@@ -38,6 +39,12 @@ def main() -> None:
     )
     ap.add_argument("--no-recommendations", action="store_true", help="Disable operational recommendations")
     args = ap.parse_args()
+
+    if args.step == "conformance":
+        report = run_conformance_audit(Path(__file__).parent)
+        logging.getLogger(__name__).info("Wrote conformance report to %s", Path(__file__).parent / "data" / "outputs" / "conformance_report.json")
+        logging.getLogger(__name__).info("Validated %s checks", len((report.get("results") or [])))
+        return
 
     cfg = load_config(Path(__file__).parent / "config.yaml")
     logging.getLogger(__name__).info(

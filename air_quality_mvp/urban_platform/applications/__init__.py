@@ -1,2 +1,0 @@
-"""Application wiring (thin orchestration)."""
-

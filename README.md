@@ -1,14 +1,39 @@
-## Probabilistic urban air-quality observability MVP (Bengaluru/Delhi)
+## AirOS — Urban Intelligence Platform
 
-This project is **not an operational air-quality management system**.
+**AirOS (Air OS)** is an **urban intelligence platform**: a closed-loop city data and decision-support system. It is not a single-purpose application.
 
-It is a local, reliability-first prototype for:
+Air pollution management, heat risk assessment, flood preparedness, mobility planning, crowd monitoring, and sensor siting are all **applications that can be built on top of AirOS** — sharing the same data infrastructure, reliability layer, and decision-support tools.
 
-- **data fusion / observability** under sparse station coverage
-- **probabilistic PM2.5 forecasting** (baseline models + uncertainty estimates)
-- **provenance-first decision-support workflow design** (with safety gates)
+- **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
+- **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
+- **Specifications**: [`specifications/README.md`](specifications/README.md)
 
-The output should be interpreted as **indicative** unless station coverage and data provenance are strong.
+### What is AirOS?
+
+AirOS is to city data what an operating system is to a computer: applications run on top of it, while the platform handles the common, hard parts (connectors, standardized objects, reliability scoring, conformance, APIs/SDKs, decision packets).
+
+This is **not** an operational system out of the box. It is a reliability-first prototype intended to demonstrate how trusted city intelligence can be built and improved over time.
+
+### AirOS is a closed feedback loop
+
+This is not just a data pipeline. AirOS is designed as a **closed loop**:
+
+1) ingest + standardize city signals  
+2) assess source reliability and provenance  
+3) build reusable features  
+4) run models and produce recommendations/decision packets  
+5) humans review and decide  
+6) outcomes are measured and fed back to improve models and playbooks
+
+### Current reference application: air pollution (PM2.5)
+
+The reference app in this repo is **probabilistic air-quality observability**:
+
+- data fusion under sparse station coverage
+- probabilistic PM2.5 forecasting (baseline models + uncertainty estimates)
+- provenance-first decision support (quality gates + human review)
+
+Outputs should be interpreted as **indicative** unless station coverage and provenance are strong.
 
 - Boundary (bbox / ward polygon / full city)
 - H3 grid
@@ -159,6 +184,16 @@ Default config runs **fast `bbox` mode** (recommended for development):
 python main.py
 ```
 
+### Conformance audit (contracts)
+
+Run a full specification conformance audit (schemas, manifest, outputs, local API/SDK responses):
+
+```bash
+python main.py --step conformance
+```
+
+This writes `data/outputs/conformance_report.json`.
+
 Useful CLI options:
 
 ```bash
@@ -171,6 +206,16 @@ python main.py --sensor-siting-mode coverage
 python main.py --sensor-siting-mode hotspot_discovery
 python main.py --sensor-siting-mode equity
 ```
+
+### Review dashboard (Streamlit)
+
+Run the dashboard UI:
+
+```bash
+streamlit run review_dashboard/app.py
+```
+
+The dashboard uses the **SDK** (`UrbanPlatformClient`) to read persisted artifacts and supports tabs for multiple use cases (e.g., Air Pollution + Crowd).
 
 Outputs land in:
 
@@ -194,6 +239,16 @@ Outputs land in:
 - A `sensor_siting_summary` block inside `data/outputs/metrics.json` when sensor siting runs
 
 Open the HTML files in a browser.
+
+### Crowd (camera people_count) example
+
+This repo also includes a privacy-first “Crowd” example:
+
+- Edge publisher writes provider-contract JSONL: `data/edge/video_camera_people_count.jsonl`
+- File ingestion normalizes into `data/processed/observation_store.parquet`
+- Dashboard “Crowd” tab shows latest `people_count` per `entity_id`
+
+See [`GETTING_STARTED.md`](GETTING_STARTED.md) for the exact commands (dummy publisher and YOLO mode).
 
 ### Human review and decision packets
 
