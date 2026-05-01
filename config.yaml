@@ -1,0 +1,84 @@
+city_name: London, UK
+fallback_city_name: Los Angeles, US
+spatial_mode: bbox
+bbox:
+  # Central London bbox (high OpenAQ PM2.5 location density)
+  north: 51.54
+  south: 51.49
+  east: -0.08
+  west: -0.19
+ward_polygon_path: null
+h3_resolution: 8
+forecast_horizon_hours: 12
+lookback_days: 30
+local_crs: EPSG:27700
+pm25_hotspot_thresholds:
+  low: 30
+  moderate: 60
+  high: 90
+  severe: 120
+
+# Default PM2.5 category labels aligned to Indian AQI-style breakpoints (µg/m³)
+pm25_categories_india:
+  good: [0, 30]
+  satisfactory: [31, 60]
+  moderate: [61, 90]
+  poor: [91, 120]
+  very_poor: [121, 250]
+  severe: [251, 999]
+
+# AQI clarity: categorization is PM2.5-only (not full multi-pollutant AQI).
+aqi_standard: CPCB_PM25_ONLY
+
+quality_gates:
+  max_synthetic_aq_ratio_for_recommendations: 0.0
+  max_interpolated_aq_ratio_for_high_confidence: 0.5
+  max_avg_station_distance_km: 10
+  min_real_stations_required: 3
+  block_recommendations_if_synthetic: true
+aq:
+  idw_power: 2.0
+  min_stations: 3
+model:
+  test_fraction: 0.2
+  force_model: null
+  random_forest:
+    n_estimators: 250
+    min_samples_leaf: 2
+    random_state: 42
+osm:
+  road_classes:
+  - motorway
+  - trunk
+  - primary
+  - secondary
+  - tertiary
+  - residential
+  - service
+  - unclassified
+cache:
+  enabled: true
+  force_refresh: false
+  ttl_days: 30
+development:
+  sample_mode: true
+  sample_seed: 42
+  max_buildings: 5000
+  max_roads: 5000
+  max_pois: 3000
+  max_landuse: 3000
+
+# Planning support: ranks H3 cells where an extra sensor could reduce uncertainty
+# (coverage / equity proxies). Not “most polluted” spots.
+sensor_siting:
+  enabled: true
+  mode: coverage
+  top_k: 20
+  min_distance_from_existing_station_km: 1.0
+  redundancy_penalty_enabled: true
+  apply_min_spacing_if_stations_known: true
+
+# Runtime JSON Schema checks (specifications/manifest.json). Report: data/outputs/conformance_report.json
+conformance:
+  enabled: true
+  fail_on_error: false
