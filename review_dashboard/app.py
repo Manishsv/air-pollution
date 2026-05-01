@@ -21,6 +21,7 @@ from review_dashboard.components.evidence_tabs import render_evidence_tabs
 from review_dashboard.components.filters import render_filters
 from review_dashboard.components.map_view import render_map
 from review_dashboard.components.packet_summary import render_packet_summary
+from review_dashboard.components.flood_panel import render_flood_panel
 
 
 st.set_page_config(page_title="Air Quality Review Console", layout="wide")
@@ -174,7 +175,7 @@ def main():
 
     _render_system_sidebar(client, audit=audit, metrics=metrics)
 
-    t_air, t_heat, t_crowd, t_events = st.tabs(["Air Pollution", "Heat", "Crowd", "Events"])
+    t_air, t_flood, t_heat, t_crowd, t_events = st.tabs(["Air Pollution", "Flood", "Heat", "Crowd", "Events"])
 
     with t_air:
         has_degraded = False
@@ -428,6 +429,9 @@ def main():
     with t_heat:
         st.subheader("Heat")
         st.caption("Placeholder. This tab will host heat risk indicators and workflows.")
+
+    with t_flood:
+        render_flood_panel()
 
     with t_crowd:
         _render_crowd(client)
