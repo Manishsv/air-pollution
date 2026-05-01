@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Local caches / outputs
+cache/
+data/raw/
+data/processed/
+data/outputs/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+

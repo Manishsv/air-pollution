@@ -1,0 +1,52 @@
+{
+  "spec_version": "v1",
+  "json_schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Urban sensing platform output contracts. Domain-neutral cores plus optional strict profiles per hazard/modality (air quality, traffic, flood, heat, …).",
+  "artifacts": {
+    "urban_decision_packet_core": {
+      "description": "Domain-neutral decision packet shell (H3 cell, review workflow, generic prediction/evidence blobs). Use for new domains before adding a strict profile.",
+      "schema_path": "json_schema/v1/urban_decision_packet_core.v1.schema.json",
+      "stability": "stable"
+    },
+    "decision_packet": {
+      "description": "Alias for the default strict profile (air quality PM2.5 MVP). Prefer `decision_packet_air_quality` in new integrations.",
+      "schema_path": "json_schema/v1/decision_packet.profile.air_quality.v1.schema.json",
+      "stability": "stable"
+    },
+    "decision_packet_air_quality": {
+      "description": "Strict profile: PM2.5, India bands, AQ + weather + fire provenance fields emitted by the current pipeline.",
+      "schema_path": "json_schema/v1/decision_packet.profile.air_quality.v1.schema.json",
+      "stability": "stable"
+    },
+    "decision_packets": {
+      "description": "Root array for decision_packets.json (items follow the default strict profile in v1).",
+      "schema_path": "json_schema/v1/decision_packets.schema.json",
+      "stability": "stable"
+    },
+    "data_audit": {
+      "description": "Grid + observation coverage audit for the AQ pipeline (v1 field names are AQ-oriented). Other domains should add e.g. `data_audit.profile.traffic.v1.schema.json`.",
+      "schema_path": "json_schema/v1/data_audit.schema.json",
+      "stability": "stable"
+    },
+    "metrics": {
+      "description": "Run metrics envelope (minimal required subset); model blocks vary by domain.",
+      "schema_path": "json_schema/v1/metrics.schema.json",
+      "stability": "documented"
+    },
+    "provenance_summary": {
+      "description": "Compact provenance object embedded in packets/metrics (v1 keys lean on spatial + station language from AQ).",
+      "schema_path": "json_schema/v1/provenance_summary.schema.json",
+      "stability": "stable"
+    },
+    "source_reliability": {
+      "description": "Per-entity reliability table (variable-agnostic: pm25, speed_mph, water_depth_m, …).",
+      "schema_path": "json_schema/v1/source_reliability.schema.json",
+      "stability": "stable"
+    },
+    "scale_analysis": {
+      "description": "H3 resolution vs observation density (reusable across domains that use H3 + point sensors).",
+      "schema_path": "json_schema/v1/scale_analysis.schema.json",
+      "stability": "stable"
+    }
+  }
+}
