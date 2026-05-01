@@ -1,22 +1,267 @@
 # AirOS Use Case Roadmap
 
+This roadmap organizes AirOS city-management capabilities into **phases**. Each phase is designed to be specs-first: required provider contracts, platform objects, domain specs, and consumer contracts must exist and conformance must pass before the phase is considered complete.
+
+## Phased platform roadmap
+
+### Phase 1. City base layer
+
+- **purpose**: Establish shared city primitives so all domains can reuse boundaries, grids, entities, and identifiers.
+- **city actors served**: platform engineers, GIS teams, city data office
+- **capabilities**:
+  - canonical `city_id`, `area_id` / ward boundaries, and base geospatial reference layers
+  - H3 grid generation and boundary selection modes
+  - canonical entity identity conventions (assets, wards, stations, parcels)
+- **required data sources**:
+  - administrative boundaries (wards/city)
+  - base map layers (roads/buildings/water bodies as baseline)
+- **required specifications**:
+  - platform objects: `Entity`, `Boundary`, `Feature` (as applicable)
+  - provider contracts for boundary layers if ingested
+- **example dashboards**:
+  - “City base map + layers catalog”
+  - “Boundary/ward explorer”
+- **acceptance criteria**:
+  - canonical IDs and geometry conventions documented
+  - reusable boundary + grid artifacts can be produced for a city
+
+### Phase 2. Data governance and conformance layer
+
+- **purpose**: Make specs-first development enforceable; ensure every provider and consumer surface is contract-driven.
+- **city actors served**: platform engineers, city data office, audit/governance reviewers
+- **capabilities**:
+  - provider contracts, consumer contracts, platform objects, domain specs
+  - mandatory conformance + audit reports
+  - provenance and source reliability semantics
+- **required data sources**:
+  - none (governance layer is platform-internal), but must support provider metadata inputs
+- **required specifications**:
+  - spec policy (`specifications/spec_policy.yaml`)
+  - provider contracts + consumer contracts + platform objects
+  - domain specs scaffolding for domain variables/thresholds/categories
+- **example dashboards**:
+  - “Conformance status + contract coverage”
+  - “Data provenance and reliability report”
+- **acceptance criteria**:
+  - conformance step passes in CI/local runs
+  - examples/fixtures validate against their schemas
+
+### Phase 3. Situational awareness layer
+
+- **purpose**: Provide actor-specific, confidence-rated snapshots of “what is happening now” with clear provenance.
+- **city actors served**: city administrators, ward officers, operations centers
+- **capabilities**:
+  - multi-layer maps (risks, incidents, assets) with warnings
+  - summaries by ward/area and time window
+  - “review queue” of decision packets requiring attention
+- **required data sources**:
+  - at least one real-time/batch signal per domain (sensors, incidents, weather, etc.)
+- **required specifications**:
+  - consumer contracts for situational dashboards
+  - domain specs for interpretation categories and safety gates
+- **example dashboards**:
+  - air quality summary + hotspots (confidence-rated)
+  - flood risk summary + incident overlay (verification-first)
+- **acceptance criteria**:
+  - dashboard payloads conform to consumer contracts
+  - visible warnings for synthetic/low-confidence states are required and present
+
+### Phase 4. Service delivery and grievance layer
+
+- **purpose**: Turn signals into accountable service workflows (complaints, tickets, SLAs) with evidence trails.
+- **city actors served**: ward officers, call centers, department engineers, citizens (where appropriate)
+- **capabilities**:
+  - complaint ingestion and clustering (privacy-aware)
+  - service-status views and queues
+  - audit trail linking complaints ↔ evidence ↔ actions
+- **required data sources**:
+  - complaint/ticket systems
+  - service schedules (where applicable)
+- **required specifications**:
+  - provider contracts for complaint/ticket feeds
+  - consumer contracts for grievance dashboards and task payloads
+  - domain specs for service-level semantics (what “resolved” means)
+- **example dashboards**:
+  - “Ward grievance queue + clusters”
+  - “Department SLA and backlog”
+- **acceptance criteria**:
+  - task/queue payloads are contract-defined
+  - privacy and sensitivity constraints are enforced by consumer contracts
+
+### Phase 5. Risk and resilience layer
+
+- **purpose**: Provide early-warning and risk posture views (not automatic orders) for hazards and system stress.
+- **city actors served**: disaster management, utilities, operations centers, planners
+- **capabilities**:
+  - risk scoring/category outputs with uncertainty
+  - safety gates that block operational use when provenance/reliability is insufficient
+  - scenario-based “what could happen next” summaries
+- **required data sources**:
+  - hazard drivers (weather/rainfall/heat), incidents, exposure layers, assets
+- **required specifications**:
+  - domain specs for thresholds/categories and blocked uses
+  - decision packet consumer contracts (domain profiles)
+- **example dashboards**:
+  - “Flood risk level by ward + vulnerable assets”
+  - “Heat risk exposure by neighborhood”
+- **acceptance criteria**:
+  - high-risk outputs include explicit blocked uses + field verification requirements
+  - recommendations are downgraded to “verify” when gates fail
+
+### Phase 6. Field operations layer
+
+- **purpose**: Make decision support operationally actionable via verified tasks and structured outcomes.
+- **city actors served**: field inspectors, ward engineers, emergency responders (under protocol)
+- **capabilities**:
+  - field verification task generation and assignment
+  - checklists, evidence capture, and outcomes that feed back into models/playbooks
+  - linking tasks ↔ decision packets ↔ assets/incidents
+- **required data sources**:
+  - workforce/task systems (or a minimal task registry)
+  - mobile evidence capture metadata (photos/notes)
+- **required specifications**:
+  - consumer contract for field verification tasks
+  - decision packet profiles referencing field verification requirements
+- **example dashboards**:
+  - “Field task list + map”
+  - “Verification outcomes and follow-ups”
+- **acceptance criteria**:
+  - field tasks conform to a consumer contract
+  - operational actions require verification unless separately authorized by protocol
+
+### Phase 7. Domain modules
+
+- **purpose**: Deliver domain-specific modules as contract packages: provider contracts + domain spec + consumer contracts.
+- **city actors served**: domain departments (environment, stormwater, water utility, traffic, sanitation, assets)
+- **capabilities**:
+  - domain-specific normalization, features, models/rules, and decision packets
+  - domain dashboards built strictly from consumer contracts
+- **required data sources**:
+  - domain-specific authoritative sources (plus open data where appropriate)
+- **required specifications**:
+  - provider contracts per source
+  - domain specs (variables/units/thresholds/safety gates)
+  - consumer contracts (dashboards, decision packets, tasks)
+- **example dashboards**:
+  - “Flood risk + drainage assets module”
+  - “Property/building mismatch review module”
+- **acceptance criteria**:
+  - no domain-specific fields exist outside domain specs
+  - providers/consumers pass conformance with examples and fixtures
+
+### Phase 8. Planning and simulation layer
+
+- **purpose**: Support policy and infrastructure planning (what-if) distinct from operations (nowcasting).
+- **city actors served**: urban planners, finance, city administrators, researchers
+- **capabilities**:
+  - scenario parameters and simulation outputs with uncertainty
+  - long-horizon forecasts and interventions comparison
+  - impact evaluation (before/after, counterfactual-style)
+- **required data sources**:
+  - historical time series, network models, land use/zoning, demographic proxies (as allowed)
+- **required specifications**:
+  - consumer contracts for scenario outputs and simulation dashboards
+  - domain specs defining safe interpretation (planning vs operations)
+- **example dashboards**:
+  - “Stormwater capacity upgrade scenarios”
+  - “Traffic demand and corridor redesign what-if”
+- **acceptance criteria**:
+  - simulation outputs are clearly labeled “planning”
+  - operational safeguards prevent planning outputs from being misused as real-time truth
+
+### Phase 9. Public transparency and ecosystem layer
+
+- **purpose**: Provide trust-building public views and enable third-party ecosystem integrations safely.
+- **city actors served**: citizens, civil society, researchers, private ecosystem participants
+- **capabilities**:
+  - public dashboards and open-data exports (non-sensitive)
+  - ecosystem APIs/SDKs with stable consumer contracts
+  - transparency about provenance, confidence, and limitations
+- **required data sources**:
+  - curated outputs from domain modules with privacy controls
+- **required specifications**:
+  - public-facing consumer contracts with privacy constraints
+  - blocked uses and warnings required by domain specs
+- **example dashboards**:
+  - “Public flood alerts (advisory) + caveats”
+  - “Public air quality map (confidence-rated)”
+- **acceptance criteria**:
+  - no sensitive identifiers leak via public payloads
+  - all public outputs include provenance/confidence cues
+
+### Phase 10. Cross-domain city command view
+
+- **purpose**: Provide a unified, cross-domain operational picture and prioritization across departments.
+- **city actors served**: city command center, city administrators, department heads
+- **capabilities**:
+  - cross-domain risk posture and queues
+  - shared prioritization and escalation workflows
+  - cross-domain decision packets and dependencies (e.g., flood ↔ traffic ↔ emergency response)
+- **required data sources**:
+  - harmonized domain dashboards/decision packets
+  - shared incident/task registries
+- **required specifications**:
+  - cross-domain consumer contracts (command view payload)
+  - consistent provenance and reliability semantics across domains
+- **example dashboards**:
+  - “City command: top risks + queues across domains”
+  - “Escalations and blockers”
+- **acceptance criteria**:
+  - command view is purely contract-driven (no ad-hoc merges)
+  - explicit blocked uses for high-risk recommendations
+
+## Recommended Domain Sequence
+
+1. Air quality
+2. Flood and stormwater
+3. Property and buildings
+4. Water operations
+5. Traffic and mobility
+6. Sanitation and solid waste
+7. Public assets and maintenance
+8. Heat and public health risk
+9. Emergency response
+10. Planning and simulation
+
 ## Use case maturity stages
 
 Each use case should move through these stages:
 
 1. Concept
-2. Data-source discovery
-3. Connector implementation
-4. Provider contract (provider specification)
-5. Normalization to canonical platform objects
-6. Domain semantics (domain specification)
-7. Consumer contracts (dashboard/API/SDK/report payloads)
-8. Feature generation
-9. Decision packet
-10. Review workflow
-11. Field validation / outcome feedback
 
-AirOS is **specs-first**. Stages 4–7 are not optional: connectors and dashboards must be backed by specifications and must pass conformance.
+2. Actor and decision definition
+
+3. Data-source discovery
+
+4. Domain specification
+
+5. Provider contracts
+
+6. Platform object mapping
+
+7. Consumer contracts
+
+8. Examples and fixtures
+
+9. Conformance checks
+
+10. Connector implementation
+
+11. Normalization to canonical platform objects
+
+12. Feature generation
+
+13. Model/rule logic where applicable
+
+14. Dashboard/API/SDK implementation
+
+15. Decision packet
+
+16. Review workflow
+
+17. Field validation / outcome feedback
+
+AirOS is **specs-first**. Stages 4–9 are not optional: connectors, dashboards, APIs, SDK methods, reports, and decision packets must be backed by specifications and must pass conformance before implementation is considered complete.
 
 ## Current implemented use cases
 
@@ -172,14 +417,27 @@ Initial dashboard:
 
 When starting a new use case, the minimum acceptable sequence is:
 
-1. **Define** the actor and the decision to support
-2. **Specify provider contracts** for each required data source
-3. **Map to canonical platform objects** (domain-neutral where possible)
-4. **Define domain specs** (variables, units, thresholds, safety gates, review prompts)
-5. **Define consumer contracts** (dashboard payloads, decision packets, API/SDK responses)
-6. **Register specs** in the specifications manifest
-7. **Implement/extend conformance checks**
-8. **Only then implement** connectors, pipelines, models, dashboards
-9. **Run conformance** and attach evidence to the PR
+1. **Define** the actor and the decision to support.
+2. **Discover data sources** and document access method, license, coverage, update frequency, and reliability risks.
+3. **Define or update the domain specification**: variables, units, thresholds, categories, safety gates, blocked uses, and review prompts.
+4. **Specify provider contracts** for each required data source.
+5. **Map provider data to canonical platform objects** such as Entity, Observation, Feature, Event, Asset, SourceReliability, DecisionPacket, or FieldTask.
+6. **Define consumer contracts** for dashboard payloads, decision packets, API/SDK responses, reports, and field tasks.
+7. **Add examples and fixtures** for provider inputs and consumer outputs.
+8. **Register specifications** in the specifications manifest.
+9. **Implement or extend conformance checks**.
+10. **Only then implement** connectors, pipelines, models/rules, dashboards, APIs, or SDK methods.
+11. **Run conformance** and attach evidence to the PR.
+12. **Add human review and field verification loops** where the output may influence operational action, enforcement, emergency response, or citizen-facing service delivery.
 
 This keeps AirOS interoperable across domains and prevents ad-hoc payloads from becoming de facto contracts.
+
+## Why this domain sequence?
+
+The recommended order optimizes for:
+
+- **reuse of shared primitives** (boundaries/H3/OSM, provenance, reliability, conformance, decision packets)
+- **operational safety** (high-risk domains early, with verification-first patterns baked in)
+- **data availability** (weather/open sources first, then heavier enterprise/registry integrations)
+
+Air quality is first as the reference implementation. Flood/stormwater comes next because it reuses weather + spatial primitives and benefits from verification-first workflows. Property/buildings and water operations establish city registries and asset-centric operations. Traffic, sanitation, public assets, heat, emergency response, and planning/simulation then build on the same platform layers with increasing cross-domain coupling.
