@@ -1,16 +1,39 @@
-## Probabilistic urban air-quality observability MVP (Bengaluru/Delhi)
+## AirOS — Urban Intelligence Platform
 
-This project is **not an operational air-quality management system**.
+**AirOS (Air OS)** is an **urban intelligence platform**: a closed-loop city data and decision-support system. It is not a single-purpose application.
 
-See [`GETTING_STARTED.md`](GETTING_STARTED.md) for setup, API keys, running the pipeline, and the dashboard.
+Air pollution management, heat risk assessment, flood preparedness, mobility planning, crowd monitoring, and sensor siting are all **applications that can be built on top of AirOS** — sharing the same data infrastructure, reliability layer, and decision-support tools.
 
-It is a local, reliability-first prototype for:
+- **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
+- **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
+- **Specifications**: [`specifications/README.md`](specifications/README.md)
 
-- **data fusion / observability** under sparse station coverage
-- **probabilistic PM2.5 forecasting** (baseline models + uncertainty estimates)
-- **provenance-first decision-support workflow design** (with safety gates)
+### What is AirOS?
 
-The output should be interpreted as **indicative** unless station coverage and data provenance are strong.
+AirOS is to city data what an operating system is to a computer: applications run on top of it, while the platform handles the common, hard parts (connectors, standardized objects, reliability scoring, conformance, APIs/SDKs, decision packets).
+
+This is **not** an operational system out of the box. It is a reliability-first prototype intended to demonstrate how trusted city intelligence can be built and improved over time.
+
+### AirOS is a closed feedback loop
+
+This is not just a data pipeline. AirOS is designed as a **closed loop**:
+
+1) ingest + standardize city signals  
+2) assess source reliability and provenance  
+3) build reusable features  
+4) run models and produce recommendations/decision packets  
+5) humans review and decide  
+6) outcomes are measured and fed back to improve models and playbooks
+
+### Current reference application: air pollution (PM2.5)
+
+The reference app in this repo is **probabilistic air-quality observability**:
+
+- data fusion under sparse station coverage
+- probabilistic PM2.5 forecasting (baseline models + uncertainty estimates)
+- provenance-first decision support (quality gates + human review)
+
+Outputs should be interpreted as **indicative** unless station coverage and provenance are strong.
 
 - Boundary (bbox / ward polygon / full city)
 - H3 grid
