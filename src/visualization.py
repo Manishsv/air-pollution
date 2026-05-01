@@ -160,6 +160,7 @@ def save_hotspot_recommendations_map(
     g = grid_geo.to_crs("EPSG:4326").copy()
     desired = [
         "h3_id",
+        "packet_id",
         "current_pm25",
         "aq_source_type",
         "forecast_pm25_mean",
@@ -199,6 +200,7 @@ def save_hotspot_recommendations_map(
         # reuse style mapping; unknown gets gray
         style = _style_by_level("severe" if lvl == "severe" else "high" if lvl in {"very_poor", "poor"} else "moderate" if lvl in {"moderate"} else "low")
         popup_html = (
+            f"<b>packet_id</b>: {row.get('packet_id') or ''}<br>"
             f"<b>H3</b>: {row['h3_id']}<br>"
             f"<b>Current PM2.5</b>: {float(row.get('current_pm25') or 0):.1f}<br>"
             f"<b>AQ source</b>: {row.get('aq_source_type')}<br>"

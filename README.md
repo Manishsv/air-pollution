@@ -118,8 +118,26 @@ air_quality_mvp/
     visualization.py
     sensor_siting.py
     pipeline.py
+  urban_platform/
+    connectors/
+    standards/
+    registries/
+    fabric/
+    processing/
+    models/
+    decision_support/
+    applications/
+    outputs/
+    common/
   main.py
 ```
+
+During the migration to `urban_platform/`, **connectors expose two entrypoints**:
+
+- **raw**: `fetch_*_raw(config)` returns the legacy-shaped DataFrame (for backward compatibility)
+- **schema-native**: `fetch_*_observations(config, grid_gdf=None)` returns canonical **Observation** records (validated)
+
+The current reference air-pollution pipeline still uses raw fetchers internally and converts to Observations immediately after ingestion.
 
 ### Setup
 
@@ -158,6 +176,8 @@ Outputs land in:
 
 - `data/processed/h3_grid.geojson`
 - `data/processed/static_features.geojson`
+- `data/processed/observation_store.parquet`
+- `data/processed/feature_store.parquet`
 - `data/processed/model_dataset.csv`
 - `data/outputs/pm25_model.joblib`
 - `data/outputs/metrics.json`
@@ -167,11 +187,30 @@ Outputs land in:
 - `data/outputs/current_pm25_map.html`
 - `data/outputs/forecast_pm25_map.html`
 - `data/outputs/hotspot_recommendations_map.html`
+- `data/outputs/decision_packets.json`
+- `data/outputs/decision_packets/<packet_id>.json`
 - `data/outputs/sensor_siting_candidates.geojson` (if `sensor_siting.enabled` and after a full run)
 - `data/outputs/sensor_siting_candidates_map.html`
 - A `sensor_siting_summary` block inside `data/outputs/metrics.json` when sensor siting runs
 
 Open the HTML files in a browser.
+
+### Human review and decision packets
+
+**Recommendations are not final decisions.** The system produces decision support outputs that must be reviewed by a human officer before any operational action.
+
+For each grid-cell recommendation, the pipeline writes a **decision packet** that bundles:
+
+- **evidence** (observations, nearby stations, weather, static + dynamic features)
+- **provenance** (real/interpolated/synthetic flags, interpolation method, station distance/count, warnings)
+- **confidence + uncertainty** (confidence score, data quality score, uncertainty band / quantiles where available)
+- **review guidance** (questions, verification steps, and “when not to act” reminders)
+
+Important:
+
+- Proxy-based **likely contributing factors are not causal attribution**.
+- Do not issue enforcement actions without **field verification**.
+- Do not act solely on **synthetic data** or low-confidence outputs.
 
 ### Sensor siting support
 
@@ -255,6 +294,22 @@ Before training the model, the pipeline writes:
 
 This includes station counts, interpolated/synthetic ratios, nearest-station distance stats, and whether recommendations are allowed.
 
+### Source reliability and observation quality
+
+Sensors and external feeds can degrade: they may go offline, become stale, flatline at a constant value, or emit impossible/spiky readings.
+
+The platform runs a **Source Reliability Layer** before persisting and trusting observations:
+
+- **What it produces**: `data/outputs/source_reliability.json` (one row per `entity_id + variable`) with a transparent `status` (healthy/degraded/suspect/offline/unknown), `reliability_score` (0–1), and the concrete `reliability_issues` that triggered penalties.
+- **How it affects observations**: the canonical `data/processed/observation_store.parquet` gains:
+  - `source_reliability_score`, `source_reliability_status`, `source_reliability_issues`
+  - `original_quality_flag` (preserved)
+  - adjusted `confidence = confidence * source_reliability_score`
+  - if a source is `suspect`/`offline`, `quality_flag` is set to `suspect`
+- **Why it matters**: reliability affects observation confidence, downstream confidence, decision packet risk warnings, and the review dashboard’s system warnings.
+
+This layer is reusable for AQ sensors, flood sensors, traffic feeds, weather feeds, and other IoT sources: it operates on canonical Observations and does not depend on air-pollution-specific model logic.
+
 ### How hotspot recommendations are generated
 
 This MVP generates recommendations in a deliberately **simple and explainable** way:
@@ -265,6 +320,12 @@ This MVP generates recommendations in a deliberately **simple and explainable** 
 
 2. **Category labels use Indian AQI-style PM2.5 breakpoints**
    - The MVP outputs `pm25_category_india` based on `pm25_categories_india` in `config.yaml`.
+
+### AQI Interpretation
+
+- This system reports **PM2.5-based categorization only** (configured as `aqi_standard: CPCB_PM25_ONLY`).
+- It **does not compute full AQI** (multi-pollutant AQI requires additional pollutants and aggregation rules).
+- Interpret `pm25_category_india` as a **PM2.5 breakpoint category**, not a full AQI index value.
 
 3. **Likely contributing factors (proxy-based, rule-driven)**
    - The MVP reports `likely_contributing_factors` using conservative proxy rules.
@@ -278,6 +339,8 @@ This MVP generates recommendations in a deliberately **simple and explainable** 
 - Synthetic AQ/weather kick in when APIs fail; this is documented but not “real” air-quality truth.
 - AQ interpolation is simple **inverse distance weighting**.
 - Model is a baseline tree regressor; no spatial-temporal deep learning.
+- Prediction intervals are **approximate and not formally calibrated** (RandomForest quantile-based heuristic).
+  - Future work: residual-based calibration / conformal intervals.
 - OSM feature extraction uses straightforward spatial joins; for full-city scale you’d want spatial indexing + chunking.
 - Station coverage is often sparse for Indian cities in OpenAQ; replace with CPCB/CAAQMS for operational use.
 

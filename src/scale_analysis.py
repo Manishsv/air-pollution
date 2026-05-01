@@ -31,6 +31,19 @@ def analyze_h3_resolution(grid_gdf, aq_stations_df) -> Dict[str, Any]:
     elif avg_cells_per_station > 50:
         resolution_warning = "Many grid cells per station; interpolation dominates. Consider coarser H3 resolution."
 
+    # Pre-deployment defensibility: simple resolution assessment + recommendation.
+    assessment_warning = ""
+    if station_density_per_100_sqkm < 5:
+        assessment_warning = "Grid too fine for sensor density"
+    elif avg_cells_per_station > 10:
+        assessment_warning = "High interpolation dependency"
+
+    cur_res = int(getattr(grid_gdf, "h3_resolution", None) or -1)
+    recommended_resolution = cur_res
+    if assessment_warning:
+        # suggest coarser resolution (larger cells) when coverage is sparse/interpolation-heavy
+        recommended_resolution = max(0, cur_res - 1) if cur_res >= 0 else cur_res
+
     return {
         "h3_resolution": int(getattr(grid_gdf, "h3_resolution", None) or -1),
         "avg_cell_area_sqkm": avg_cell_area_sqkm,
@@ -39,5 +52,7 @@ def analyze_h3_resolution(grid_gdf, aq_stations_df) -> Dict[str, Any]:
         "station_density_per_100_sqkm": station_density_per_100_sqkm,
         "avg_cells_per_station": avg_cells_per_station,
         "resolution_warning": resolution_warning,
+        "resolution_assessment": {"warning": assessment_warning},
+        "recommended_resolution": recommended_resolution,
     }
 

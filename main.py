@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from src.config import load_config
-from src.pipeline import run_pipeline
+from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
 
 
 def setup_logging() -> None:
@@ -48,7 +48,7 @@ def main() -> None:
         cfg.lookback_days,
         cfg.forecast_horizon_hours,
     )
-    outputs = run_pipeline(
+    outputs = run_air_pollution_pipeline(
         cfg,
         step=args.step,
         refresh_scope=args.force_refresh,

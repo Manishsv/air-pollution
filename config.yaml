@@ -27,6 +27,9 @@ pm25_categories_india:
   very_poor: [121, 250]
   severe: [251, 999]
 
+# AQI clarity: categorization is PM2.5-only (not full multi-pollutant AQI).
+aqi_standard: CPCB_PM25_ONLY
+
 quality_gates:
   max_synthetic_aq_ratio_for_recommendations: 0.0
   max_interpolated_aq_ratio_for_high_confidence: 0.5
@@ -74,3 +77,8 @@ sensor_siting:
   min_distance_from_existing_station_km: 1.0
   redundancy_penalty_enabled: true
   apply_min_spacing_if_stations_known: true
+
+# Runtime JSON Schema checks (specifications/manifest.json). Report: data/outputs/conformance_report.json
+conformance:
+  enabled: true
+  fail_on_error: false

@@ -13,3 +13,6 @@ joblib
 pyyaml
 python-dotenv
 tqdm
+streamlit
+streamlit-folium
+jsonschema>=4.17.0
