@@ -1,0 +1,57 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No secrets.
+#
+# Conceptual shape aligns with:
+#   specifications/registry_contracts/application_registry.v1.schema.json
+# =============================================================================
+
+registry_id: deployment-application-registry-PLACEHOLDER
+version: v1
+updated_at: "2026-05-02T00:00:00Z"
+scope: deployment
+deployment_id: DEPLOYMENT_ID_PLACEHOLDER
+
+applications:
+  - application_id: air_quality_reference_pipeline
+    label: Air quality reference application (AQ pipeline + decision packets)
+    domain_id: air_quality
+    consumer_contracts:
+      - consumer_decision_packet_air_quality
+      - consumer_decision_packets_air_quality
+      - consumer_recommendation_response
+    payload_builders:
+      - urban_platform.applications.air_pollution.pipeline
+    # dashboard_component is optional; presentation only.
+    sdk_api_outputs_consumed: [recommendation_response, decision_packet_air_quality]
+    packet_types: [consumer_decision_packet_air_quality]
+    field_task_types: [consumer_field_verification_task]
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/air_quality.v1.yaml#safety_gates
+      - specifications/domain_specs/air_quality.v1.yaml#blocked_uses
+    examples: []
+    conformance_requirements: [schema_valid, manifest_registered]
+    enabled_by_default: false
+    status: reference
+
+  - application_id: flood_risk_review_console
+    label: Flood risk read-only review application
+    domain_id: flood_risk
+    consumer_contracts:
+      - consumer_flood_risk_dashboard
+      - consumer_flood_decision_packet
+      - consumer_field_verification_task
+    payload_builders:
+      - urban_platform.applications.flood.dashboard_payload
+      - urban_platform.applications.flood.decision_packets
+    dashboard_component: review_dashboard.components.flood_panel
+    sdk_api_outputs_consumed: [flood_risk_dashboard, flood_decision_packet]
+    packet_types: [consumer_flood_decision_packet]
+    field_task_types: [consumer_field_verification_task]
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/flood_risk.v1.yaml#safety_gates
+      - specifications/domain_specs/flood_risk.v1.yaml#blocked_uses
+    examples:
+      - examples/flood/flood_risk_dashboard.sample.json
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: false
+    status: reference

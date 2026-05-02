@@ -180,3 +180,4 @@ This repository already contains several “proto-plugins,” but they are not y
 - Specs-first and conformance: `AGENTS.md`, `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`, `specifications/README.md`
 - Federation and Network Layer: `docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`, `docs/AGENCY_NODE_MODEL.md`, `docs/CROSS_AGENCY_COORDINATION_LAYER.md`
 - Architecture diagrams: `docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`
+- Deployment-scoped templates (profiles + registries): `deployments/templates/`

@@ -1,0 +1,36 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. Policy is envelope-level and domain-agnostic.
+# =============================================================================
+
+policy_id: policy:PLACEHOLDER
+purpose: "TEMPLATE: why this cross-node sharing exists"
+
+allowed_senders:
+  - node:NODE_ID_PLACEHOLDER
+allowed_receivers:
+  - node:NODE_ID_PLACEHOLDER
+
+allowed_message_types:
+  - decision_packet_shared
+  - field_task_requested
+  - agency_status_update
+
+# Schema refs should point to contract references (manifest artifact keys or registry URIs).
+allowed_schema_refs:
+  - network_message_envelope_v1
+  - network_delivery_receipt_v1
+
+allowed_jurisdiction_refs:
+  - jurisdiction:PLACEHOLDER
+
+data_classification: official_sensitive  # public | official_sensitive | restricted | internal
+retention_policy: "TEMPLATE: e.g. 90d receipts, 30d payload refs; deployment-specific"
+human_review_required: true
+
+prohibited_uses:
+  - "TEMPLATE: automated enforcement action"
+  - "TEMPLATE: public disclosure of restricted operational data"
+
+notes: >-
+  TEMPLATE: policy is enforced by the Network Layer and deployment governance; it must not
+  encode domain semantics (thresholds, hazard levels) or override agency authority.

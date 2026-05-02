@@ -1,0 +1,39 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No real deployment data. No secrets.
+# Copy to a private deployment repo/workspace before operational use.
+# =============================================================================
+
+deployment_id: DEPLOYMENT_ID_PLACEHOLDER
+deployment_name: Deployment Placeholder Name
+
+# single_agency | multi_agency_city | multi_city_agency | state_coordination | regional_corridor | public_transparency
+deployment_type: single_agency
+
+owner_organization: OWNER_ORG_PLACEHOLDER
+environment: local  # local | staging | production
+
+# References to jurisdiction identifiers (not raw geometry dumps).
+jurisdiction_refs:
+  - jurisdiction:PLACEHOLDER
+
+# Domains enabled in this deployment (must correspond to domain specs).
+enabled_domains:
+  - air_quality
+
+# Deployment registries are overlays: enable only the subset needed.
+# These may point to files in a private deployment repo.
+enabled_provider_registries:
+  - deployments/templates/provider_registry.yaml
+enabled_application_registries:
+  - deployments/templates/application_registry.yaml
+enabled_network_adapter_registries:
+  - deployments/templates/network_adapter_registry.yaml
+
+notes: >-
+  TEMPLATE: describe goals, constraints, participating agencies, and whether
+  federation/network layer coordination is needed.
+
+no_secrets_notice: >-
+  This profile must not contain secrets, credentials, API keys, mailbox passwords,
+  or restricted personal data. Use configuration_ref pointers to deployment-local
+  secret/config stores.

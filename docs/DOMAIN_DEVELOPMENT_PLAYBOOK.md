@@ -21,6 +21,8 @@ For a **repo-specific** architecture snapshot (layout, conformance, gaps, superv
 
 For the design direction on keeping **AirOS Core** independent of specific providers and consumers, see **`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`**.
 
+For deployment-scoped overlays (profiles + registries templates to copy into private deployment repos), see **`deployments/templates/`** and `docs/CITY_PROFILE_TEMPLATE.md`.
+
 ## Repository layout (use the right layer)
 
 **Authoritative detail:** `specifications/ARCHITECTURE_NOTE.md` → section **“Repository code layout: `src/` vs `urban_platform/`”** (current state, **ownership table**, migration principles, and **suggested AQ migration sequence**).

@@ -1,0 +1,15 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. Do not commit restricted geometry dumps.
+# =============================================================================
+
+jurisdiction_id: jurisdiction:PLACEHOLDER
+jurisdiction_type: city  # city | multi_city | district | regional | state | national
+name: Jurisdiction Name Placeholder
+parent_jurisdiction_id: jurisdiction:PARENT_PLACEHOLDER
+
+# geometry_ref points to a deployment-local file/registry id or external authoritative source.
+geometry_ref: geometry:PLACEHOLDER
+authoritative_source: SOURCE_PLACEHOLDER
+
+notes: >-
+  TEMPLATE: store geometry in deployment-local secure storage where required; reference it here.

@@ -1,0 +1,41 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No secrets. No mailbox passwords. No API tokens.
+#
+# Conceptual shape aligns with:
+#   specifications/registry_contracts/network_adapter_registry.v1.schema.json
+# =============================================================================
+
+registry_id: deployment-network-adapter-registry-PLACEHOLDER
+version: v1
+updated_at: "2026-05-02T00:00:00Z"
+scope: deployment
+deployment_id: DEPLOYMENT_ID_PLACEHOLDER
+
+adapters:
+  - adapter_id: email_phase1_adapter
+    label: Email Phase 1 transport adapter (low-frequency coordination)
+    description: >-
+      TEMPLATE: email is a low-friction carrier for task handoffs, decision packet sharing,
+      acknowledgements, and status updates. It is NOT the Network Layer.
+    supported_transport: email
+    supported_network_contracts: [network_message_envelope_v1, network_delivery_receipt_v1]
+    delivery_receipt_support: [delivery_ack, delivery_nack, processing_ack, processing_nack, status_update]
+    authentication_method: manual_moa_gate
+    audit_behavior: "TEMPLATE: store Message-ID mapping; retain receipts."
+    retry_behavior: "TEMPLATE: conservative backoff; idempotent message_id."
+    configuration_ref: DEPLOYMENT_LOCAL:EMAIL_GATEWAY_CONFIG
+    enabled_by_default: false
+    status: experimental
+    notes: "No credentials here. Use deployment-local secrets/config stores."
+
+  - adapter_id: file_drop_adapter
+    label: File drop adapter
+    supported_transport: file_drop
+    supported_network_contracts: [network_message_envelope_v1, network_delivery_receipt_v1]
+    delivery_receipt_support: [delivery_ack, delivery_nack, status_update]
+    authentication_method: deployment_scoped_access_control
+    audit_behavior: "TEMPLATE: file handle -> transport_message_ref; retain receipts."
+    retry_behavior: "TEMPLATE: at-least-once; dedup by message_id."
+    configuration_ref: DEPLOYMENT_LOCAL:FILE_DROP_CONFIG
+    enabled_by_default: false
+    status: experimental

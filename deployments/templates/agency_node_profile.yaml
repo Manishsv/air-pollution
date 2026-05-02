@@ -1,0 +1,36 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No secrets. No personal PII.
+# =============================================================================
+
+node_id: NODE_ID_PLACEHOLDER
+agency_id: AGENCY_ID_PLACEHOLDER
+agency_name: Agency Name Placeholder
+agency_type: ulb  # ulb | pcb | traffic_police | utility | development_authority | state_department | etc.
+
+jurisdiction_type: city  # city | multi_city | district | regional | state | national
+jurisdiction_refs:
+  - jurisdiction:PLACEHOLDER
+
+deployment_mode: standalone  # standalone | shared_hosted | managed_service | federated
+
+enabled_domains:
+  - air_quality
+
+provider_contracts_supported:
+  - provider_air_quality_observation_feed
+  - provider_weather_observation_feed
+
+consumer_contracts_supported:
+  - consumer_decision_packet_air_quality
+  - consumer_recommendation_response
+
+network_contracts_supported:
+  - network_message_envelope_v1
+  - network_delivery_receipt_v1
+
+operational_owner_role: ROLE_PLACEHOLDER
+data_sharing_policy_ref: policy:PLACEHOLDER
+
+notes: >-
+  TEMPLATE: keep agency-specific assumptions out of platform code; use deployment profiles
+  and registries to enable only the needed subset of providers/apps/adapters.

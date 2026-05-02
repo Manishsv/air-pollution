@@ -1,0 +1,33 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No secrets. No credentials. No personal PII.
+# =============================================================================
+
+participant_id: PARTICIPANT_ID_PLACEHOLDER
+node_id: NODE_ID_PLACEHOLDER
+participant_type: gateway  # gateway | node_service | human_ops | monitoring
+
+endpoint_catalog_ref: endpoint_catalog:PLACEHOLDER
+
+supported_message_types:
+  - field_task_requested
+  - decision_packet_shared
+  - agency_status_update
+
+supported_network_contracts:
+  - network_message_envelope_v1
+  - network_delivery_receipt_v1
+
+authorization_policy_ref: policy:PLACEHOLDER
+
+receipt_support:
+  - delivery_ack
+  - delivery_nack
+  - processing_ack
+  - processing_nack
+  - status_update
+
+audit_contact_role: ROLE_PLACEHOLDER
+
+notes: >-
+  TEMPLATE: endpoint catalog details and credentials must live in deployment-local config,
+  not in the public AirOS repo.

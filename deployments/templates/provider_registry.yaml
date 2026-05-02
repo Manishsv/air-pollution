@@ -1,0 +1,64 @@
+# =============================================================================
+# TEMPLATE ONLY — placeholders. No real provider endpoints. No secrets.
+#
+# Conceptual shape aligns with:
+#   specifications/registry_contracts/provider_registry.v1.schema.json
+# =============================================================================
+
+registry_id: deployment-provider-registry-PLACEHOLDER
+version: v1
+updated_at: "2026-05-02T00:00:00Z"
+scope: deployment
+deployment_id: DEPLOYMENT_ID_PLACEHOLDER
+
+# NOTE:
+# - Do NOT store API keys, endpoints, usernames, or passwords here.
+# - Use configuration references (deployment-local) inside connector config files,
+#   not in this registry.
+providers:
+  - provider_id: openaq_v3
+    label: OpenAQ (CPCB-like) station-hourly air quality observations
+    domain_ids: [air_quality]
+    provider_contract: provider_air_quality_observation_feed
+    connector_module: urban_platform.connectors.air_quality.openaq.fetch_openaq_observations
+    input_method: api
+    output_platform_object_types: [Observation]
+    examples: []  # optional: manifest example keys or specifications-relative example paths
+    provenance_behavior:
+      strategy: normalized
+      notes: "TEMPLATE: attach source_metadata; mark synthetic fallback when applicable."
+    quality_flags: [raw_provider_flag, synthetic_fallback, interpolated]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: false
+    status: reference
+
+  - provider_id: open_meteo
+    label: Open-Meteo weather observations (best-effort)
+    domain_ids: [air_quality]
+    provider_contract: provider_weather_observation_feed
+    connector_module: urban_platform.connectors.weather.open_meteo.fetch_open_meteo_observations
+    input_method: api
+    output_platform_object_types: [Observation]
+    examples: []
+    provenance_behavior:
+      strategy: normalized
+    quality_flags: [raw_provider_flag, synthetic_fallback]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: false
+    status: reference
+
+  - provider_id: flood_rainfall_file_fixture
+    label: Flood rainfall fixture/file ingest (demos/tests)
+    domain_ids: [flood_risk]
+    provider_contract: provider_rainfall_observation_feed
+    connector_module: urban_platform.connectors.flood.ingest_file
+    input_method: file
+    output_platform_object_types: [Observation]
+    examples:
+      - examples/flood/rainfall_observation.sample.json
+    provenance_behavior:
+      strategy: pass_through
+    quality_flags: [fixture]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: false
+    status: experimental
