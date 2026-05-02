@@ -28,6 +28,11 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
   - **`delivery_receipt.v1`** — carrier and pipeline-level **delivery / acknowledgement** records tied to **`message_id`**, without payload or domain semantics.
   - The Network Layer is **protocol-like**: **contract-aware** and **policy-oriented**, never a substitute for **domain specs** or **agency decisions**.
 
+- **Registry contracts** (`registry_contracts/`)
+  - **`provider_registry.v1`** — declarative list of **provider plugins** a deployment may enable (core default or deployment-scoped).
+  - **`application_registry.v1`** — declarative list of **application/consumer plugins** a deployment may enable (core default or deployment-scoped).
+  - Registries must **not** contain secrets or credentials. Deployment registries may reference private/internal providers without exposing sensitive details in the public repo.
+
 - **OpenAPI stubs** (`openapi/`)
   - Machine-readable API descriptions (not JSON Schema). These are versioned contracts for endpoint shapes and will be refined over time.
 
@@ -46,6 +51,7 @@ The legacy schemas under `json_schema/v1/` remain the **canonical** files used b
 - **Platform object schemas validate normalized data.**
 - **Consumer contracts validate what applications see.**
 - **Network envelopes validate interoperability metadata only—not domain semantics.** Payload validity is enforced against the **`schema_ref`** contract outside the envelope.
+- **Registry contracts validate plugin metadata only—not runtime behavior.** They are deployment configuration artifacts validated by conformance.
 
 ## Domain specifications (`domain_specs/`)
 

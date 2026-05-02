@@ -26,6 +26,7 @@ EXPECTED_SPEC_FOLDERS = [
     "specifications/domain_specs",
     "specifications/consumer_contracts",
     "specifications/network_contracts",
+    "specifications/registry_contracts",
 ]
 
 

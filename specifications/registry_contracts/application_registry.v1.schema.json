@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/registry/v1/application_registry",
+  "title": "AirOS registry contract: application registry (v1)",
+  "description": "Declarative registry describing application/data-consumer plugins enabled for an AirOS Core deployment. Applications must consume or emit contract-shaped payloads. Dashboard components are presentation only. Safety gates and blocked uses reference domain specs and consumer contracts; applications must not imply operational authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["registry_id", "version", "updated_at", "scope", "applications"],
+  "properties": {
+    "registry_id": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "enum": ["v1"] },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "scope": { "type": "string", "enum": ["core_default", "deployment"] },
+    "deployment_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional identifier for the deployment profile (required when scope=deployment)."
+    },
+    "applications": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "application_id",
+          "label",
+          "domain_id",
+          "consumer_contracts",
+          "payload_builders",
+          "sdk_api_outputs_consumed",
+          "packet_types",
+          "field_task_types",
+          "safety_gates_and_blocked_uses",
+          "examples",
+          "conformance_requirements",
+          "enabled_by_default",
+          "status"
+        ],
+        "properties": {
+          "application_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "domain_id": { "type": "string", "minLength": 1 },
+          "consumer_contracts": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Manifest artifact keys for consumer contracts emitted/consumed."
+          },
+          "payload_builders": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Import paths to payload builder modules/functions."
+          },
+          "dashboard_component": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional dashboard panel module (presentation only)."
+          },
+          "sdk_api_outputs_consumed": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "packet_types": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Decision/review packet contract keys or profiles emitted."
+          },
+          "field_task_types": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Field task consumer contract keys emitted/consumed."
+          },
+          "safety_gates_and_blocked_uses": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "References to domain spec sections and/or consumer contracts; not embedded domain logic."
+          },
+          "examples": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Example keys or paths illustrating emitted payloads (registered in specifications/manifest.json examples)."
+          },
+          "conformance_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["schema_valid", "manifest_registered", "example_valid", "payload_builder_tests", "dashboard_demo_tests"]
+            }
+          },
+          "enabled_by_default": { "type": "boolean" },
+          "status": {
+            "type": "string",
+            "enum": ["reference", "experimental", "deployment_private", "deprecated"]
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "scope": { "const": "deployment" } } },
+      "then": { "required": ["deployment_id"] }
+    }
+  ]
+}
+

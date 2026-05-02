@@ -253,6 +253,18 @@
       "schema_path": "network_contracts/delivery_receipt.v1.schema.json",
       "stability": "documented"
     },
+    "registry_provider_registry_v1": {
+      "description": "Registry contract: provider plugins (core/default or deployment-scoped). Declarative only; no secrets or credentials inline.",
+      "contract_type": "registry_contract",
+      "schema_path": "registry_contracts/provider_registry.v1.schema.json",
+      "stability": "documented"
+    },
+    "registry_application_registry_v1": {
+      "description": "Registry contract: application/data-consumer plugins (core/default or deployment-scoped). Declarative only; dashboard components are presentation only.",
+      "contract_type": "registry_contract",
+      "schema_path": "registry_contracts/application_registry.v1.schema.json",
+      "stability": "documented"
+    },
 
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
@@ -327,6 +339,14 @@
     "example_network_delivery_receipt_v1": {
       "schema_name": "network_delivery_receipt_v1",
       "path": "examples/network/delivery_receipt.sample.json"
+    },
+    "example_registry_provider_registry_v1": {
+      "schema_name": "registry_provider_registry_v1",
+      "path": "examples/registries/provider_registry.sample.json"
+    },
+    "example_registry_application_registry_v1": {
+      "schema_name": "registry_application_registry_v1",
+      "path": "examples/registries/application_registry.sample.json"
     }
   }
 }

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/registry/v1/provider_registry",
+  "title": "AirOS registry contract: provider registry (v1)",
+  "description": "Declarative registry describing provider plugins enabled for an AirOS Core deployment. This document must not contain secrets, API keys, or endpoint credentials. Deployment registries may reference private/internal providers, but sensitive details must remain out-of-band.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["registry_id", "version", "updated_at", "scope", "providers"],
+  "properties": {
+    "registry_id": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "enum": ["v1"] },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "scope": { "type": "string", "enum": ["core_default", "deployment"] },
+    "deployment_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional identifier for the deployment profile (required when scope=deployment)."
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider_id",
+          "label",
+          "domain_ids",
+          "provider_contract",
+          "connector_module",
+          "input_method",
+          "output_platform_object_types",
+          "examples",
+          "provenance_behavior",
+          "quality_flags",
+          "conformance_requirements",
+          "enabled_by_default",
+          "status"
+        ],
+        "properties": {
+          "provider_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "domain_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "provider_contract": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Manifest artifact key for the provider contract (e.g. provider_air_quality_observation_feed)."
+          },
+          "connector_module": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Import path to connector implementation (module or callable). No endpoints or credentials inline."
+          },
+          "input_method": {
+            "type": "string",
+            "enum": ["api", "file", "email", "event", "manual_upload"]
+          },
+          "output_platform_object_types": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "enum": ["Observation", "Event", "Feature", "Asset"] }
+          },
+          "examples": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Example keys or paths illustrating the provider contract (registered in specifications/manifest.json examples)."
+          },
+          "provenance_behavior": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategy"],
+            "properties": {
+              "strategy": {
+                "type": "string",
+                "enum": ["pass_through", "normalized", "synthetic_fallback", "derived_transform"]
+              },
+              "notes": { "type": "string" }
+            }
+          },
+          "quality_flags": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Quality flag vocabulary used or mapped by the connector."
+          },
+          "conformance_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["schema_valid", "manifest_registered", "example_valid", "connector_tests"]
+            }
+          },
+          "enabled_by_default": { "type": "boolean" },
+          "status": {
+            "type": "string",
+            "enum": ["reference", "experimental", "deployment_private", "deprecated"]
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "scope": { "const": "deployment" } } },
+      "then": { "required": ["deployment_id"] }
+    }
+  ]
+}
+

@@ -91,6 +91,7 @@ def audit_schema_validity(*, validated_at: str) -> list[dict[str, Any]]:
         SPEC_ROOT / "platform_objects",
         SPEC_ROOT / "consumer_contracts",
         SPEC_ROOT / "network_contracts",
+        SPEC_ROOT / "registry_contracts",
     ]
     for schema_path in _iter_schema_files(schema_dirs):
         artifact_or_api = f"schema_file:{schema_path.relative_to(SPEC_ROOT)}"
@@ -291,7 +292,7 @@ def audit_manifest(*, validated_at: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     m = load_manifest()
     arts = m.get("artifacts") or {}
-    allowed = {"provider", "platform_object", "consumer", "openapi", "network_contract"}
+    allowed = {"provider", "platform_object", "consumer", "openapi", "network_contract", "registry_contract"}
     for name, meta in arts.items():
         schema_path = (meta or {}).get("schema_path")
         ct = (meta or {}).get("contract_type")
