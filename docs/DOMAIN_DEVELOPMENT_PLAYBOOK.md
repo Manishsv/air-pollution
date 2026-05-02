@@ -30,6 +30,8 @@ Summary:
 - **`review_dashboard/`** — **Presentation** only via **`urban_platform/sdk`**; build payloads under **`urban_platform/applications/<domain>/`**.
 - **`specifications/examples/`** — versioned fixtures; **`data/`** — local runtime outputs, not source of truth.
 
+For a text-diagram overview of the full stack (Core vs Node vs Network Layer), see **`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`**.
+
 ### Migration rule of thumb
 
 - **New work:** `urban_platform/` (+ specs). **Do not** add new domain stacks under `src/`.

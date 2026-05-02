@@ -13,6 +13,7 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Use-case roadmap**: [`docs/USE_CASE_ROADMAP.md`](docs/USE_CASE_ROADMAP.md)
 - **Data-source discovery**: [`docs/DATA_SOURCE_CATALOG.md`](docs/DATA_SOURCE_CATALOG.md)
 - **Urban governance context (India)**: [`docs/URBAN_CONTEXT_INDIA.md`](docs/URBAN_CONTEXT_INDIA.md)
+- **Architecture overview (text diagrams)**: [`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`](docs/AIR_OS_ARCHITECTURE_OVERVIEW.md)
 - **Federated deployment (node-first)**: [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md)
 - **Agency node model**: [`docs/AGENCY_NODE_MODEL.md`](docs/AGENCY_NODE_MODEL.md)
 - **Cross-agency coordination / Network Layer**: [`docs/CROSS_AGENCY_COORDINATION_LAYER.md`](docs/CROSS_AGENCY_COORDINATION_LAYER.md)
@@ -24,6 +25,16 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 AirOS is to city data what an operating system is to a computer: applications run on top of it, while the platform handles the common, hard parts (connectors, standardized objects, reliability scoring, conformance, APIs/SDKs, decision packets).
 
 This is **not** an operational system out of the box. It is a reliability-first prototype intended to demonstrate how trusted city intelligence can be built and improved over time.
+
+### Architecture (condensed)
+
+```
+Actors → Apps/UI (presentation) → Domain applications (contract-shaped outputs)
+      → Processing/features → Canonical objects → Connectors → Data fabric
+      ↘ Specs+Conformance (source of truth) ↘ CI+Supervisor (quality gates)
+
+Federation: AirOS Nodes ↔ (optional) Network Layer ↔ transports (email/api/bus/file)
+```
 
 ### AirOS is a closed feedback loop
 

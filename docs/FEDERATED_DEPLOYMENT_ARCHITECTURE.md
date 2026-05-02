@@ -9,6 +9,7 @@ This document anchors **AirOS Core**, **AirOS Node**, and the **AirOS Network La
 - [`docs/AGENCY_NODE_MODEL.md`](AGENCY_NODE_MODEL.md) — agency-owned node identity, contracts, policies, maturity.  
 - [`docs/CROSS_AGENCY_COORDINATION_LAYER.md`](CROSS_AGENCY_COORDINATION_LAYER.md) — Network Layer: domain-agnostic, contract-aware, policy-enforcing coordination; includes **email as a Phase 1 transport adapter**.  
 - [`docs/CITY_PROFILE_TEMPLATE.md`](CITY_PROFILE_TEMPLATE.md) — lightweight **city-scoped** deployment context (insufficient alone; see below).
+- [`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`](AIR_OS_ARCHITECTURE_OVERVIEW.md) — text diagrams of layers (Core vs Node vs Network Layer).
 
 ---
 
