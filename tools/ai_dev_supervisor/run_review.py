@@ -25,6 +25,7 @@ EXPECTED_SPEC_FOLDERS = [
     "specifications/platform_objects",
     "specifications/domain_specs",
     "specifications/consumer_contracts",
+    "specifications/network_contracts",
 ]
 
 

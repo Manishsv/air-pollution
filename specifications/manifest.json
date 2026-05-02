@@ -1,7 +1,7 @@
 {
   "spec_version": "v1",
   "json_schema_dialect": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Urban platform contracts grouped by family: provider ingestion, internal platform objects, and consumer-facing outputs/APIs. Backward-compatible aliases preserved.",
+  "description": "Urban platform contracts grouped by family: provider ingestion, platform objects, consumer outputs/APIs, network-layer coordination envelopes, plus OpenAPI stubs. Backward-compatible aliases preserved.",
   "artifacts": {
     "urban_decision_packet_core": {
       "description": "Domain-neutral decision packet shell (H3 cell, review workflow, generic prediction/evidence blobs). Use for new domains before adding a strict profile.",
@@ -241,6 +241,13 @@
       "stability": "documented"
     },
 
+    "network_message_envelope_v1": {
+      "description": "AirOS Network Layer: domain-agnostic envelope for routing contract-shaped payloads between agency nodes (transports attach separately—email/API/queue—not embedded here).",
+      "contract_type": "network_contract",
+      "schema_path": "network_contracts/message_envelope.v1.schema.json",
+      "stability": "documented"
+    },
+
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
       "contract_type": "openapi",
@@ -306,6 +313,10 @@
     "example_property_buildings_review_packet": {
       "schema_name": "consumer_property_building_review_packet",
       "path": "examples/property_buildings/property_building_review_packet.sample.json"
+    },
+    "example_network_message_envelope_v1": {
+      "schema_name": "network_message_envelope_v1",
+      "path": "examples/network/message_envelope.sample.json"
     }
   }
 }

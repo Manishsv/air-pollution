@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/network/v1/message_envelope",
+  "title": "AirOS Network Layer: message envelope (v1)",
+  "description": "Domain-agnostic routing envelope for contract-shaped payloads. The Network Layer must not interpret PM2.5, flood stages, permits, SLA levels, congestion models, enforcement rules, tax logic, or other domain semantics. Payload bodies are referenced or hashed—not embedded—and validated separately against schema_ref.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "message_type",
+    "schema_ref",
+    "from_node",
+    "to_node",
+    "jurisdiction_refs",
+    "purpose",
+    "data_classification",
+    "created_at",
+    "priority",
+    "requires_ack"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Unique idempotency token for deduplication and audit correlation."
+    },
+    "message_type": {
+      "type": "string",
+      "enum": [
+        "observation_published",
+        "event_published",
+        "decision_packet_shared",
+        "field_task_requested",
+        "field_task_response",
+        "data_request",
+        "data_response",
+        "agency_status_update",
+        "advisory_candidate_shared",
+        "summary_published"
+      ]
+    },
+    "schema_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable reference of the payload contract (URI, manifest artifact key with version, or agreed registry path). Resolver must validate the payload externally—this envelope carries no semantic rules."
+    },
+    "from_node": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Sending AirOS node identifier (participant/naming registry out of scope for this envelope shape)."
+    },
+    "to_node": {
+      "description": "Single destination identifier or multicast list; routing policy uses this—not domain logic.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "jurisdiction_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Opaque jurisdiction identifiers referenced by federation policy—not adjudication outcomes."
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Operational coordination rationale (routing metadata). Must not encode domain thresholds or mandates."
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": ["public", "official_sensitive", "restricted", "internal"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Envelope creation timestamp (typically UTC)."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "normal", "elevated", "high", "urgent"]
+    },
+    "requires_ack": {
+      "type": "boolean"
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "description": "Optional thread id across related messages."
+    },
+    "reply_to_message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional parent message linkage for conversational or request/response transports."
+    },
+    "provenance_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pointer to lineage/audit ledger record for envelope-level provenance—not domain derivation."
+    },
+    "payload_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Indirect reference to serialized payload entity (HTTPS URL, file handle, CID, staged attachment id)—payload validated against schema_ref out of band."
+    },
+    "payload_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "minLength": 1,
+          "description": "e.g. SHA-256, BLAKE3 (policy-bound—not interpreted by domain logic)."
+        },
+        "digest": {
+          "type": "string",
+          "minLength": 16,
+          "description": "Hex or base64 per deployment convention."
+        }
+      }
+    },
+    "transport_hints": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Carrier-level preferences only (preferred_transport, MIME type, MIME layout). Not domain directives."
+    },
+    "authorization_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth_method": {
+          "type": "string",
+          "enum": ["none", "bearer_reference", "signed_envelope", "manual_moa_gate"],
+          "description": "Operational auth classification—no entitlement decisions implied."
+        },
+        "credential_bundle_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Indirect reference to stored credentials—not inline secrets."
+        },
+        "policy_bundle_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to registered data_sharing_policy or MoU appendix."
+        }
+      }
+    },
+    "audit_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Retries, hops, SLA timers, ingest/egress ids—carrier and operations metadata only.",
+      "properties": {
+        "delivery_attempt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ingress_ts": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "relay_chain": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "required": ["payload_ref"]
+    },
+    {
+      "required": ["payload_hash"]
+    },
+    {
+      "required": ["payload_ref", "payload_hash"]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "message_id": "demo-msg-ae7c8d3d-aq-ftask-PLACEHOLDER-NO-REAL-CITY",
+  "message_type": "field_task_requested",
+  "schema_ref": "https://urban-platform.local/manifest.json#/artifacts/consumer_field_verification_task",
+  "from_node": "agency-node-pcb-central-PLACEHOLDER",
+  "to_node": "agency-node-ulb-field-ops-PLACEHOLDER",
+  "jurisdiction_refs": ["jurisdiction:admin-area:EXAMPLE_DISTRICT:A1"],
+  "purpose": "Hand off field-verification coordination for contextual air-quality review queue (human review mandatory; envelope carries no pollutants or thresholds)",
+  "data_classification": "official_sensitive",
+  "created_at": "2026-05-02T18:30:00Z",
+  "priority": "elevated",
+  "requires_ack": true,
+  "correlation_id": "thread-aq-hotspot-review-CORR-PLACEHOLDER",
+  "reply_to_message_id": "prior-envelope-msg-PLACEHOLDER-if-any",
+  "provenance_ref": "ledger-entry:NETWORK:PLACEHOLDER_INGRESS_ID",
+  "payload_ref": "attachment://field-task-body.json#/blobs/obj-aq-ft-PLACEHOLDER",
+  "payload_hash": {
+    "algorithm": "SHA-256",
+    "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "transport_hints": {
+    "preferred_transport": "email",
+    "mime_layout": "json_attachment_secondary",
+    "encoding": "UTF-8"
+  },
+  "authorization_context": {
+    "auth_method": "manual_moa_gate",
+    "policy_bundle_ref": "policy://sharing/moa-draft/PLACEHOLDER"
+  },
+  "audit_metadata": {
+    "delivery_attempt": 0,
+    "ingress_ts": "2026-05-02T18:31:05Z",
+    "relay_chain": ["network-gateway-PLACEHOLDER-01"]
+  }
+}

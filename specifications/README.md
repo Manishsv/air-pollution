@@ -1,6 +1,6 @@
 # Specifications (v1)
 
-Machine-readable contracts are grouped into **three contract families** (plus OpenAPI stubs). The goal is to keep **provider ingestion**, **internal platform objects**, and **consumer outputs/APIs** stable via conformance testing *without renaming runtime pipeline fields*.
+Machine-readable contracts are grouped into **provider ingestion**, **platform objects**, **consumer outputs/APIs**, **network coordination envelopes**, and **OpenAPI stubs**. The goal is to keep ingestion, normalization surfaces, dashboards/APIs, and cross-node interoperability contracts stable via conformance testing *without renaming runtime pipeline fields casually*.
 
 See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTED.md`](../GETTING_STARTED.md).
 
@@ -23,6 +23,10 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
     - strict profiles like air-quality decision packets
     - response wrappers for API-style payloads (`*_response.v1.schema.json`)
 
+- **Network contracts** (`network_contracts/`)
+  - **`message_envelope.v1`** — domain-agnostic **routing envelopes** connecting **AirOS nodes** (`schema_ref` + `payload_ref` / hash; no embedded domain payloads). Separate **transports** (email/API/queues) attach around this shape per `docs/CROSS_AGENCY_COORDINATION_LAYER.md`.
+  - The Network Layer is **protocol-like**: **contract-aware** and **policy-oriented**, never a substitute for **domain specs** or **agency decisions**.
+
 - **OpenAPI stubs** (`openapi/`)
   - Machine-readable API descriptions (not JSON Schema). These are versioned contracts for endpoint shapes and will be refined over time.
 
@@ -40,6 +44,7 @@ The legacy schemas under `json_schema/v1/` remain the **canonical** files used b
 - **Provider contracts validate ingestion.**
 - **Platform object schemas validate normalized data.**
 - **Consumer contracts validate what applications see.**
+- **Network envelopes validate interoperability metadata only—not domain semantics.** Payload validity is enforced against the **`schema_ref`** contract outside the envelope.
 
 ## Domain specifications (`domain_specs/`)
 
