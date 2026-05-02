@@ -1,0 +1,30 @@
+{
+  "provider_id": "city_permit_system_demo",
+  "source_name": "City building permit system (demo)",
+  "source_type": "government_system_extract",
+  "license": "demo_only",
+  "source_metadata": {
+    "notes": "Synthetic example; decision support only."
+  },
+  "records": [
+    {
+      "approval_date": "2025-09-11T00:00:00Z",
+      "source_record_id": "permit_row_0001",
+      "permit_id": "permit_2025_0911",
+      "property_id": "prop_000123",
+      "permit_type": "new_construction",
+      "approved_built_up_area_sq_m": 110.0,
+      "validity_status": "approved",
+      "permitted_use": "residential",
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "city_permit_system_demo",
+        "source_type": "government_system_extract",
+        "license": "demo_only",
+        "collected_at": "2025-09-11T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      }
+    }
+  ]
+}
+

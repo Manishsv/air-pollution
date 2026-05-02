@@ -1,0 +1,99 @@
+{
+  "packet_id": "pb_packet_0001",
+  "domain_id": "property_buildings",
+  "timestamp": "2026-05-01T00:10:00Z",
+  "area_id": "ward_12",
+  "building_id": "bldg_osm_991",
+  "issue_type": "built_up_change_candidate",
+  "evidence": {
+    "inputs": [
+      {
+        "input_type": "satellite_change_signal",
+        "spatial_unit_id": "ward_12",
+        "observed_property": "spectral_change_index",
+        "value": 0.38,
+        "time_window": "2025-11-01/2026-04-30",
+        "quality_flag": "synthetic_demo"
+      },
+      {
+        "input_type": "building_footprint",
+        "building_id": "bldg_osm_991",
+        "footprint_area_sq_m": 140.0,
+        "source": "open_building_footprints_demo",
+        "quality_flag": "synthetic_demo"
+      },
+      {
+        "input_type": "ward_boundary",
+        "ward_id": "ward_12",
+        "quality_flag": "synthetic_demo"
+      }
+    ],
+    "notes": "Demo packet: stacked open signals suggest field context review only—not permit, owner, or tax conclusions."
+  },
+  "provenance": {
+    "sources": [
+      "sentinel2_change_proxy_demo",
+      "open_building_footprints_demo",
+      "openstreetmap_buildings_demo",
+      "ward_boundaries_open_demo"
+    ],
+    "synthetic_used": true
+  },
+  "confidence": {
+    "confidence_score": 0.48,
+    "recommendation_allowed": false,
+    "recommendation_block_reason": "Synthetic open-signal stack; field verification required; no regulatory or revenue action from EO/footprints alone."
+  },
+  "recommended_review_action": "Dispatch a non-enforcement field context visit to validate built form, access, and local explanations (vegetation, informal construction mapping gaps).",
+  "review_guidance": {
+    "review_prompts": [
+      "Could spectral change be explained by agriculture, monsoon green-up, clouds, or bare soil—not new built-up?",
+      "Are OSM or open footprints systematically incomplete in informal or dense settlements?",
+      "What on-site observations would confirm or reject a new built-up interpretation?"
+    ],
+    "when_not_to_act": [
+      "Do not infer permit compliance or tax liability from remote sensing and open footprints alone.",
+      "Do not publish owner identity or sensitive registry data to broad dashboards.",
+      "Do not treat change scores as proof of illegal construction."
+    ]
+  },
+  "safety_gates": [
+    {
+      "gate_id": "require_field_verification_before_regulatory_or_revenue_action",
+      "status": "blocked",
+      "message": "Field verification and authorized local process required before any regulatory or revenue claim."
+    },
+    {
+      "gate_id": "eo_signal_limitations",
+      "status": "blocked",
+      "message": "Earth-observation proxies require seasonality and cloud QA before high-priority operational use."
+    }
+  ],
+  "blocked_uses": [
+    "automated_enforcement_or_tax_reassessment_without_human_review",
+    "publish_owner_identity_or_sensitive_registry_fields_to_public_dashboards",
+    "treat_open_signal_stacks_as_proof_of_unpermitted_construction",
+    "permit_status_inference_from_satellite_imagery_only"
+  ],
+  "field_verification_required": true,
+  "field_verification_task": {
+    "task_id": "fv_task_0001",
+    "source_packet_id": "pb_packet_0001",
+    "domain_id": "property_buildings",
+    "location": {
+      "centroid_lat": 12.9701,
+      "centroid_lon": 77.5801,
+      "geometry_geojson": null
+    },
+    "assigned_role": "field_inspector",
+    "verification_questions": [
+      "Visually confirm whether built-up extent changed versus last known state or imagery.",
+      "Note informal or unmapped structures that open footprints may miss.",
+      "Capture geotagged photos and site context; flag if vegetation or land clearing explains EO signals."
+    ],
+    "evidence_to_collect": ["photo", "site_visit_note", "ticket_id"],
+    "priority": "high",
+    "status": "new",
+    "created_at": "2026-05-01T00:11:00Z"
+  }
+}

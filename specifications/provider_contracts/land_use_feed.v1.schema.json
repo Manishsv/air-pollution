@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/land_use_feed",
+  "title": "Provider contract: land use feed (v1)",
+  "description": "Public land-use, zoning, or land-cover polygons from open government portals or openly licensed datasets. Must include geometry, provenance, and quality flags. Not a substitute for internal cadastre.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "records", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "updated_at",
+          "source_record_id",
+          "land_use_id",
+          "land_use_category",
+          "geometry",
+          "quality_flag",
+          "provenance"
+        ],
+        "properties": {
+          "updated_at": { "type": "string", "minLength": 1 },
+          "source_record_id": { "type": "string", "minLength": 1 },
+
+          "land_use_id": { "type": "string", "minLength": 1 },
+          "zone_id": { "type": ["string", "null"] },
+          "land_use_category": { "type": "string", "minLength": 1 },
+          "permitted_uses": { "type": "array", "items": { "type": "string" } },
+          "restrictions": { "type": "array", "items": { "type": "string" } },
+
+          "geometry": { "type": "object", "additionalProperties": true },
+
+          "quality_flag": { "type": "string", "minLength": 1 },
+          "provenance": { "type": "object", "minProperties": 1, "additionalProperties": true }
+        }
+      }
+    }
+  }
+}
+

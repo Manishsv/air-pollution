@@ -41,6 +41,10 @@ The legacy schemas under `json_schema/v1/` remain the **canonical** files used b
 - **Platform object schemas validate normalized data.**
 - **Consumer contracts validate what applications see.**
 
+## Domain specifications (`domain_specs/`)
+
+YAML domain specs describe actors, variables, safety gates, and **integration phasing**. For example, `property_buildings.v1.yaml` separates **`open_data_inputs`** (Phase 1 MVP) from **`authorized_municipal_inputs`** (later-stage partner integrations). Existing provider JSON Schemas for registry or permit feeds **remain valid** for authorized integrations; they are not removed when a domain is open-data-first.
+
 ## Conformance audit (recommended)
 
 From the **repo root**:

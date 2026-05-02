@@ -1,0 +1,40 @@
+{
+  "provider_id": "open_wards_demo",
+  "source_name": "Ward boundaries (open data demo)",
+  "source_type": "admin_boundaries",
+  "license": "CC-BY-4.0",
+  "source_metadata": {
+    "notes": "Synthetic ward polygon for contract validation; replace with authoritative open boundary where licensed."
+  },
+  "features": [
+    {
+      "timestamp": "2026-05-01T00:00:00Z",
+      "source_record_id": "ward_boundary_ward_12",
+      "ward_id": "ward_12",
+      "area_id": "ward_12",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.56, 12.96],
+            [77.62, 12.96],
+            [77.62, 12.99],
+            [77.56, 12.99],
+            [77.56, 12.96]
+          ]
+        ]
+      },
+      "feature_type": "admin_boundary_ward",
+      "value": null,
+      "unit": "none",
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "open_wards_demo",
+        "source_type": "admin_boundaries",
+        "license": "CC-BY-4.0",
+        "collected_at": "2026-05-01T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      }
+    }
+  ]
+}

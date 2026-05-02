@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/property_registry_feed",
+  "title": "Provider contract: property registry feed (v1)",
+  "description": "Optional partner feed for municipal or assessment registries where legally and operationally available. NOT part of the open-data built-environment MVP sequence (politically and technically hard). Must not require raw personal data; use non-identifying owner references only.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "records", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "updated_at",
+          "source_record_id",
+          "property_id",
+          "land_use",
+          "quality_flag",
+          "provenance"
+        ],
+        "properties": {
+          "updated_at": { "type": "string", "minLength": 1 },
+          "source_record_id": { "type": "string", "minLength": 1 },
+
+          "property_id": { "type": "string", "minLength": 1 },
+          "parcel_id": { "type": ["string", "null"] },
+          "assessment_id": { "type": ["string", "null"] },
+
+          "owner_reference": { "type": ["string", "null"] },
+          "anonymized_owner_reference": { "type": ["string", "null"] },
+
+          "land_use": { "type": "string", "minLength": 1 },
+          "built_up_area_sq_m": { "type": ["number", "null"] },
+          "plot_area_sq_m": { "type": ["number", "null"] },
+          "tax_status": { "type": ["string", "null"] },
+          "assessment_status": { "type": ["string", "null"] },
+
+          "ward_id": { "type": ["string", "null"] },
+          "area_id": { "type": ["string", "null"] },
+
+          "geometry": { "type": "object", "additionalProperties": true },
+          "latitude": { "type": ["number", "null"] },
+          "longitude": { "type": ["number", "null"] },
+
+          "quality_flag": { "type": "string", "minLength": 1 },
+          "provenance": { "type": "object", "minProperties": 1, "additionalProperties": true }
+        },
+        "anyOf": [
+          { "required": ["anonymized_owner_reference"] },
+          { "required": ["owner_reference"] }
+        ]
+      }
+    }
+  }
+}
+

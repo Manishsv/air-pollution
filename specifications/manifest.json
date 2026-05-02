@@ -77,7 +77,7 @@
       "stability": "documented"
     },
     "provider_building_footprint_feed": {
-      "description": "Raw ingestion contract: building footprints / polygons.",
+      "description": "Raw ingestion contract: building footprints (OSM, licensed open footprints, satellite-derived polygons where permitted).",
       "contract_type": "provider",
       "schema_path": "provider_contracts/building_footprint_feed.v1.schema.json",
       "stability": "documented"
@@ -110,6 +110,36 @@
       "description": "Raw ingestion contract: drainage assets (drains/culverts/inlets/outfalls/pumps).",
       "contract_type": "provider",
       "schema_path": "provider_contracts/drainage_asset_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_property_registry_feed": {
+      "description": "Optional partner contract: municipal property/assessment registries. Out of scope for the open-data property_buildings MVP (hard to access); privacy-safe shape when used later.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/property_registry_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_building_permit_feed": {
+      "description": "Optional partner contract: building permits. Not assumed in the open-data MVP (no permit-mismatch claims from EO/footprints alone).",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/building_permit_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_land_use_feed": {
+      "description": "Raw ingestion contract: public land-use / zoning polygons (open government or openly licensed layers).",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/land_use_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_ward_boundary_feed": {
+      "description": "Raw ingestion contract: ward or administrative polygons for aggregating built-environment change signals.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/ward_boundary_feed.v1.schema.json",
+      "stability": "documented"
+    },
+    "provider_satellite_change_signal_feed": {
+      "description": "Raw ingestion contract: Sentinel/Landsat-style EO change or anomaly signals for built-environment triage (not permit detection).",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/satellite_change_signal_feed.v1.schema.json",
       "stability": "documented"
     },
 
@@ -198,6 +228,18 @@
       "schema_path": "consumer_contracts/field_verification_task.v1.schema.json",
       "stability": "documented"
     },
+    "consumer_property_building_dashboard": {
+      "description": "Consumer contract: built-environment change dashboard (domain_id=property_buildings; open-data MVP path).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/property_building_dashboard.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_property_building_review_packet": {
+      "description": "Consumer contract: built-environment field-review packet (domain_id=property_buildings; open signals, no tax/enforcement claims).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/property_building_review_packet.v1.schema.json",
+      "stability": "documented"
+    },
 
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
@@ -232,6 +274,38 @@
     "example_flood_decision_packet": {
       "schema_name": "consumer_flood_decision_packet",
       "path": "examples/flood/flood_decision_packet.sample.json"
+    },
+    "example_property_buildings_property_registry": {
+      "schema_name": "provider_property_registry_feed",
+      "path": "examples/property_buildings/property_registry.sample.json"
+    },
+    "example_property_buildings_building_footprint": {
+      "schema_name": "provider_building_footprint_feed",
+      "path": "examples/property_buildings/building_footprint.sample.json"
+    },
+    "example_property_buildings_building_permit": {
+      "schema_name": "provider_building_permit_feed",
+      "path": "examples/property_buildings/building_permit.sample.json"
+    },
+    "example_property_buildings_land_use": {
+      "schema_name": "provider_land_use_feed",
+      "path": "examples/property_buildings/land_use.sample.json"
+    },
+    "example_property_buildings_ward_boundary": {
+      "schema_name": "provider_ward_boundary_feed",
+      "path": "examples/property_buildings/ward_boundary.sample.json"
+    },
+    "example_property_buildings_satellite_change_signal": {
+      "schema_name": "provider_satellite_change_signal_feed",
+      "path": "examples/property_buildings/satellite_change_signal.sample.json"
+    },
+    "example_property_buildings_dashboard": {
+      "schema_name": "consumer_property_building_dashboard",
+      "path": "examples/property_buildings/property_building_dashboard.sample.json"
+    },
+    "example_property_buildings_review_packet": {
+      "schema_name": "consumer_property_building_review_packet",
+      "path": "examples/property_buildings/property_building_review_packet.sample.json"
     }
   }
 }

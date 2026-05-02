@@ -1,0 +1,35 @@
+{
+  "provider_id": "city_property_registry_demo",
+  "source_name": "City Property Registry (demo)",
+  "source_type": "government_registry",
+  "license": "demo_only",
+  "source_metadata": {
+    "city": "demo_city",
+    "notes": "Synthetic example; contains no personal data."
+  },
+  "records": [
+    {
+      "updated_at": "2026-05-01T00:00:00Z",
+      "source_record_id": "registry_row_0001",
+      "property_id": "prop_000123",
+      "parcel_id": "parcel_42_19",
+      "assessment_id": "assess_2024_1001",
+      "anonymized_owner_reference": "owner_hash_7f3a",
+      "land_use": "residential",
+      "built_up_area_sq_m": 120.5,
+      "plot_area_sq_m": 180.0,
+      "tax_status": "unknown",
+      "assessment_status": "active",
+      "ward_id": "ward_12",
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "city_property_registry_demo",
+        "source_type": "government_registry",
+        "license": "demo_only",
+        "collected_at": "2026-05-01T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      }
+    }
+  ]
+}
+

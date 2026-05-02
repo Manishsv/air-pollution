@@ -1,122 +1,262 @@
 domain_id: property_buildings
 version: v1
-status: stub
+status: documented
 
 purpose: >
-  Provide decision support for property and building intelligence by harmonizing property records,
-  building footprints, permits, and land-use layers into reviewable mismatch signals. This domain is
-  high-risk: enforcement or tax actions must be gated by human review and field verification.
+  Phased built-environment intelligence: **Phase 1** uses open or externally obtainable data
+  only (OSM, licensed open footprints, EO change signals, ward/base layers, roads/settlement
+  context, and structured field verification results when operators upload them). **Later stages**
+  add authorized municipal and partner integrations (registry, permits, tax, cadastre) only after
+  value is demonstrated and governance allows. Outputs remain decision-support and field-review
+  candidates—not operational truth, not enforcement, and not tax or revenue claims.
+
+primary_operational_question: >
+  Where does the built environment appear to have changed recently, and which areas may need
+  field review?
+
+integration_phasing:
+  principle: >
+    AirOS demonstrates value on open-data **Built Environment Change Detection and Field Review**
+    before relying on municipal system integration. Existing JSON provider contracts for property
+    registry and building permits are **not removed**; they are positioned as **later-stage,
+    authorized-integration** inputs requiring explicit partner agreements, access controls, and
+    additional consumer profiles—not Phase 1 defaults.
+  phase_1_label: Open-data MVP (built environment change + field review)
+  later_stage_label: Authorized municipal and revenue-system integrations (optional, post-value)
+
+product_delivery_phases:
+  description: >
+    End-to-end sequencing aligned with `docs/USE_CASE_ROADMAP.md`. Phase 1 outputs are **change
+    candidates and field-review prompts only**—not legal property records, permit violation
+    evidence, tax liabilities, ownership facts, or enforcement evidence.
+  phase_1_open_data_change_detection:
+    summary: OSM / open footprints, satellite-derived change signals, wards, roads, settlement context.
+  phase_2_field_verification_loop:
+    summary: Structured field tasks and evidence feeding back into review queues under contracts.
+  phase_3_municipal_integration_readiness:
+    summary: Governance and access posture for optional municipal pipes—no automatic onboarding.
+  phase_4_registry_permit_tax_comparison:
+    summary: Authorized-official reconciliation when partner feeds exist; human-in-the-loop only.
+  phase_5_official_workflows_outside_auto_enforcement:
+    summary: Case/revenue system integration only via explicit design; no AirOS-default auto enforcement.
+
+open_data_inputs:
+  description: >
+    Default Phase 1 ingress categories. Each must carry provenance, license, and quality flags;
+    synthetic or demo feeds must be flagged and blocked from operational truth (existing policy).
+  categories:
+    - id: osm_building_footprints
+      notes: OpenStreetMap building polygons and related tags; coverage gaps in informal areas must be surfaced.
+    - id: open_building_footprint_datasets
+      notes: Vendor or government releases where license permits ingestion and agreed derivatives.
+    - id: satellite_change_detection
+      notes: Change masks, indices, or external derived products; cloud and seasonality QA mandatory.
+    - id: sentinel_landsat_style_signals
+      notes: Sentinel-2 / Landsat stacks or harmonized products; time_window and product id required on observations.
+    - id: ward_and_base_layers
+      notes: Ward or admin boundaries via `ward_boundary_feed` or equivalent open compilations.
+    - id: roads_settlement_context
+      notes: e.g. `provider_road_network_feed` and settlement outlines for interpretation—not ownership.
+    - id: manual_field_verification_results
+      notes: Structured uploads of site visit outcomes, photos metadata, or tickets when available under a dedicated provider contract; still subject to provenance and review.
+
+authorized_municipal_inputs:
+  description: >
+    **Later-stage only**: inputs that require municipal authorization, legal basis, and often
+    bilateral agreements. Provider contracts (`property_registry_feed`, `building_permit_feed`,
+    cadastral feeds when added) remain valid specifications for when cities choose to integrate;
+    they do not define Phase 1 defaults and must not be required to render the open-data MVP.
+  categories:
+    - id: municipal_property_registry
+    - id: building_permit_system
+    - id: property_tax_assessment_data
+    - id: cadastral_parcel_system
+    - id: land_use_zoning_authority_datasets
+      notes: >
+        Distinct from **public** land-use layers in Phase 1—authority-internal layers are
+        later-stage unless published as open data under a clear license.
+
+phase_1_supported_questions:
+  - Which wards show built-up area growth over the last 6 months or 1 year (per configured windows and data availability)?
+  - Where are new building or construction **candidates** visible from open data only?
+  - Which areas need field verification given stacked signals and uncertainty?
+  - Where is open data coverage weak, stale, or license-constrained?
+  - Which locations should be **prioritized later** for municipal data integration (readiness signal, not a demand)?
+
+phase_1_explicitly_not_supported:
+  - Under-assessment or revenue-gap claims
+  - Tax demand generation or reassessment recommendations from open signals
+  - Permit violation or non-compliance verdicts from remote sensing alone
+  - Demolition, penalty, or enforcement recommendations
+  - Owner-level analysis or ownership facts as default outputs
+  - Automated non-compliance detection from EO/footprints without authoritative process
+
+phase_1_decisions:
+  description: Decision IDs that the open-data MVP may support without municipal pipes (see supported_decisions for full definitions).
+  decision_ids:
+    - prioritize_field_review_for_built_environment_change
+    - triage_new_construction_candidate_areas
+    - data_quality_and_coverage_review
+
+later_stage_decisions:
+  description: Decision IDs reserved for authorized municipal/partner integrations post-value (same safeguards; no automated enforcement).
+  decision_ids:
+    - partner_registry_permit_reconciliation
+    - cadastral_alignment_and_official_land_use
+
+open_data_safety_language: >
+  Open-data and EO-derived outputs are **change candidates** and **review prompts** only. They must
+  not be interpreted as legal property records, permit violations, tax liabilities, ownership facts,
+  or enforcement evidence. Any shift toward revenue, permit, or enforcement workflows requires
+  authorized municipal inputs, explicit consumer contracts, human review, and field verification
+  consistent with blocked_uses below.
+
+explicit_non_goals:
+  - Property tax assessment, under-assessment, or revenue optimization narratives
+  - Automated permit mismatch or “lack of permission” conclusions from remote sensing alone
+  - Owner identity, PII, or registry-style parcel ownership as default inputs
+  - Enforcement, penalties, demolition, or reassessment language in consumer-facing defaults
+
+mvp_consumer_outputs:
+  - built_up_change_candidates
+  - new_construction_candidate_areas
+  - building_footprint_growth_signals
+  - high_change_wards_or_units
+  - field_verification_queue
+  - confidence_and_provenance_warnings
+
+data_sequence_note: >
+  Phase 1 assumes open or externally obtainable data only. Municipal registries, internal permit
+  systems, and tax rolls are **later-stage** integrations. Operator CSV or field-result uploads may
+  augment Phase 1 when covered by a provider contract and privacy review. Demonstrate value on open
+  data before expanding to authorized municipal pipes.
 
 target_actors:
-  - property_tax_department
+  - ward_engineer
   - town_planning_department
-  - building_permission_department
-  - ward_officer
+  - disaster_management_cell
   - field_inspector
+  - urban_analyst
 
 supported_decisions:
-  - decision_id: prioritize_field_verification_for_mismatch
-    description: Prioritize properties/buildings for field verification based on mismatch strength and evidence.
+  - decision_id: prioritize_field_review_for_built_environment_change
+    integration_phase: phase_1
+    description: >
+      Prioritize wards or spatial units for field visit based on stacked open signals
+      (footprint growth, spectral change, new geometry) and confidence—not on tax or permit guilt.
+    decision_scope: ward_or_spatial_unit
+    operational_risk: medium
+  - decision_id: triage_new_construction_candidate_areas
+    integration_phase: phase_1
+    description: >
+      Triage candidate polygons or clusters where new built-up area or footprint growth appears;
+      requires on-site verification before any regulatory narrative.
+    decision_scope: area
+    operational_risk: medium
+  - decision_id: data_quality_and_coverage_review
+    integration_phase: phase_1
+    description: Review coverage gaps, licensing constraints, and temporal alignment across open feeds.
+    decision_scope: city
+    operational_risk: low
+  - decision_id: partner_registry_permit_reconciliation
+    integration_phase: later_stage
+    description: >
+      Human-in-the-loop workflows when authorized registry/permit feeds exist; must not bypass
+      privacy, provenance, blocked uses, or field verification gates.
+    decision_scope: parcel_or_building
+    operational_risk: high
+  - decision_id: cadastral_alignment_and_official_land_use
+    integration_phase: later_stage
+    description: >
+      Align to cadastre or authority zoning when legally integrated; optional post-value enhancement.
     decision_scope: parcel
-    operational_risk: high
-  - decision_id: identify_under_assessment_candidates
-    description: Identify candidates where assessed value/area may be inconsistent with observed footprint signals.
-    decision_scope: ward
-    operational_risk: high
-  - decision_id: permit_compliance_review_queue
-    description: Queue potential permit compliance cases for review (not enforcement).
-    decision_scope: building
     operational_risk: high
 
 canonical_entities:
-  - entity_type: property_record
-    description: Property registry entry (owner/details may be sensitive; consumer outputs must respect privacy).
-    examples: [prop_000123]
-  - entity_type: building
-    description: Building geometry/footprint entity (OSM or authoritative footprint sources).
-    examples: [bldg_778]
-  - entity_type: permit
-    description: Building permit / approval record.
-    examples: [permit_2025_0911]
-  - entity_type: parcel
-    description: Parcel/plot boundary if available.
-    examples: [parcel_42_19]
+  - entity_type: building_footprint
+    description: Building geometry from OSM, licensed open footprints, or satellite-derived products.
+    examples: [bldg_osm_991, bldg_msft_204a]
   - entity_type: ward
-    description: Administrative unit for operational prioritization.
+    description: Administrative or analytical polygon used to aggregate change signals.
     examples: [ward_12]
+  - entity_type: road_segment
+    description: OSM or open road context for settlement structure (supporting layer).
+    examples: [rd_4412]
+  - entity_type: land_use_zone
+    description: Public land-use or zoning polygon where legally publishable (no internal cadastre assumed).
+    examples: [zone_R2_north]
+  - entity_type: satellite_change_cell
+    description: Raster cell or simplified polygon with a change or anomaly index from Sentinel/Landsat pipelines.
+    examples: [chg_h3_8a2f1d]
 
 observations:
-  - observed_property: assessed_builtup_area_sq_m
-    description: Built-up area from property assessment records.
-    typical_sources: [property_registry]
-    required_provenance_fields: [source_id, collected_at, license]
   - observed_property: footprint_area_sq_m
-    description: Building footprint area derived from geometry.
-    typical_sources: [building_footprint_feed, osm]
+    description: Footprint area from open or licensed geometry feeds.
+    typical_sources: [osm_buildings, open_building_footprints, satellite_derived_footprints]
     required_provenance_fields: [source_id, collected_at, license]
-  - observed_property: permit_status
-    description: Permit status for a building/project.
-    typical_sources: [permit_system]
-    required_provenance_fields: [source_id, collected_at]
+  - observed_property: spectral_change_index
+    description: Conservative index from Sentinel/Landsat stacks (e.g. NDVI/build-up proxy); not a permit check.
+    typical_sources: [sentinel2, landsat]
+    required_provenance_fields: [source_id, time_window, license]
   - observed_property: land_use_category
-    description: Land use classification (zoning or observed).
-    typical_sources: [zoning_layer, planning_gis]
+    description: Category from public zoning or open land-cover where available.
+    typical_sources: [open_land_use, planning_open_data]
     required_provenance_fields: [source_id, license]
+  - observed_property: building_count_or_density_proxy
+    description: Aggregate count or density proxy per ward/cell from OSM or footprints.
+    typical_sources: [osm_buildings, open_building_footprints]
+    required_provenance_fields: [source_id, collected_at]
 
 features:
-  - feature_id: footprint_vs_assessment_area_ratio
-    description: Ratio comparing footprint-derived area to assessed built-up area (proxy; not ground truth).
-    inputs: [footprint_area_sq_m, assessed_builtup_area_sq_m]
-  - feature_id: mismatch_score_property_building
-    description: Composite mismatch score combining area ratio, permit status mismatches, and land-use conflicts.
-    inputs: [footprint_vs_assessment_area_ratio, permit_status, land_use_category]
-  - feature_id: under_assessment_candidate_flag
-    description: Conservative flag for “candidate for review”, not a conclusion.
-    inputs: [mismatch_score_property_building]
+  - feature_id: footprint_area_delta_proxy
+    description: Temporal or cross-source delta proxy for footprint-covered area (model-dependent; not ground truth).
+    inputs: [footprint_area_sq_m, time_window]
+  - feature_id: spectral_change_composite
+    description: Composite spectral/build-up change signal with explicit uncertainty.
+    inputs: [spectral_change_index, footprint_area_sq_m]
+  - feature_id: high_change_ward_score
+    description: Ward-level rollup for triage; must surface coverage and license warnings.
+    inputs: [spectral_change_composite, building_count_or_density_proxy]
+  - feature_id: new_built_up_candidate_flag
+    description: Conservative flag for “candidate for field review”, not a conclusion of illegal construction.
+    inputs: [footprint_area_delta_proxy, spectral_change_composite]
 
 allowed_variables:
-  - variable: assessed_builtup_area_sq_m
-    description: Assessed built-up area from registry.
-    type: number
-    unit: sq_m
-    value_range: 0..1000000
-    allowed_values: []
-    notes: Must carry provenance; may be missing or outdated.
   - variable: footprint_area_sq_m
-    description: Area from building footprint geometry.
+    description: Area from building footprint geometry (open/licensed sources).
     type: number
     unit: sq_m
     value_range: 0..1000000
     allowed_values: []
-    notes: Geometry source must be explicit; OSM footprints are best-effort.
+    notes: Source mix must be explicit in provenance.
+  - variable: spectral_change_index
+    description: Unitless or standardized change metric from EO stack.
+    type: number
+    unit: none
+    value_range: -1..1
+    allowed_values: []
+    notes: Must carry time_window and product id; not interchangeable with field survey.
   - variable: land_use_category
-    description: Land use category.
+    description: Land use or zoning category from public layers.
     type: enum
     unit: none
     value_range: null
     allowed_values: [residential, commercial, industrial, mixed, institutional, public, open_space, unknown]
-    notes: Categories are stub; must be aligned to city’s official zoning taxonomy where available.
-  - variable: permit_status
-    description: Permit status.
-    type: enum
-    unit: none
-    value_range: null
-    allowed_values: [unknown, approved, pending, rejected, expired]
-    notes: Must include authoritative system provenance.
-  - variable: mismatch_level
-    description: Human-facing mismatch category used to prioritize review.
+    notes: Align to local open taxonomy when available.
+  - variable: change_triage_level
+    description: Human-facing triage band for review ordering.
     type: enum
     unit: none
     value_range: null
     allowed_values: [low, medium, high]
-    notes: Must not be interpreted as wrongdoing; “high” means “review first”.
-  - variable: under_assessment_candidate
-    description: Candidate flag for potential under-assessment (review-only).
+    notes: High means review sooner, not proof of violation.
+  - variable: new_built_up_candidate
+    description: Boolean candidate for field review from open signals.
     type: boolean
     unit: none
     value_range: null
     allowed_values: []
-    notes: Forbidden for automated tax action; requires human review + verification.
+    notes: Forbidden as sole basis for enforcement or tax action.
 
 units:
   - unit: sq_m
@@ -127,38 +267,38 @@ units:
     description: Unitless category/flag.
 
 thresholds_or_categories:
-  - id: mismatch_level_categories
-    variable: mismatch_level
+  - id: change_triage_levels
+    variable: change_triage_level
     type: categories
     definition: >
-      Stub categories based on footprint vs assessment ratio and missing permit signals. Final thresholds
-      must be city-calibrated and reviewed for bias and fairness.
+      City- and sensor-calibrated bands for triage. Thresholds must be audited for bias
+      (e.g. informal settlements, cloud cover, seasonal vegetation).
     levels:
       - level: low
-        criteria: footprint_vs_assessment_area_ratio <= 1.1
+        criteria: spectral_change_index near baseline and footprint delta small
         severity: low
       - level: medium
-        criteria: footprint_vs_assessment_area_ratio > 1.1 and <= 1.3
+        criteria: moderate spectral or footprint delta with acceptable data quality
         severity: medium
       - level: high
-        criteria: footprint_vs_assessment_area_ratio > 1.3
+        criteria: strong stacked signals with acceptable licenses and temporal alignment
         severity: high
 
 safety_gates:
-  - gate_id: require_field_verification_before_enforcement_or_tax_action
-    description: No enforcement/tax action may be taken solely from mismatch outputs.
-    when_to_block: enforcement, tax_reassessment, penalties
-    required_evidence: [field_verification_result, reviewer_approval]
+  - gate_id: require_field_verification_before_regulatory_or_revenue_action
+    description: No regulatory, revenue, or enforcement action from open-signal outputs alone.
+    when_to_block: enforcement, tax_reassessment, penalties, demolition_orders
+    required_evidence: [field_verification_result, reviewer_approval, authoritative_local_process]
     override_policy: human_approval_only
-  - gate_id: privacy_and_sensitivity_guardrail
-    description: Consumer outputs must avoid exposing sensitive personal identifiers by default.
-    when_to_block: public_reporting, broad_dashboard_sharing
+  - gate_id: no_pii_in_default_consumer_views
+    description: Default dashboards must not surface owner identity or sensitive registry fields.
+    when_to_block: public_dashboard_export
     required_evidence: [consumer_contract_privacy_review]
     override_policy: human_approval_only
-  - gate_id: block_if_low_provenance_or_low_reliability
-    description: If inputs are outdated/unknown provenance, restrict to “data cleanup” tasks only.
-    when_to_block: high_priority_review_queue
-    required_evidence: [provenance_summary, reliability_ok]
+  - gate_id: block_if_low_provenance_or_license_mismatch
+    description: Restrict to data-quality tasks when licenses prohibit redistribution or derivative use.
+    when_to_block: automated_high_priority_field_deployment
+    required_evidence: [license_ok, provenance_summary]
     override_policy: none
 
 provenance_requirements:
@@ -175,7 +315,7 @@ source_reliability_requirements:
     allowed_statuses: [healthy]
 
 decision_packet_profile:
-  profile_id: decision_packet_property_buildings_stub
+  profile_id: decision_packet_property_buildings_open_signals
   based_on: urban_decision_packet_core
   required_sections:
     - situation_summary
@@ -189,37 +329,58 @@ decision_packet_profile:
     - field_verification
 
 dashboard_consumer_requirements:
-  required_payload_sections: [summary, map_layers, alerts_or_queue, decision_packet_links]
+  required_payload_sections:
+    - summary
+    - map_layers
+    - field_verification_queue_or_review_candidates
+    - confidence_and_provenance_warnings
   required_warnings:
     - show_low_provenance_banner_if_present
-    - show_low_reliability_banner_if_present
-    - do_not_display_sensitive_identifiers_by_default
+    - show_license_or_redistribution_constraints_if_present
+    - show_cloud_seasonality_and_geometry_caveats_for_eo
+    - do_not_display_owner_or_registry_pii_by_default
+
+required_human_review:
+  description: >
+    Phase 1 outputs must be interpreted by accountable humans; the platform surfaces candidates,
+    provenance, and prompts—it does not replace municipal legal processes.
+  requirements:
+    - Reviewers must acknowledge open_data_safety_language before prioritizing field visits.
+    - High triage bands require explicit acknowledgment of EO and footprint false-positive modes.
+    - Escalation toward revenue, permit, or enforcement workflows requires later-stage feeds plus local authorization—not Phase 1 defaults.
+    - human_review_prompts below are mandatory categories for medium/high change_triage_level packets.
 
 human_review_prompts:
-  - prompt: Is the mismatch explainable by legitimate data issues (stale record, missing permits, geometry error)?
-    applies_when: mismatch_level in [medium, high]
+  - prompt: Could change signals be explained by clouds, seasonality, agriculture, or DEM/shadow effects?
+    applies_when: change_triage_level in [medium, high]
     required_response: free_text
-  - prompt: Do we have any authoritative corroboration (permits, surveys) beyond best-effort footprints?
-    applies_when: under_assessment_candidate == true
-    required_response: yes/no
-  - prompt: Are there fairness/bias risks in prioritizing this area (coverage gaps, informal settlements)?
-    applies_when: mismatch_level == high
+  - prompt: Are open footprints and OSM coverage biased in this ward (informal construction under-mapped)?
+    applies_when: change_triage_level == high
+    required_response: free_text
+  - prompt: What on-site evidence would disambiguate new built-up vs. resurfacing or vegetation change?
+    applies_when: new_built_up_candidate == true
     required_response: free_text
 
 field_verification_requirements:
-  required_before_operational_action:
-    - verify_building_existence_and_approximate_area
-    - verify_occupancy_or_use_if_relevant_and_legal
-    - verify_permit_documents_or_status
-  evidence_to_capture: [photo, site_visit_note, ticket_id]
+  phase_1_note: >
+    Field verification results may be ingested as structured uploads when a provider contract exists;
+    they strengthen review loops but do not automatically validate EO/footprint candidates as legal facts.
+  required_before_regulatory_or_revenue_claim:
+    - confirm_built_structure_and_extent_on_site
+    - capture_photo_and_geotagged_notes
+    - record_uncertainty_and_alternative_explanations
+  evidence_to_capture: [photo, site_visit_note, optional_survey_reference]
 
 blocked_uses:
   - automated_enforcement_or_tax_reassessment_without_human_review
-  - publish_sensitive_property_details_to_public_dashboards
-  - treat_mismatch_score_as_proof_of_non_compliance
+  - tax_demand_or_reassessment_generation_from_open_signals_only
+  - publish_owner_identity_or_sensitive_registry_fields_to_public_dashboards
+  - treat_open_signal_stacks_as_proof_of_unpermitted_construction
+  - permit_status_inference_from_satellite_imagery_only
+  - demolition_penalty_or_non_compliance_recommendations_without_authoritative_municipal_process
+  - under_assessment_or_revenue_gap_claims_in_phase_1_default_consumers
 
 open_questions:
-  - What minimum privacy standard should consumer contracts enforce for property identifiers?
-  - Which authoritative footprint/parcel sources will be used per city (beyond OSM)?
-  - How will mismatch thresholds be calibrated and audited for fairness?
-
+  - Which open footprint products are licensed for redistribution per deployment geography?
+  - What ward boundary source is authoritative enough for aggregation while remaining open?
+  - How will seasonal and monsoon vegetation be baseline-corrected for India-relevant cities?

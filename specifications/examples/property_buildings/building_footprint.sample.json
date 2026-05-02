@@ -1,0 +1,41 @@
+{
+  "provider_id": "footprints_demo",
+  "source_name": "Building footprints (demo)",
+  "source_type": "gis_layer",
+  "license": "demo_only",
+  "source_metadata": {
+    "capture_method": "synthetic",
+    "notes": "Synthetic polygon for contract validation only."
+  },
+  "features": [
+    {
+      "timestamp": "2026-05-01T00:00:00Z",
+      "source_record_id": "footprint_row_0001",
+      "building_id": "bldg_778",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.5800, 12.9700],
+            [77.5802, 12.9700],
+            [77.5802, 12.9702],
+            [77.5800, 12.9702],
+            [77.5800, 12.9700]
+          ]
+        ]
+      },
+      "feature_type": "building_footprint",
+      "value": 140.0,
+      "unit": "sq_m",
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "footprints_demo",
+        "source_type": "gis_layer",
+        "license": "demo_only",
+        "collected_at": "2026-05-01T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      }
+    }
+  ]
+}
+

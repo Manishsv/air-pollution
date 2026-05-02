@@ -1,0 +1,33 @@
+{
+  "provider_id": "eo_change_demo",
+  "source_name": "Sentinel-2 change proxy (demo)",
+  "source_type": "sentinel2_change_proxy",
+  "license": "CC-BY-4.0",
+  "source_metadata": {
+    "product": "sentinel2_l2a_demo",
+    "notes": "Synthetic change index for contract validation; not a permit or tax signal."
+  },
+  "records": [
+    {
+      "observation_time": "2026-05-01T00:00:00Z",
+      "source_record_id": "eo_chg_ward_12_001",
+      "spatial_unit_id": "ward_12",
+      "spatial_unit_type": "ward",
+      "time_window_start": "2025-11-01",
+      "time_window_end": "2026-04-30",
+      "observed_property": "spectral_change_index",
+      "value": 0.38,
+      "unit": "none",
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "eo_change_demo",
+        "source_type": "sentinel2_change_proxy",
+        "license": "CC-BY-4.0",
+        "collected_at": "2026-05-01T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      },
+      "latitude": 12.975,
+      "longitude": 77.59
+    }
+  ]
+}

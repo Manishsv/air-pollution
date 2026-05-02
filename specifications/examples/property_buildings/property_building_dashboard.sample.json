@@ -1,0 +1,105 @@
+{
+  "area_id": "ward_12",
+  "generated_at": "2026-05-01T00:10:00Z",
+  "coverage_summary": {
+    "property_registry_records": 0,
+    "building_footprint_records": 1,
+    "building_permit_records": 0,
+    "land_use_records": 1,
+    "osm_building_features": 1,
+    "open_footprint_features": 1,
+    "satellite_change_records": 1,
+    "ward_boundary_features": 1
+  },
+  "mismatch_summary": {
+    "total_candidates": 1,
+    "high_priority": 1,
+    "notes": "Legacy aggregate key: open-signal triage counts only; no tax or permit-enforcement semantics."
+  },
+  "built_up_change_candidates": [
+    {
+      "candidate_id": "be_change_0001",
+      "spatial_unit_id": "ward_12",
+      "signal_summary": "Elevated spectral change index with stable footprint sample (demo).",
+      "priority": "medium",
+      "confidence_score": 0.42
+    }
+  ],
+  "new_construction_candidate_areas": [
+    {
+      "area_id": "cluster_h3_demo_01",
+      "description": "Cluster where footprint growth proxy and EO change align (demo only).",
+      "priority": "medium",
+      "field_review_recommended": true
+    }
+  ],
+  "footprint_growth_summary": {
+    "city_id": "demo_city",
+    "note": "Footprint delta proxies require multi-temporal licensed stacks; this is a placeholder.",
+    "wards_with_positive_delta_proxy": ["ward_12"]
+  },
+  "high_change_wards": [
+    {
+      "ward_id": "ward_12",
+      "change_rank": 1,
+      "change_score_proxy": 0.61,
+      "drivers": ["spectral_change_index", "footprint_sample"],
+      "review_rationale": "Stacked open signals exceed demo triage threshold; schedule field context review."
+    }
+  ],
+  "map_layers": [
+    { "layer_id": "ward_footprint_context", "layer_type": "polygons", "title": "Ward boundaries (open)" },
+    { "layer_id": "building_footprints_open", "layer_type": "polygons", "title": "Building footprints (OSM / open)" },
+    { "layer_id": "eo_change_heatmap", "layer_type": "raster", "title": "EO change proxy (Sentinel/Landsat-style)" },
+    { "layer_id": "land_use_public", "layer_type": "polygons", "title": "Public land use / zoning" }
+  ],
+  "review_candidates": [
+    {
+      "candidate_id": "pb_candidate_field_0001",
+      "property_id": null,
+      "parcel_id": null,
+      "building_id": "bldg_osm_991",
+      "issue_type": "built_up_change_candidate",
+      "priority": "high",
+      "confidence_score": 0.48,
+      "evidence": {
+        "spectral_change_index": 0.38,
+        "footprint_area_sq_m": 140.0,
+        "notes": "Demo triage only—verify seasonality, clouds, and informal mapping gaps before field deployment."
+      },
+      "recommended_review_action": "Schedule ward-level field context review; do not infer permit or tax status from remote signals alone.",
+      "field_verification_required": true
+    }
+  ],
+  "data_quality_summary": {
+    "synthetic_data_used": true,
+    "confidence_note": "Demo payload mixing synthetic EO and footprint samples; operational use prohibited."
+  },
+  "provenance_summary": {
+    "sources": [
+      "openstreetmap_buildings_demo",
+      "open_building_footprints_demo",
+      "sentinel2_change_proxy_demo",
+      "public_land_use_layer_demo",
+      "ward_boundaries_open_demo"
+    ],
+    "synthetic_used": true
+  },
+  "active_warnings": [
+    {
+      "warning_id": "synthetic_demo_data",
+      "severity": "high",
+      "message": "Synthetic demo payload — do not use for operational enforcement, tax, or revenue decisions."
+    },
+    {
+      "warning_id": "eo_signal_limitations",
+      "severity": "medium",
+      "message": "Spectral change can reflect vegetation, soil moisture, or clouds—not proof of construction legality."
+    },
+    {
+      "warning_id": "no_registry_permit_assumptions",
+      "severity": "high",
+      "message": "Municipal property registries and internal permit feeds are not assumed in this open-data MVP path."
+    }
+  ]
+}

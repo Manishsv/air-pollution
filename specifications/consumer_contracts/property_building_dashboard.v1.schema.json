@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/property_building_dashboard",
+  "title": "Consumer contract: built-environment change dashboard (domain property_buildings, v1)",
+  "description": "Dashboard payload for open-data built-environment intelligence (footprints, EO change signals, wards, public land use). Phase 1 does not require property registry, building permit, or tax-system fields in coverage_summary—municipal-shaped keys may appear only when later-stage authorized integrations supply them. Primary question: where built form may have changed and what needs field review. Decision support only—no tax, permit-guilt, owner, or enforcement claims. The key mismatch_summary is a legacy aggregate slot for change/triage counts; prefer built_up_change_candidates, high_change_wards, and review_candidates for new work.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "generated_at",
+    "coverage_summary",
+    "mismatch_summary",
+    "map_layers",
+    "review_candidates",
+    "data_quality_summary",
+    "provenance_summary",
+    "active_warnings"
+  ],
+  "properties": {
+    "city_id": { "type": "string" },
+    "area_id": { "type": "string" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "coverage_summary": { "type": "object", "additionalProperties": true },
+    "mismatch_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Aggregate triage/readiness counts (legacy name). Must not encode tax or permit-enforcement conclusions."
+    },
+    "built_up_change_candidates": {
+      "type": "array",
+      "description": "Spatial or unit-level candidates where built-up or footprint signals suggest recent change.",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "new_construction_candidate_areas": {
+      "type": "array",
+      "description": "Polygons or references to areas warranting on-site review for possible new construction (not a permit verdict).",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "footprint_growth_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Rollups of footprint growth or delta proxies by ward or city, with explicit uncertainty."
+    },
+    "high_change_wards": {
+      "type": "array",
+      "description": "Wards or spatial units ranked for review from stacked open signals.",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "map_layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["layer_id", "layer_type", "title"],
+        "properties": {
+          "layer_id": { "type": "string", "minLength": 1 },
+          "layer_type": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "review_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["candidate_id", "issue_type", "priority", "confidence_score"],
+        "properties": {
+          "candidate_id": { "type": "string", "minLength": 1 },
+          "property_id": { "type": ["string", "null"] },
+          "parcel_id": { "type": ["string", "null"] },
+          "building_id": { "type": ["string", "null"] },
+          "issue_type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "e.g. built_up_change_candidate, new_construction_area_candidate, high_change_ward, eo_change_signal_review, data_readiness_review — not tax or permit-mismatch verdicts"
+          },
+          "priority": { "type": "string", "minLength": 1 },
+          "confidence_score": { "type": ["number", "null"] },
+          "evidence": { "type": "object", "additionalProperties": true },
+          "recommended_review_action": { "type": "string" },
+          "field_verification_required": { "type": "boolean" }
+        }
+      }
+    },
+    "data_quality_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["synthetic_data_used", "confidence_note"],
+      "properties": {
+        "synthetic_data_used": { "type": "boolean" },
+        "confidence_note": { "type": "string" }
+      }
+    },
+    "provenance_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sources", "synthetic_used"],
+      "properties": {
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "synthetic_used": { "type": "boolean" }
+      }
+    },
+    "active_warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["warning_id", "severity", "message"],
+        "properties": {
+          "warning_id": { "type": "string", "minLength": 1 },
+          "severity": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "anyOf": [{ "required": ["city_id"] }, { "required": ["area_id"] }]
+}
+

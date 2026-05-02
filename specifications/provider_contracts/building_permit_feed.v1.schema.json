@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/building_permit_feed",
+  "title": "Provider contract: building permit feed (v1)",
+  "description": "Optional partner feed for permit systems where accessible. NOT assumed in the open-data MVP for property_buildings (no permit-mismatch or lack-of-permit claims from remote sensing). Decision support input only; must include provenance and quality flags.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "records", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "approval_date",
+          "source_record_id",
+          "permit_id",
+          "permit_type",
+          "validity_status",
+          "permitted_use",
+          "quality_flag",
+          "provenance"
+        ],
+        "properties": {
+          "approval_date": { "type": "string", "minLength": 1 },
+          "source_record_id": { "type": "string", "minLength": 1 },
+
+          "permit_id": { "type": "string", "minLength": 1 },
+          "property_id": { "type": ["string", "null"] },
+          "parcel_id": { "type": ["string", "null"] },
+
+          "permit_type": { "type": "string", "minLength": 1 },
+          "approved_built_up_area_sq_m": { "type": ["number", "null"] },
+          "validity_status": { "type": "string", "minLength": 1 },
+          "permitted_use": { "type": "string", "minLength": 1 },
+
+          "geometry": { "type": "object", "additionalProperties": true },
+          "latitude": { "type": ["number", "null"] },
+          "longitude": { "type": ["number", "null"] },
+
+          "quality_flag": { "type": "string", "minLength": 1 },
+          "provenance": { "type": "object", "minProperties": 1, "additionalProperties": true }
+        },
+        "anyOf": [
+          { "required": ["geometry"] },
+          { "required": ["latitude", "longitude"] },
+          { "required": ["parcel_id"] },
+          { "required": ["property_id"] }
+        ]
+      }
+    }
+  }
+}
+

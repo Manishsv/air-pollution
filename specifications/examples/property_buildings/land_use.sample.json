@@ -1,0 +1,41 @@
+{
+  "provider_id": "city_zoning_gis_demo",
+  "source_name": "City zoning GIS (demo)",
+  "source_type": "planning_gis",
+  "license": "demo_only",
+  "source_metadata": {
+    "notes": "Synthetic example; no sensitive data."
+  },
+  "records": [
+    {
+      "updated_at": "2026-05-01T00:00:00Z",
+      "source_record_id": "zone_row_0001",
+      "land_use_id": "lu_001",
+      "zone_id": "zone_R1",
+      "land_use_category": "residential",
+      "permitted_uses": ["residential"],
+      "restrictions": ["no_industrial_use"],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.5795, 12.9695],
+            [77.5805, 12.9695],
+            [77.5805, 12.9705],
+            [77.5795, 12.9705],
+            [77.5795, 12.9695]
+          ]
+        ]
+      },
+      "quality_flag": "synthetic_demo",
+      "provenance": {
+        "source_id": "city_zoning_gis_demo",
+        "source_type": "planning_gis",
+        "license": "demo_only",
+        "collected_at": "2026-05-01T00:00:00Z",
+        "ingested_at": "2026-05-01T00:01:00Z"
+      }
+    }
+  ]
+}
+

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://urban-platform.local/spec/provider/v1/building_footprint_feed",
-  "title": "Provider contract: building footprint feed (v1)",
-  "description": "Building polygons from OpenStreetMap, vendor open building footprints where license permits, or satellite-derived footprint products. Prefer open/licensed sources for the property_buildings MVP path.",
+  "$id": "https://urban-platform.local/spec/provider/v1/ward_boundary_feed",
+  "title": "Provider contract: ward / administrative boundary feed (v1)",
+  "description": "Polygon boundaries for wards or other admin units used to aggregate open built-environment signals (OSM, open government data, or licensed extracts). Same feature envelope as building_footprint_feed for reuse.",
   "type": "object",
   "additionalProperties": true,
   "required": ["provider_id", "source_name", "source_type", "features", "license", "source_metadata"],
@@ -28,8 +28,8 @@
         "properties": {
           "timestamp": { "type": "string", "minLength": 1 },
           "source_record_id": { "type": "string", "minLength": 1 },
-          "building_id": { "type": "string" },
-          "footprint_id": { "type": "string" },
+          "ward_id": { "type": "string" },
+          "area_id": { "type": "string" },
           "geometry": { "type": "object", "additionalProperties": true },
           "feature_type": { "type": "string" },
           "value": { "type": ["number", "string", "null"] },
@@ -41,4 +41,3 @@
     }
   }
 }
-
