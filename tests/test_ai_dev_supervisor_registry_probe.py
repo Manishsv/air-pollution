@@ -13,6 +13,7 @@ def test_registry_probe_happy_path_on_repo_samples() -> None:
     assert r.errors == []
     assert r.provider_count >= 1
     assert r.application_count >= 1
+    assert r.adapter_count >= 1
     assert r.missing_manifest_references == []
     # Example references may be incomplete while registries are still early and
     # runtime registry loading is not enabled yet; the probe must surface them as risks.
@@ -46,15 +47,25 @@ def test_registry_probe_detects_missing_manifest_and_examples() -> None:
             }
         ]
     }
+    network_adapter_registry = {
+        "adapters": [
+            {
+                "adapter_id": "n1",
+                "supported_network_contracts": ["network_missing_contract"],
+            }
+        ]
+    }
 
     r = check_registry_hygiene(
         spec_root=spec_root,
         manifest=manifest,
         provider_registry=provider_registry,
         application_registry=application_registry,
+        network_adapter_registry=network_adapter_registry,
     )
     assert any("provider:p1 provider_contract:provider_missing" in x for x in r.missing_manifest_references)
     assert any("application:a1 consumer_contract:consumer_missing" in x for x in r.missing_manifest_references)
+    assert any("adapter:n1 supported_network_contract:network_missing_contract" in x for x in r.missing_manifest_references)
     assert r.missing_example_references  # at least one missing example path/key
     assert r.risks
 

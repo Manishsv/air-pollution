@@ -289,6 +289,8 @@ def _render_markdown(report: dict[str, Any]) -> str:
         lines.append("### Registry hygiene")
         lines.append(f"- **provider_count**: `{registry_hygiene.get('provider_count')}`")
         lines.append(f"- **application_count**: `{registry_hygiene.get('application_count')}`")
+        if registry_hygiene.get("adapter_count") is not None:
+            lines.append(f"- **adapter_count**: `{registry_hygiene.get('adapter_count')}`")
         missing_manifest = registry_hygiene.get("missing_manifest_references") or []
         missing_examples = registry_hygiene.get("missing_example_references") or []
         lines.append(f"- **missing_manifest_references**: `{len(missing_manifest)}`")

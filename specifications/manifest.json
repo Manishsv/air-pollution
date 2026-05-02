@@ -265,6 +265,12 @@
       "schema_path": "registry_contracts/application_registry.v1.schema.json",
       "stability": "documented"
     },
+    "registry_network_adapter_registry_v1": {
+      "description": "Registry contract: network transport adapter plugins (email/webhook/file drop/event bus) that carry network contracts. Declarative only; no secrets or credentials inline.",
+      "contract_type": "registry_contract",
+      "schema_path": "registry_contracts/network_adapter_registry.v1.schema.json",
+      "stability": "documented"
+    },
 
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
@@ -347,6 +353,10 @@
     "example_registry_application_registry_v1": {
       "schema_name": "registry_application_registry_v1",
       "path": "examples/registries/application_registry.sample.json"
+    },
+    "example_registry_network_adapter_registry_v1": {
+      "schema_name": "registry_network_adapter_registry_v1",
+      "path": "examples/registries/network_adapter_registry.sample.json"
     }
   }
 }

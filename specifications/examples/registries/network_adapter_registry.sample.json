@@ -1,0 +1,48 @@
+{
+  "registry_id": "core-default-network-adapter-registry-PLACEHOLDER",
+  "version": "v1",
+  "updated_at": "2026-05-02T20:45:00Z",
+  "scope": "core_default",
+  "adapters": [
+    {
+      "adapter_id": "email_phase1_adapter",
+      "label": "Email Phase 1 transport adapter (low-frequency coordination)",
+      "description": "Practical carrier for fragmented agencies: low-frequency decision packet sharing, task handoffs, acknowledgements, and status updates. Not suitable for high-frequency sensor streams or sensitive personal data without stronger controls.",
+      "supported_transport": "email",
+      "supported_network_contracts": ["network_message_envelope_v1", "network_delivery_receipt_v1"],
+      "delivery_receipt_support": ["delivery_ack", "delivery_nack", "processing_ack", "processing_nack", "status_update"],
+      "authentication_method": "manual_moa_gate",
+      "audit_behavior": "Record Message-ID mapping to message_id/receipt_id; retain delivery receipts for audit.",
+      "retry_behavior": "Human-in-the-loop retries; idempotent message_id; conservative backoff.",
+      "configuration_ref": "DEPLOYMENT_LOCAL:EMAIL_GATEWAY_CONFIG",
+      "enabled_by_default": false,
+      "status": "experimental",
+      "notes": "Email is a transport adapter, not the Network Layer."
+    },
+    {
+      "adapter_id": "api_webhook_adapter",
+      "label": "API/Webhook adapter",
+      "supported_transport": "webhook",
+      "supported_network_contracts": ["network_message_envelope_v1", "network_delivery_receipt_v1"],
+      "delivery_receipt_support": ["delivery_ack", "delivery_nack", "status_update"],
+      "authentication_method": "signed_envelope",
+      "audit_behavior": "Persist delivery receipts with webhook delivery ids; expose audit trails to ops only.",
+      "retry_behavior": "Exponential backoff + dead-letter; idempotent message_id handling.",
+      "enabled_by_default": false,
+      "status": "experimental"
+    },
+    {
+      "adapter_id": "file_drop_adapter",
+      "label": "File drop adapter",
+      "supported_transport": "file_drop",
+      "supported_network_contracts": ["network_message_envelope_v1", "network_delivery_receipt_v1"],
+      "delivery_receipt_support": ["delivery_ack", "delivery_nack", "processing_ack", "processing_nack", "status_update"],
+      "authentication_method": "deployment_scoped_access_control",
+      "audit_behavior": "Record file path/handle as transport_message_ref; preserve receipts.",
+      "retry_behavior": "At-least-once delivery with dedup on message_id; backoff via scheduler.",
+      "enabled_by_default": false,
+      "status": "experimental"
+    }
+  ]
+}
+

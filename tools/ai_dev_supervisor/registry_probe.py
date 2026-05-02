@@ -10,6 +10,7 @@ from typing import Any, Optional
 class RegistryHygieneResult:
     provider_count: int
     application_count: int
+    adapter_count: int
     missing_manifest_references: list[str]
     missing_example_references: list[str]
     risks: list[str]
@@ -60,6 +61,7 @@ def check_registry_hygiene(
     manifest: dict[str, Any],
     provider_registry: dict[str, Any],
     application_registry: dict[str, Any],
+    network_adapter_registry: dict[str, Any],
 ) -> RegistryHygieneResult:
     errors: list[str] = []
     risks: list[str] = []
@@ -145,6 +147,25 @@ def check_registry_hygiene(
         if not isinstance(a.get("payload_builders"), list):
             risks.append(f"application:{aid} missing payload_builders")
 
+    adapters = network_adapter_registry.get("adapters") or []
+    if not isinstance(adapters, list):
+        errors.append("network_adapter_registry.adapters must be an array")
+        adapters = []
+
+    for ad in adapters:
+        if not isinstance(ad, dict):
+            continue
+        adid = str(ad.get("adapter_id") or "?")
+        snc = ad.get("supported_network_contracts") or []
+        if isinstance(snc, list):
+            for c in snc:
+                if not isinstance(c, str) or not c.strip():
+                    continue
+                if c not in artifacts:
+                    missing_manifest.append(f"adapter:{adid} supported_network_contract:{c}")
+        else:
+            risks.append(f"adapter:{adid} supported_network_contracts must be an array")
+
     if missing_manifest:
         risks.append("Registry references missing manifest artifacts (fix registry or register artifacts).")
     if missing_examples:
@@ -164,6 +185,7 @@ def check_registry_hygiene(
     return RegistryHygieneResult(
         provider_count=len(providers),
         application_count=len(apps),
+        adapter_count=len(adapters),
         missing_manifest_references=missing_manifest,
         missing_example_references=missing_examples,
         risks=risks,
@@ -182,6 +204,7 @@ def probe_registry_hygiene(repo_root: Path) -> RegistryHygieneResult:
     manifest_path = spec_root / "manifest.json"
     prov_path = spec_root / "examples" / "registries" / "provider_registry.sample.json"
     app_path = spec_root / "examples" / "registries" / "application_registry.sample.json"
+    nad_path = spec_root / "examples" / "registries" / "network_adapter_registry.sample.json"
 
     manifest, err = _read_json(manifest_path)
     if err:
@@ -195,6 +218,10 @@ def probe_registry_hygiene(repo_root: Path) -> RegistryHygieneResult:
     if err:
         errors.append(err)
         application_registry = {}
+    network_adapter_registry, err = _read_json(nad_path)
+    if err:
+        errors.append(err)
+        network_adapter_registry = {}
 
     if not isinstance(manifest, dict):
         errors.append("manifest.json root must be an object")
@@ -205,18 +232,23 @@ def probe_registry_hygiene(repo_root: Path) -> RegistryHygieneResult:
     if not isinstance(application_registry, dict):
         errors.append("application registry JSON root must be an object")
         application_registry = {}
+    if not isinstance(network_adapter_registry, dict):
+        errors.append("network adapter registry JSON root must be an object")
+        network_adapter_registry = {}
 
     res = check_registry_hygiene(
         spec_root=spec_root,
         manifest=manifest,
         provider_registry=provider_registry,
         application_registry=application_registry,
+        network_adapter_registry=network_adapter_registry,
     )
     if errors:
         # preserve computed results but surface file IO/parse errors
         return RegistryHygieneResult(
             provider_count=res.provider_count,
             application_count=res.application_count,
+            adapter_count=res.adapter_count,
             missing_manifest_references=res.missing_manifest_references,
             missing_example_references=res.missing_example_references,
             risks=res.risks,

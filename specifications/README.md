@@ -31,6 +31,7 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
 - **Registry contracts** (`registry_contracts/`)
   - **`provider_registry.v1`** — declarative list of **provider plugins** a deployment may enable (core default or deployment-scoped).
   - **`application_registry.v1`** — declarative list of **application/consumer plugins** a deployment may enable (core default or deployment-scoped).
+  - **`network_adapter_registry.v1`** — declarative list of **transport adapters** (email/webhook/file drop/event bus) that carry network contracts.
   - Registries must **not** contain secrets or credentials. Deployment registries may reference private/internal providers without exposing sensitive details in the public repo.
 
 - **OpenAPI stubs** (`openapi/`)
