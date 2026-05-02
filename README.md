@@ -15,6 +15,7 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Urban governance context (India)**: [`docs/URBAN_CONTEXT_INDIA.md`](docs/URBAN_CONTEXT_INDIA.md)
 - **Architecture overview (text diagrams)**: [`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`](docs/AIR_OS_ARCHITECTURE_OVERVIEW.md)
 - **Plugin + registry model**: [`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`](docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md)
+- **Deployment quickstart (clean-machine test)**: [`docs/DEPLOYMENT_QUICKSTART.md`](docs/DEPLOYMENT_QUICKSTART.md)
 - **Forward deployment templates**: [`deployments/templates/`](deployments/templates/)
 - **Federated deployment (node-first)**: [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md)
 - **Agency node model**: [`docs/AGENCY_NODE_MODEL.md`](docs/AGENCY_NODE_MODEL.md)

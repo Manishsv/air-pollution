@@ -179,6 +179,7 @@ This repo includes a **minimal proof of concept** runner that demonstrates **Air
 
 - Example deployment: `deployments/examples/flood_local_demo/`
 - Runner: `python tools/deployment_runner/run_deployment.py --deployment deployments/examples/flood_local_demo`
+  - Quickstart: `docs/DEPLOYMENT_QUICKSTART.md`
 
 The runner is intentionally constrained:
 
