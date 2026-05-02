@@ -39,6 +39,18 @@ def test_property_buildings_checklist_loads() -> None:
     assert "urban_platform/processing/property_buildings/open_data_features.py" in paths
 
 
+def test_air_quality_checklist_loads() -> None:
+    data = load_domain_checklist("air_quality")
+    assert data is not None
+    assert data.get("__load_error__") is not True
+    assert data.get("domain_id") == "air_quality"
+    paths = required_paths_from_checklist(data)
+    assert "specifications/domain_specs/air_quality.v1.yaml" in paths
+    assert "urban_platform/applications/air_pollution/pipeline.py" in paths
+    # Runtime outputs are optional, so the probe should complete even on clean clone.
+    assert "data/outputs/decision_packets.json" not in paths
+
+
 def test_unknown_domain_handled_gracefully() -> None:
     r = probe_domain_maturity(REPO_ROOT, "no_such_domain_for_maturity_xyz")
     assert r.maturity_stage == "unknown_domain"

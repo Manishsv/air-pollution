@@ -1,0 +1,187 @@
+# Declarative maturity checklist for AI dev supervisor (file-existence gates).
+# Air quality is the reference application; implementation is partly legacy (`src/`) via delegation.
+
+domain_id: air_quality
+label: Air quality (reference app)
+
+open_data_first_sequence: []
+
+recommended_next_by_stage:
+  complete_read_only_vertical_slice: >-
+    Continue incremental migration from `src/` → `urban_platform/` while keeping tests + conformance green.
+    Do not add new domain logic under `src/`. Keep `specifications/domain_specs/air_quality.v1.yaml` aligned
+    when thresholds, safety gates, or PM2.5/AQI framing changes.
+
+checklist_groups:
+  - id: domain_spec
+    label: Domain specification
+    items:
+      - id: aq_domain_spec_v1
+        label: Air quality domain spec
+        path: specifications/domain_specs/air_quality.v1.yaml
+        required: true
+        category: domain_spec
+
+  - id: provider_contracts
+    label: Provider contracts
+    items:
+      - id: provider_aq_observation_feed
+        label: Air quality observation feed schema
+        path: specifications/provider_contracts/air_quality_observation_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: provider_weather_observation_feed
+        label: Weather observation feed schema
+        path: specifications/provider_contracts/weather_observation_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: provider_fire_event_feed
+        label: Fire event feed schema
+        path: specifications/provider_contracts/fire_event_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: provider_road_network_feed
+        label: Road network feed schema
+        path: specifications/provider_contracts/road_network_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: provider_building_footprint_feed
+        label: Building footprint feed schema
+        path: specifications/provider_contracts/building_footprint_feed.v1.schema.json
+        required: true
+        category: provider_contract
+
+  - id: consumer_contracts
+    label: Consumer contracts / profiles
+    items:
+      - id: consumer_decision_packet_aq_profile
+        label: Decision packet profile (air quality)
+        path: specifications/consumer_contracts/decision_packet.profile.air_quality.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: consumer_decision_packets_aq_profile
+        label: Decision packets array profile (air quality)
+        path: specifications/consumer_contracts/decision_packets.profile.air_quality.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: consumer_data_audit_aq_profile
+        label: Data audit profile (air quality)
+        path: specifications/consumer_contracts/data_audit.profile.air_quality.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: consumer_metrics_v1
+        label: Metrics contract
+        path: specifications/consumer_contracts/metrics.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: consumer_source_reliability_response
+        label: Source reliability response wrapper
+        path: specifications/consumer_contracts/source_reliability_response.v1.schema.json
+        required: true
+        category: consumer_contract
+
+  - id: application_bridge
+    label: Platform/application bridge
+    items:
+      - id: main_entrypoint
+        label: Main entrypoint
+        path: main.py
+        required: true
+        category: application
+      - id: platform_aq_pipeline
+        label: Platform AQ pipeline entry (delegates to legacy src/)
+        path: urban_platform/applications/air_pollution/pipeline.py
+        required: true
+        category: application
+
+  - id: legacy_aq_reference
+    label: Legacy AQ implementation (currently used via delegation)
+    items:
+      - id: legacy_pipeline
+        label: Legacy AQ pipeline
+        path: src/pipeline.py
+        required: true
+        category: processing
+      - id: legacy_config
+        label: Legacy AQ config
+        path: src/config.py
+        required: true
+        category: processing
+      - id: legacy_aq_data
+        label: Legacy AQ data helpers
+        path: src/aq_data.py
+        required: true
+        category: ingestion
+      - id: legacy_feature_engineering
+        label: Legacy feature engineering
+        path: src/feature_engineering.py
+        required: true
+        category: processing
+      - id: legacy_model
+        label: Legacy model
+        path: src/model.py
+        required: true
+        category: processing
+      - id: legacy_recommendations
+        label: Legacy recommendations
+        path: src/recommendations.py
+        required: true
+        category: application
+      - id: legacy_visualization
+        label: Legacy visualization
+        path: src/visualization.py
+        required: true
+        category: dashboard
+
+  - id: runtime_outputs
+    label: Runtime outputs (generated locally; optional on clean clone)
+    items:
+      - id: out_decision_packets
+        label: Generated decision packets
+        path: data/outputs/decision_packets.json
+        required: false
+        category: example
+      - id: out_data_audit
+        label: Generated data audit
+        path: data/outputs/data_audit.json
+        required: false
+        category: example
+      - id: out_metrics
+        label: Generated metrics
+        path: data/outputs/metrics.json
+        required: false
+        category: example
+      - id: out_source_reliability
+        label: Generated source reliability
+        path: data/outputs/source_reliability.json
+        required: false
+        category: example
+      - id: out_scale_analysis
+        label: Generated scale analysis
+        path: data/outputs/scale_analysis.json
+        required: false
+        category: example
+
+  - id: tests
+    label: Tests
+    items:
+      - id: test_connectors_schema_native
+        label: Schema-native connector tests (OpenAQ/Open-Meteo)
+        path: tests/test_connectors_schema_native.py
+        required: true
+        category: tests
+      - id: test_runtime_conformance
+        label: Runtime artifact conformance tests
+        path: tests/test_runtime_conformance.py
+        required: true
+        category: tests
+      - id: test_decision_packets
+        label: Decision packets tests
+        path: tests/test_decision_packets.py
+        required: true
+        category: tests
+      - id: test_spatial_cv
+        label: Spatial CV tests
+        path: tests/test_spatial_cv.py
+        required: true
+        category: tests
