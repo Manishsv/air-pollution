@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from review_dashboard.ui_shell import render_section_title
+
 
 def _row(label: str, value: str) -> None:
     st.markdown(f"**{label}**  \n{value}")
@@ -12,10 +14,7 @@ def render_packet_summary(packet: dict, *, title: str | None = None):
     conf = packet.get("confidence") or {}
     prov = packet.get("provenance") or {}
 
-    if title:
-        st.subheader(title)
-    else:
-        st.subheader("Review Summary")
+    render_section_title(title or "Review Summary")
 
     forecast_mean = pred.get("forecast_pm25_mean", "—")
     category = pred.get("pm25_category_india", "—")

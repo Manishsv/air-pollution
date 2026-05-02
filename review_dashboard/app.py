@@ -22,9 +22,17 @@ from review_dashboard.components.filters import render_filters
 from review_dashboard.components.map_view import render_map
 from review_dashboard.components.packet_summary import render_packet_summary
 from review_dashboard.components.flood_panel import render_flood_panel
+from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
+from review_dashboard.ui_shell import (
+    render_context_metrics,
+    render_domain_header,
+    render_empty_state,
+    render_section_title,
+    render_technical_json_expander,
+)
 
 
-st.set_page_config(page_title="Air Quality Review Console", layout="wide")
+st.set_page_config(page_title="AirOS Review Console", layout="wide")
 
 
 def _horizon_label(metrics: dict) -> str:
@@ -96,6 +104,7 @@ def _render_system_sidebar(client: UrbanPlatformClient, *, audit: dict, metrics:
     with st.sidebar:
         st.title("AirOS Review Console")
         st.caption("Local-first review console for multiple use cases.")
+        st.caption("UI layout follows `docs/UI_GUIDELINES.md`.")
         with st.expander("System Data Quality", expanded=False):
             render_audit_panel(audit, metrics)
 
@@ -121,7 +130,7 @@ def _render_system_sidebar(client: UrbanPlatformClient, *, audit: dict, metrics:
 
 
 def _render_events(events: pd.DataFrame) -> None:
-    st.subheader("Events / Tasks Queue")
+    render_section_title("Events / Tasks Queue")
     if events is None or events.empty:
         st.caption("No events yet. Run `python main.py` to generate decision packets and events.")
         return
@@ -147,21 +156,25 @@ def _render_events(events: pd.DataFrame) -> None:
         st.dataframe(df[cols].sort_values("timestamp", ascending=False), hide_index=True, use_container_width=True)
 
 
-def _render_crowd(client: UrbanPlatformClient) -> None:
-    st.subheader("Crowd (people_count)")
+def _render_crowd(client: UrbanPlatformClient) -> tuple[pd.DataFrame | None, list[dict]]:
+    """Returns (observations_df_or_none, preview_rows_for_technical_panel)."""
+    render_section_title("Latest observations")
     obs = client.get_observations(variable="people_count")
     if obs is None or obs.empty:
         st.caption("No `people_count` observations found yet. Run the camera publisher + ingest, then refresh.")
-        return
+        return None, []
     df = obs.copy()
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     if "entity_id" in df.columns:
         df = df.sort_values("timestamp").groupby("entity_id", as_index=False).tail(1)
         show = [c for c in ["entity_id", "timestamp", "value", "unit", "quality_flag", "source"] if c in df.columns]
-        st.dataframe(df[show].sort_values("timestamp", ascending=False), hide_index=True, use_container_width=True)
-    else:
-        st.dataframe(df.tail(50), hide_index=True, use_container_width=True)
+        out = df[show].sort_values("timestamp", ascending=False)
+        st.dataframe(out, hide_index=True, use_container_width=True)
+        return obs, out.head(50).to_dict(orient="records")
+    tail = df.tail(50)
+    st.dataframe(tail, hide_index=True, use_container_width=True)
+    return obs, tail.to_dict(orient="records")
 
 
 def main():
@@ -175,7 +188,9 @@ def main():
 
     _render_system_sidebar(client, audit=audit, metrics=metrics)
 
-    t_air, t_flood, t_heat, t_crowd, t_events = st.tabs(["Air Pollution", "Flood", "Heat", "Crowd", "Events"])
+    t_air, t_flood, t_property, t_heat, t_crowd, t_events = st.tabs(
+        ["Air Pollution", "Flood", "Property & Buildings", "Heat", "Crowd", "Events"]
+    )
 
     with t_air:
         has_degraded = False
@@ -184,19 +199,31 @@ def main():
             has_degraded = int(rel.get("degraded_count", 0) or 0) + int(rel.get("suspect_count", 0) or 0) + int(rel.get("offline_count", 0) or 0) > 0
         except Exception:
             has_degraded = False
-        _banner(prov, has_degraded_sensors=has_degraded)
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Forecast horizon", _horizon_label(metrics))
-        c2.metric("Data confidence", _confidence_label(prov))
-        c3.metric("Cells interpolated", f"{float(prov.get('percent_cells_interpolated') or 0.0):.1f}%")
+        render_domain_header(
+            title="Air Pollution Review",
+            caption="Grid-level PM2.5 review with provenance, confidence, and reviewer accountability.",
+            primary_alert=(
+                "Outputs support human review only. Do not treat forecasts or suggested next steps as operational orders."
+            ),
+            primary_alert_kind="info",
+        )
+
         try:
             rel = audit.get("source_reliability_summary") or {}
             active = int(audit.get("number_of_real_aq_stations", 0) or 0)
             degraded = int(rel.get("degraded_count", 0) or 0) + int(rel.get("suspect_count", 0) or 0) + int(rel.get("offline_count", 0) or 0)
-            c4.metric("Sensors active / degraded", f"{active} / {degraded}")
+            sensors_label = f"{active} / {degraded}"
         except Exception:
-            c4.metric("Sensors active / degraded", "—")
+            sensors_label = "—"
+
+        render_context_metrics(
+            ("Forecast horizon", _horizon_label(metrics)),
+            ("Data confidence", _confidence_label(prov)),
+            ("Cells interpolated", f"{float(prov.get('percent_cells_interpolated') or 0.0):.1f}%"),
+            ("Sensors active / degraded", sensors_label),
+        )
+        _banner(prov, has_degraded_sensors=has_degraded)
 
         filters = render_filters()
         packets = client.get_decision_packets(
@@ -242,7 +269,7 @@ def main():
                 st.session_state["selected_area_label"] = packet_to_area.get(st.session_state["selected_packet_id"])
 
                 with tab_list:
-                    st.subheader("Areas Needing Review")
+                    render_section_title("Areas Needing Review")
                     show_cols = ["Area", "Forecast category", "Forecast PM2.5", "Confidence", "Suggested handling", "Main concern"]
                     try:
                         evt = st.dataframe(
@@ -269,7 +296,7 @@ def main():
                         st.dataframe(dfq[show_cols], width="stretch", hide_index=True)
 
                 with tab_map:
-                    st.subheader("Map View")
+                    render_section_title("Map View")
                     with st.expander("Map layers", expanded=False):
                         st.caption("Turn layers on/off to inspect the evidence behind each area.")
                         st.session_state.setdefault("map_layers", {"areas": True, "selected": True, "aq_sensors": True})
@@ -389,7 +416,7 @@ def main():
 
                 with t_dec:
                     with st.container(height=780):
-                        st.markdown("### Reviewer decision")
+                        render_section_title("Reviewer decision")
                         st.caption(
                             "Choose what should happen next. The system provides evidence and a suggested next step, "
                             "but the reviewer remains accountable for the decision."
@@ -423,21 +450,68 @@ def main():
 
                 with t_log:
                     with st.container(height=780):
-                        st.subheader("Audit log (session)")
+                        render_section_title("Audit log (session)")
                         st.dataframe(pd.DataFrame(st.session_state.get("action_log", [])), width="stretch", hide_index=True)
 
-    with t_heat:
-        st.subheader("Heat")
-        st.caption("Placeholder. This tab will host heat risk indicators and workflows.")
+        render_technical_json_expander(
+            title="Technical: Raw reviewer context",
+            payload={
+                "filters": filters,
+                "selected_packet_id": st.session_state.get("selected_packet_id"),
+                "selected_decision_packet": selected,
+                "provenance_summary": prov,
+            },
+        )
 
     with t_flood:
         render_flood_panel()
 
+    with t_property:
+        render_property_buildings_panel()
+
+    with t_heat:
+        render_domain_header(
+            title="Heat Risk Review",
+            caption="Placeholder tab until heat risk consumer contracts and payloads are wired.",
+            primary_alert=None,
+        )
+        render_empty_state(
+            "Heat risk review is not implemented in this build.",
+            hint="Follow `docs/UI_GUIDELINES.md` and extend specs before adding live heat data.",
+        )
+        render_technical_json_expander(title="Technical: Placeholder", payload={"status": "not_implemented"})
+
     with t_crowd:
-        _render_crowd(client)
+        render_domain_header(
+            title="Crowd / People count",
+            caption="Latest ingested `people_count` observations for spatial units (demo or live ingest).",
+            primary_alert="Counts are operational signals, not identity. Use only for capacity and safety review workflows.",
+            primary_alert_kind="info",
+        )
+        _obs_df, crowd_preview = _render_crowd(client)
+        render_technical_json_expander(
+            title="Technical: people_count preview",
+            payload={
+                "row_count": 0 if _obs_df is None or _obs_df.empty else int(len(_obs_df)),
+                "preview_rows": crowd_preview,
+            },
+        )
 
     with t_events:
+        render_domain_header(
+            title="Events / Tasks queue",
+            caption="System-generated events linked to decision packets and recommended actions.",
+            primary_alert=None,
+        )
         _render_events(events)
+        ev_preview = []
+        if events is not None and not events.empty:
+            prev = events.sort_values("timestamp", ascending=False).head(40) if "timestamp" in events.columns else events.head(40)
+            ev_preview = prev.to_dict(orient="records")
+        render_technical_json_expander(
+            title="Technical: Events preview",
+            payload={"preview_rows": ev_preview, "total_rows": 0 if events is None or events.empty else int(len(events))},
+        )
 
 
 if __name__ == "__main__":

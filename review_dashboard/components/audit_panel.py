@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from review_dashboard.ui_shell import render_section_title
+
 
 def render_audit_panel(audit: dict, metrics: dict):
-    st.subheader("System Data Quality")
+    render_section_title("System Data Quality")
     st.caption("These indicators describe how much the system should be trusted for this run.")
 
     rel = audit.get("source_reliability_summary") or {}
