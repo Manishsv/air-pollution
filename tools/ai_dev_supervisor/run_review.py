@@ -16,6 +16,7 @@ if str(_THIS_DIR) not in sys.path:
 
 from conformance_probe import probe_conformance  # noqa: E402
 from dashboard_probe import probe_dashboard  # noqa: E402
+from deployment_probe import probe_deployment_examples  # noqa: E402
 from domain_maturity_probe import probe_domain_maturity  # noqa: E402
 from registry_probe import probe_registry_hygiene  # noqa: E402
 from spec_policy_probe import probe_spec_policy  # noqa: E402
@@ -193,6 +194,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
     dashboard = report.get("dashboard_probe")
     domain_maturity = report.get("domain_maturity")
     registry_hygiene = report.get("registry_hygiene")
+    deployment_examples = report.get("deployment_examples")
 
     risks = report.get("risks", [])
     next_task = report.get("recommended_next_task", "UNKNOWN")
@@ -313,6 +315,48 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 lines.append(f"  - `{e}`")
         lines.append("")
 
+    if deployment_examples is not None:
+        lines.append("### Deployment examples")
+        lines.append(f"- **examples_dir_exists**: `{bool(deployment_examples.get('examples_dir_exists'))}`")
+        lines.append(f"- **example_count**: `{deployment_examples.get('example_count')}`")
+        deps = deployment_examples.get("deployments") or []
+        if deps:
+            for d in deps:
+                if not isinstance(d, dict):
+                    continue
+                lines.append(f"- **deployment**: `{d.get('deployment_key')}` (`{d.get('deployment_dir')}`)")
+                lines.append(f"  - **deployment_id**: `{d.get('deployment_id')}`")
+                lines.append(f"  - **files**: profile={bool(d.get('deployment_profile_exists'))} provider_registry={bool(d.get('provider_registry_exists'))} application_registry={bool(d.get('application_registry_exists'))} readme={bool(d.get('readme_exists'))}")
+                if d.get('provider_count') is not None:
+                    lines.append(f"  - **provider_count**: `{d.get('provider_count')}`")
+                if d.get('application_count') is not None:
+                    lines.append(f"  - **application_count**: `{d.get('application_count')}`")
+                mm = d.get("missing_manifest_references") or []
+                fx = d.get("missing_fixture_paths") or []
+                if mm:
+                    lines.append("  - **missing_manifest_references**:")
+                    for x in mm:
+                        lines.append(f"    - `{x}`")
+                if fx:
+                    lines.append("  - **missing_fixture_paths**:")
+                    for x in fx:
+                        lines.append(f"    - `{x}`")
+                if d.get("risks"):
+                    lines.append("  - **deployment_risks**:")
+                    for r in d["risks"]:
+                        lines.append(f"    - {r}")
+                lines.append(f"  - **recommended_next_task**: {d.get('recommended_next_task')}")
+        if deployment_examples.get("risks"):
+            lines.append("- **deployment_examples_risks**:")
+            for r in deployment_examples["risks"]:
+                lines.append(f"  - {r}")
+        lines.append(f"- **recommended_next_task**: {deployment_examples.get('recommended_next_task')}")
+        if deployment_examples.get("errors"):
+            lines.append("- **deployment_examples_errors**:")
+            for e in deployment_examples["errors"]:
+                lines.append(f"  - `{e}`")
+        lines.append("")
+
     lines.append("### Risks")
     if risks:
         for r in risks:
@@ -371,6 +415,7 @@ def main() -> int:
         probe_domain_maturity(repo_root, args.domain) if args.domain else None
     )
     registry_hygiene = probe_registry_hygiene(repo_root)
+    deployment_examples = probe_deployment_examples(repo_root)
     dashboard_probe = probe_dashboard(args.dashboard_url) if args.dashboard_url else None
 
     risks = _risk_register(
@@ -393,6 +438,7 @@ def main() -> int:
         "dashboard_probe": dashboard_probe.to_dict() if dashboard_probe else None,
         "domain_maturity": domain_maturity.to_dict() if domain_maturity else None,
         "registry_hygiene": registry_hygiene.to_dict(),
+        "deployment_examples": deployment_examples.to_dict(),
         "risks": risks,
         "recommended_next_task": _recommended_next_task(
             spec_folders=spec_folders,
