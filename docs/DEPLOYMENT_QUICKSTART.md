@@ -48,6 +48,13 @@ python main.py --step conformance
 python tools/ai_dev_supervisor/run_review.py --run-conformance
 ```
 
+CLI equivalents:
+
+```bash
+python tools/airos_cli.py conformance
+python tools/airos_cli.py review --run-conformance
+```
+
 Expected result:
 
 - **tests pass**
@@ -57,7 +64,15 @@ Expected result:
 ## 5) Run the registry-driven flood deployment demo
 
 ```bash
+python tools/deployment_runner/validate_deployment.py --deployment deployments/examples/flood_local_demo
 python tools/deployment_runner/run_deployment.py --deployment deployments/examples/flood_local_demo
+```
+
+CLI equivalents:
+
+```bash
+python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
+python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 ```
 
 This reads:

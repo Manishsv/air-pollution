@@ -213,6 +213,18 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+### AirOS CLI (thin wrappers)
+
+AirOS includes a minimal CLI that wraps existing checks and demos (no plugin loading):
+
+```bash
+python tools/airos_cli.py doctor
+python tools/airos_cli.py conformance
+python tools/airos_cli.py review --run-conformance
+python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
+python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+```
+
 ### Run
 
 Default config runs **fast `bbox` mode** (recommended for development):
