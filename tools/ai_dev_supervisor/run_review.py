@@ -17,6 +17,7 @@ if str(_THIS_DIR) not in sys.path:
 from conformance_probe import probe_conformance  # noqa: E402
 from dashboard_probe import probe_dashboard  # noqa: E402
 from domain_maturity_probe import probe_domain_maturity  # noqa: E402
+from registry_probe import probe_registry_hygiene  # noqa: E402
 from spec_policy_probe import probe_spec_policy  # noqa: E402
 
 
@@ -191,6 +192,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
     conformance = report.get("conformance", {})
     dashboard = report.get("dashboard_probe")
     domain_maturity = report.get("domain_maturity")
+    registry_hygiene = report.get("registry_hygiene")
 
     risks = report.get("risks", [])
     next_task = report.get("recommended_next_task", "UNKNOWN")
@@ -283,6 +285,32 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 lines.append(f"  - `{e}`")
         lines.append("")
 
+    if registry_hygiene is not None:
+        lines.append("### Registry hygiene")
+        lines.append(f"- **provider_count**: `{registry_hygiene.get('provider_count')}`")
+        lines.append(f"- **application_count**: `{registry_hygiene.get('application_count')}`")
+        missing_manifest = registry_hygiene.get("missing_manifest_references") or []
+        missing_examples = registry_hygiene.get("missing_example_references") or []
+        lines.append(f"- **missing_manifest_references**: `{len(missing_manifest)}`")
+        if missing_manifest:
+            for x in missing_manifest:
+                lines.append(f"  - `{x}`")
+        lines.append(f"- **missing_example_references**: `{len(missing_examples)}`")
+        if missing_examples:
+            for x in missing_examples:
+                lines.append(f"  - `{x}`")
+        if registry_hygiene.get("risks"):
+            lines.append("- **registry_hygiene_risks**:")
+            for r in registry_hygiene["risks"]:
+                lines.append(f"  - {r}")
+        lines.append("- **recommended_next_task**:")
+        lines.append(f"  - {registry_hygiene.get('recommended_next_task')}")
+        if registry_hygiene.get("errors"):
+            lines.append("- **registry_hygiene_errors**:")
+            for e in registry_hygiene["errors"]:
+                lines.append(f"  - `{e}`")
+        lines.append("")
+
     lines.append("### Risks")
     if risks:
         for r in risks:
@@ -340,6 +368,7 @@ def main() -> int:
     domain_maturity = (
         probe_domain_maturity(repo_root, args.domain) if args.domain else None
     )
+    registry_hygiene = probe_registry_hygiene(repo_root)
     dashboard_probe = probe_dashboard(args.dashboard_url) if args.dashboard_url else None
 
     risks = _risk_register(
@@ -361,6 +390,7 @@ def main() -> int:
         "conformance": conformance.to_dict(),
         "dashboard_probe": dashboard_probe.to_dict() if dashboard_probe else None,
         "domain_maturity": domain_maturity.to_dict() if domain_maturity else None,
+        "registry_hygiene": registry_hygiene.to_dict(),
         "risks": risks,
         "recommended_next_task": _recommended_next_task(
             spec_folders=spec_folders,
