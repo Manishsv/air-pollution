@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +14,7 @@ from shapely.geometry import Polygon
 
 from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
 from urban_platform.specifications.audit import run_conformance_audit
+from urban_platform.specifications.engine import list_conformance_result_violations
 
 
 @pytest.fixture
@@ -217,4 +220,48 @@ def test_sdk_response_validation_works_for_one_api(tmp_path: Path, aq_packet_dic
     rows = [r for r in report["results"] if r["artifact_or_api"] == "api:get_decision_packets()" and r["schema_name"] == "decision_packets"]
     assert rows
     assert rows[0]["status"] == "valid"
+
+
+def test_list_conformance_result_violations_empty_when_all_valid_or_skipped():
+    assert list_conformance_result_violations([]) == []
+    assert list_conformance_result_violations([{"status": "skipped", "error_count": 0, "artifact_or_api": "x", "schema_name": "y", "contract_type": "z"}]) == []
+    assert list_conformance_result_violations([{"status": "valid", "error_count": 0, "artifact_or_api": "a", "schema_name": "b", "contract_type": "c"}]) == []
+
+
+def test_list_conformance_result_violations_flags_invalid_and_error_count():
+    rows = [
+        {"status": "invalid", "error_count": 2, "artifact_or_api": "f.json", "schema_name": "m", "contract_type": "consumer"},
+        {"status": "valid", "error_count": 1, "artifact_or_api": "g.json", "schema_name": "n", "contract_type": "consumer"},
+        {"status": "unknown", "error_count": 0, "artifact_or_api": "h", "schema_name": "o", "contract_type": "x"},
+    ]
+    v = list_conformance_result_violations(rows)
+    assert len(v) == 3
+
+
+def test_list_conformance_result_violations_non_object_row():
+    v = list_conformance_result_violations([None])  # type: ignore[list-item]
+    assert len(v) == 1
+    assert "not an object" in v[0]
+
+
+def test_invalid_packet_audit_produces_violations(tmp_path: Path, aq_packet_dict: dict):
+    bad = deepcopy(aq_packet_dict)
+    bad["prediction"] = {"forecast_pm25_mean": 1.0}
+    _write_min_outputs(tmp_path, packet=bad)
+    report = run_conformance_audit(tmp_path)
+    v = list_conformance_result_violations(report["results"])
+    assert v, "expected at least one violation for invalid AQ packet"
+    assert any("decision_packet_air_quality" in line for line in v)
+
+
+def test_main_py_conformance_step_exits_zero_on_valid_repo():
+    root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, "main.py", "--step", "conformance"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
 

@@ -117,6 +117,40 @@ def _build_artifacts_block_from_results(results: list[dict[str, Any]]) -> dict[s
     return artifacts
 
 
+def list_conformance_result_violations(results: list[dict[str, Any]] | None) -> list[str]:
+    """
+    Inspect row-wise conformance ``results`` and return human-readable violation lines.
+
+    Rows with ``status == "skipped"`` are treated as optional (e.g. missing runtime artifacts or
+    empty API paths) and do **not** produce violations.
+
+    Any other row must have ``status == "valid"`` and ``error_count == 0``; otherwise a violation
+    is recorded (covers ``invalid`` rows and inconsistent valid+errors).
+    """
+    violations: list[str] = []
+    for idx, row in enumerate(results or []):
+        if not isinstance(row, dict):
+            violations.append(f"results[{idx}]: row is not an object ({type(row).__name__})")
+            continue
+        status_raw = row.get("status")
+        status = str(status_raw or "").strip().lower()
+        try:
+            ec = int(row.get("error_count") or 0)
+        except (TypeError, ValueError):
+            ec = -1
+        if status == "skipped":
+            continue
+        if status == "valid" and ec == 0:
+            continue
+        artifact = row.get("artifact_or_api") or "?"
+        schema = row.get("schema_name") or "?"
+        ct = row.get("contract_type") or "?"
+        violations.append(
+            f"{artifact} | contract_type={ct} schema={schema} status={status_raw!r} error_count={ec}"
+        )
+    return violations
+
+
 def run_conformance(
     base_path: Path | str,
     *,

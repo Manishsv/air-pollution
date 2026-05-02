@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from src.config import load_config
 from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
 from urban_platform.specifications.audit import run_conformance_audit
+from urban_platform.specifications.engine import list_conformance_result_violations
 
 
 def setup_logging() -> None:
@@ -41,9 +42,22 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.step == "conformance":
+        log = logging.getLogger(__name__)
         report = run_conformance_audit(Path(__file__).parent)
-        logging.getLogger(__name__).info("Wrote conformance report to %s", Path(__file__).parent / "data" / "outputs" / "conformance_report.json")
-        logging.getLogger(__name__).info("Validated %s checks", len((report.get("results") or [])))
+        log.info("Wrote conformance report to %s", Path(__file__).parent / "data" / "outputs" / "conformance_report.json")
+        results = report.get("results") or []
+        log.info("Validated %s checks", len(results))
+        violations = list_conformance_result_violations(results)
+        if violations:
+            log.error(
+                "Conformance failed: %s required check(s) invalid (non-skipped status!=valid or error_count>0)",
+                len(violations),
+            )
+            for line in violations[:40]:
+                log.error("  %s", line)
+            if len(violations) > 40:
+                log.error("  ... and %s more", len(violations) - 40)
+            raise SystemExit(1)
         return
 
     cfg = load_config(Path(__file__).parent / "config.yaml")
