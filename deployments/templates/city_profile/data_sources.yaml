@@ -1,0 +1,35 @@
+# =============================================================================
+# TEMPLATE ONLY — planning records for data access. Not live connector config.
+# Real feeds require provider contracts under specifications/provider_contracts/
+# =============================================================================
+
+data_sources_available:
+  - source_id: TEMPLATE_OPEN_WEATHER_OR_AQI_LAYER
+    domains: [air_quality]
+    access_tier: open  # open | partner | authorized_municipal
+    catalog_reference: "TEMPLATE: link or doc id; see docs/DATA_SOURCE_CATALOG.md"
+    refresh_cadence: unknown
+    license_summary: "TEMPLATE"
+    notes: ""
+
+  - source_id: TEMPLATE_OPEN_EO_OR_FOOTPRINT_LAYER
+    domains: [property_buildings]
+    access_tier: open
+    catalog_reference: "TEMPLATE"
+    refresh_cadence: unknown
+    license_summary: "TEMPLATE"
+    notes: ""
+
+# Quick wins aligned to open-data-first phases (cross-domain bullets also OK).
+open_data_first_opportunities:
+  - "TEMPLATE: Satellite or open building footprint derivative"
+  - "TEMPLATE: Municipal open GIS portal layer (verify license)"
+
+# Do not operationalize until contracts + governance exist.
+authorized_municipal_integrations:
+  - integration_id: TEMPLATE_DRAINAGE_ASSET_FEED
+    domains: [flood_risk]
+    legal_basis: unknown  # unknown | statutory | contractual | pilot_mou
+    status: not_authorized  # not_authorized | in_negotiation | pilot | production
+    data_steward_organization: TEMPLATE_ORG_PLACEHOLDER
+    notes: "TEMPLATE"

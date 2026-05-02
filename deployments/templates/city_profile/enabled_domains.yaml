@@ -1,0 +1,19 @@
+# =============================================================================
+# TEMPLATE ONLY — fictional domain enablement. No production city configuration.
+# =============================================================================
+
+# Domains the deployment is allowed to work on in this city context.
+# Status is planning-only; technical enablement still requires specs + code.
+enabled_domains:
+  - domain_id: flood_risk
+    status: under_evaluation  # disabled | under_evaluation | pilot | enabled
+    notes: "TEMPLATE: why this domain for this city"
+  - domain_id: property_buildings
+    status: under_evaluation
+    notes: "TEMPLATE"
+
+# Ordered list: highest priority first. Should be a subset of enabled_domains
+# with status pilot or enabled when work is active—or the next candidate domain.
+priority_domains:
+  - flood_risk
+  - property_buildings

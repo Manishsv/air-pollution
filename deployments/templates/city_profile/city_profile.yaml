@@ -1,0 +1,62 @@
+# =============================================================================
+# TEMPLATE ONLY — fictional placeholders. No real city or agency data.
+# Copy this tree to a private deployment workspace before operational use.
+# See docs/CITY_PROFILE_TEMPLATE.md
+# =============================================================================
+
+city_id: CITY_ID_PLACEHOLDER
+city_name: Example Metro Placeholder
+state: STATE_OR_REGION_PLACEHOLDER
+country_code: IN
+city_size_category: medium  # large | medium | small
+
+# Availability of administrative boundary products (datasets, services, legal use).
+# Values are planning labels only—not geometry stored here.
+administrative_boundaries_available:
+  municipal_boundary:
+    status: unknown  # unknown | none | open_dataset | partner | authorized_municipal
+    notes: "TEMPLATE: cite catalog entry or external doc ID"
+  wards_or_zones:
+    status: unknown
+    notes: "TEMPLATE"
+  grid_or_custom_zones:
+    status: unknown
+    notes: "TEMPLATE"
+
+# Cross-file: see enabled_domains.yaml for domain_id list and priority order.
+# Cross-file: see data_sources.yaml for source_id details.
+deployment_maturity:
+  specs_first_adoption: not_started  # not_started | in_progress | established
+  open_data_pipeline_readiness: not_started  # not_started | pilot | operational
+  authorized_municipal_integration: not_applicable  # not_applicable | planned | pilot | operational
+  review_and_governance_rhythm: unknown  # unknown | ad_hoc | scheduled
+
+agency_stakeholders:
+  - role: TEMPLATE_AGENCY_ROLE
+    organization: TEMPLATE_ORG_PLACEHOLDER
+    engagement_level: unknown  # unknown | informal | formal_working_group | executive_sponsor
+    notes: "TEMPLATE: no personal phone/email in public repos"
+
+field_verification_capacity:
+  staffing: unknown  # unknown | none | limited | moderate | strong
+  digital_tasking_readiness: unknown  # unknown | pilot | operational
+  safety_and_access_constraints: "TEMPLATE: e.g. monsoon field access, night work policy"
+  notes: ""
+
+open_data_first_opportunities:
+  - "TEMPLATE: e.g. national/global open layers applicable to enabled domains"
+  - "See data_sources.yaml for concrete source_id rows when known"
+
+authorized_municipal_integrations:
+  - "TEMPLATE: planned feeds only—each needs provider contract + legal basis before use"
+  - "Details belong in data_sources.yaml under authorized_municipal_integrations"
+
+risks_and_constraints:
+  - "TEMPLATE: data license uncertainty"
+  - "TEMPLATE: departmental silos / procurement timelines"
+  - "TEMPLATE: political or election-cycle freeze windows"
+
+next_recommended_bounded_task: >-
+  TEMPLATE: one smallest specs-first step (e.g. single provider contract draft +
+  one example JSON + manifest registration) aligned to priority_domains in
+  enabled_domains.yaml.
