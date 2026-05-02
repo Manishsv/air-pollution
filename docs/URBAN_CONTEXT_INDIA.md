@@ -16,6 +16,8 @@ Urban outcomes depend on many actors that often **do not share a common data spi
 
 Responsibilities **overlap**; budgets and mandates **diverge**; and **data ownership** is distributed. AirOS assumes **coordination is hard by default**—integration is an achievement, not a precondition.
 
+**Multi-node reality:** agencies may run **separate AirOS deployments** (logical or physical **nodes**)—city-level, multi-city, regional, or state-scoped. AirOS is **node-first and federation-ready**; it does **not** assume one monolithic municipal instance. Where agencies must exchange **contract-shaped** artifacts, an optional **AirOS Network Layer** provides **domain-agnostic**, **contract-aware**, **policy-enforcing** routing—not domain reasoning. See [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](FEDERATED_DEPLOYMENT_ARCHITECTURE.md) and [`docs/CROSS_AGENCY_COORDINATION_LAYER.md`](CROSS_AGENCY_COORDINATION_LAYER.md).
+
 ## Large, medium, and small cities differ materially
 
 - **Large metros** may have GIS cells, open-data portals, and vendor relationships—but still face **siloed** operational systems and uneven quality.
@@ -54,4 +56,4 @@ Where signals are uncertain, interpolated, or socially sensitive, **field verifi
 4. **Forward-deployment-friendly**: configuration, bounded slices, and agent-assisted iteration must be safe and repeatable.  
 5. **Provenance and blocked uses by default**: trust is earned with transparency, not assumed from a logo on a slide.
 
-For how the AI Centre of Excellence operationalizes this in the field, see [`docs/AI_COE_OPERATING_STRATEGY.md`](AI_COE_OPERATING_STRATEGY.md). For sequencing domains in product work, see [`docs/USE_CASE_ROADMAP.md`](USE_CASE_ROADMAP.md). For day-to-day engineering practice (layers, conformance, vertical slices), see [`docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`](DOMAIN_DEVELOPMENT_PLAYBOOK.md) and the consolidated review [`docs/reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md`](reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md).
+For how the AI Centre of Excellence operationalizes this in the field, see [`docs/AI_COE_OPERATING_STRATEGY.md`](AI_COE_OPERATING_STRATEGY.md). For sequencing domains in product work, see [`docs/USE_CASE_ROADMAP.md`](USE_CASE_ROADMAP.md). For day-to-day engineering practice (layers, conformance, vertical slices), see [`docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`](DOMAIN_DEVELOPMENT_PLAYBOOK.md) and the consolidated review [`docs/reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md`](reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md). For **agency nodes** and **cross-agency coordination** (including future network specs), see [`docs/AGENCY_NODE_MODEL.md`](AGENCY_NODE_MODEL.md).

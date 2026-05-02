@@ -14,6 +14,7 @@ If the required specification does not exist, the agent must first propose or ad
 - Consolidated review (layout, conformance, forward deployment, tooling): [`docs/reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md`](reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md).
 - **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → delegates to **`src.pipeline`** today. **`src/`** = **legacy AQ MVP** only. **New domains and shared logic** → **`urban_platform/`** only (see root **`AGENTS.md`** *Code layout*).
 - **Dashboards** must use **`urban_platform/sdk`**; consumer payloads live under **`urban_platform/applications/<domain>/`**, not ad hoc in Streamlit.
+- **Deployment & federation (node-first, not one monolithic city instance):** [`FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](FEDERATED_DEPLOYMENT_ARCHITECTURE.md), [`AGENCY_NODE_MODEL.md`](AGENCY_NODE_MODEL.md), [`CROSS_AGENCY_COORDINATION_LAYER.md`](CROSS_AGENCY_COORDINATION_LAYER.md) — Network Layer is **contract-aware** and **domain-agnostic**; domain meaning stays in specs/applications. Root **`AGENTS.md`** has agent rules for federation.
 
 ## Mandatory conformance
 

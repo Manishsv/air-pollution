@@ -59,6 +59,20 @@ A PR that changes behavior is not acceptable unless it includes:
 - **Municipal and departmental data integrations are later-stage** and must be **explicitly authorized** (contracts, access controls, consumer profiles, and governance)—see domain specs (e.g. `authorized_municipal_inputs` for `property_buildings`).
 - **Property & Buildings:** Phase 1 is **open-data built-environment change detection** (footprints, EO change, wards, roads, settlement context), **not** property-tax optimization or permit enforcement. Use `docs/USE_CASE_ROADMAP.md`, `specifications/domain_specs/property_buildings.v1.yaml`, and `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md` before designing work.
 
+### Forward deployment city profiles
+
+- **Do not hard-code** city-specific assumptions (priorities, data availability, stakeholder names, boundary quirks) into shared AirOS modules; keep those in a **deployment-scoped city profile**, not sprinkled through `urban_platform/` or `src/` as literals.
+- **Use** `deployments/templates/city_profile/` (see **`docs/CITY_PROFILE_TEMPLATE.md`**) so local deployment context stays **explicit, versionable in private repos, and specs-first-aligned**.
+- **Do not commit** real sensitive city data—credentials, restricted datasets, unpublished MoUs, or personal stakeholder contact details—to the **public** AirOS repository. Use **templates and examples** here; operational profiles belong in **private deployment** workspaces unless the maintainer explicitly authorizes otherwise.
+- A filled city profile is **not** a substitute for **provider/domain/consumer specs**—it informs **prioritization and access reality**, while contracts remain canonical.
+
+### Federation and the AirOS Network Layer
+
+- Treat AirOS as **node-first** and **federation-ready**: **do not** assume a single monolithic municipal deployment covers all agencies (`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`, `docs/AGENCY_NODE_MODEL.md`).
+- The **AirOS Network Layer** (coordination intent: `docs/CROSS_AGENCY_COORDINATION_LAYER.md`) is **domain-agnostic**, **contract-aware**, and **policy-enforcing**—a protocol/policy plane—not a domain reasoning layer. **Do not** embed PM2.5 thresholds, flood levels, enforcement logic, or other domain semantics in network/coordination implementations; keep meaning in **domain specs** and **applications**.
+- **Email** is a plausible **Phase 1 transport adapter** only; it is **not** the Network Layer. The same **logical message envelope** should port to APIs, buses, queues, etc.
+- **Do not implement** cross-agency networking adapters **without specs** (`specifications/`); federation docs enumerate **future** schema filenames—implement only after contracts exist.
+
 ### Urban governance & AI CoE context (read before sequencing or major implementation)
 
 Before changing **domain sequencing**, **integration assumptions**, or **cross-agency consumer shapes**, read:
@@ -78,6 +92,8 @@ These documents explain **why** open-data-first phases and **specs as coordinati
 - **Use-case roadmap**: `docs/USE_CASE_ROADMAP.md`
 - **Data-source discovery**: `docs/DATA_SOURCE_CATALOG.md`
 - **Domain development playbook (Cursor / agents)**: `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`
+- **City profile template (forward deployment)**: `docs/CITY_PROFILE_TEMPLATE.md` · `deployments/templates/city_profile/`
+- **Federated deployment & network layer**: `docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md` · `docs/AGENCY_NODE_MODEL.md` · `docs/CROSS_AGENCY_COORDINATION_LAYER.md`
 - **Contract architecture + `src/` vs `urban_platform/` layout**: `specifications/ARCHITECTURE_NOTE.md`
 - **Machine-readable policy**: `specifications/spec_policy.yaml` (and `specifications/specs_policy.yaml`)
 

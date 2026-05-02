@@ -2,6 +2,12 @@
 
 Use this playbook in **Cursor or any coding agent** so new domains and phases progress **without ad-hoc external guidance**. AirOS is **specs-first**: contracts and domain semantics lead implementation.
 
+### City profile (forward deployment)
+
+Forward deployment engineers should **create a city profile** before starting **city-specific** sequencing, stakeholder alignment, or data-access assumptions—or before steering multi-domain priorities for a municipality. Copy `deployments/templates/city_profile/` and follow **`docs/CITY_PROFILE_TEMPLATE.md`**. Keep **real jurisdictional or sensitive operational data** out of the public platform repository; maintain live profiles in a **private deployment** repo or secure workspace aligned with institutional policy.
+
+**Multi-agency / federation:** AirOS is **node-first**; a city profile alone is **not** enough when several agencies run separate deployments or need **cross-node** coordination. Read **`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`**, **`docs/AGENCY_NODE_MODEL.md`**, and **`docs/CROSS_AGENCY_COORDINATION_LAYER.md`** before designing inter-agency flows—the **Network Layer** routes **contract-shaped** traffic and enforces **policy**; it does **not** embody domain semantics or override agency authority.
+
 ## Before writing code
 
 1. **Read** `docs/URBAN_CONTEXT_INDIA.md` and `docs/AI_COE_OPERATING_STRATEGY.md` so sequencing and integration choices match **Indian urban governance reality** and the **AI CoE + forward deployment** model.
@@ -41,7 +47,7 @@ The **flood** (`flood_risk`) and **property/buildings** (`property_buildings`) s
 6. `tests/test_<domain>_*.py`
 7. `review_dashboard/components/<domain>_panel.py` (+ panel demo test)
 
-**Domain maturity** checks for new domains are not automatic: `tools/ai_dev_supervisor/domain_maturity_probe.py` currently lists **flood_risk** and **property_buildings** only—extend the probe (or future config-driven checklists) when you add a third domain.
+**Domain maturity** checks load **YAML checklists** from `tools/ai_dev_supervisor/domain_checklists/` (e.g. `flood_risk`, `property_buildings`). Add `{domain}.yaml` there when you add a vertical slice—not hard-coded maturity in Python.
 
 ## Domain spec vs runtime (semantic discipline)
 

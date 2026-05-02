@@ -31,6 +31,10 @@ Forward deployment (“FD”) engineers work **inside or alongside** city contex
 - Use **specs as the handshake** between agencies: shared consumer contracts reduce miscommunication when multiple vendors touch the same city.
 - Expect **partial participation**: some agencies join late—**progressive adoption** is normal.
 
+### Node-first and federation-ready posture
+
+AirOS is **not** “one monolithic city server” by default. Treat each serious agency participation as a potential **AirOS Node** (standalone or federated) with its own **data ownership** and **contracts**—see [`docs/AGENCY_NODE_MODEL.md`](AGENCY_NODE_MODEL.md). When agencies must exchange **decision packets**, **tasks**, or **events**, plan for the optional **AirOS Network Layer**: **domain-agnostic**, **contract-aware**, **policy-enforcing** coordination—**email** may serve as an early **transport adapter**, not the layer itself ([`docs/CROSS_AGENCY_COORDINATION_LAYER.md`](CROSS_AGENCY_COORDINATION_LAYER.md), [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](FEDERATED_DEPLOYMENT_ARCHITECTURE.md)).
+
 ## Local priorities drive domain sequencing
 
 The CoE does not force a single national domain order. **City A** may need flood and drainage first; **City B** may need air and heat. FD teams propose **bounded vertical slices** per city; the **roadmap** and **domain specs** record the rationale. The **core** stays shared; **activation order** is local.
