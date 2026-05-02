@@ -1,0 +1,61 @@
+# =============================================================================
+# EXAMPLE APPLICATION REGISTRY (local demo) — fixture/demo data only. No secrets.
+# This is not runtime plugin loading; the deployment runner uses an allowlist.
+# =============================================================================
+
+registry_id: flood-local-demo-application-registry
+version: v1
+updated_at: "2026-05-02T00:00:00Z"
+scope: deployment
+deployment_id: flood_local_demo
+
+applications:
+  - application_id: flood_risk_dashboard_payload
+    label: Flood risk dashboard payload builder
+    domain_id: flood_risk
+    consumer_contracts: [consumer_flood_risk_dashboard]
+    payload_builders: [urban_platform.applications.flood.dashboard_payload.build_flood_risk_dashboard_payload]
+    sdk_api_outputs_consumed: [flood_risk_dashboard]
+    packet_types: []
+    field_task_types: []
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/flood_risk.v1.yaml#safety_gates
+      - specifications/domain_specs/flood_risk.v1.yaml#blocked_uses
+    examples:
+      - examples/flood/flood_risk_dashboard.sample.json
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference
+
+  - application_id: flood_decision_packets
+    label: Flood decision packet builder
+    domain_id: flood_risk
+    consumer_contracts: [consumer_flood_decision_packet]
+    payload_builders: [urban_platform.applications.flood.decision_packets.build_flood_decision_packets]
+    sdk_api_outputs_consumed: [flood_decision_packet]
+    packet_types: [consumer_flood_decision_packet]
+    field_task_types: [consumer_field_verification_task]
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/flood_risk.v1.yaml#safety_gates
+      - specifications/domain_specs/flood_risk.v1.yaml#blocked_uses
+    examples:
+      - examples/flood/flood_decision_packet.sample.json
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference
+
+  - application_id: flood_field_verification_tasks
+    label: Flood field verification task builder
+    domain_id: flood_risk
+    consumer_contracts: [consumer_field_verification_task]
+    payload_builders: [urban_platform.applications.flood.field_tasks.build_flood_field_verification_tasks]
+    sdk_api_outputs_consumed: [field_verification_task]
+    packet_types: []
+    field_task_types: [consumer_field_verification_task]
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/flood_risk.v1.yaml#field_verification_requirements
+      - specifications/domain_specs/flood_risk.v1.yaml#blocked_uses
+    examples: []
+    conformance_requirements: [schema_valid, manifest_registered]
+    enabled_by_default: true
+    status: reference

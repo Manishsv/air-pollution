@@ -1,0 +1,28 @@
+# =============================================================================
+# EXAMPLE DEPLOYMENT (local demo) — fixture/demo data only. No secrets.
+# =============================================================================
+
+deployment_id: flood_local_demo
+deployment_name: Flood local demo (fixtures only)
+deployment_type: single_agency
+owner_organization: EXAMPLE_ORG_PLACEHOLDER
+environment: local
+
+jurisdiction_refs:
+  - jurisdiction:demo_city
+
+enabled_domains:
+  - flood_risk
+
+enabled_provider_registries:
+  - deployments/examples/flood_local_demo/provider_registry.yaml
+enabled_application_registries:
+  - deployments/examples/flood_local_demo/application_registry.yaml
+
+notes: >-
+  Runs the flood vertical slice using only fixture JSON files under
+  specifications/examples/flood/. Decision support only; field verification required.
+
+no_secrets_notice: >-
+  No secrets, credentials, API keys, or restricted personal data are stored in this
+  example deployment. It uses repository fixtures only.

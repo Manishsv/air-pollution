@@ -1,0 +1,63 @@
+# =============================================================================
+# EXAMPLE PROVIDER REGISTRY (local demo) — fixture/demo data only. No secrets.
+# This is not runtime plugin loading; the deployment runner uses an allowlist.
+# =============================================================================
+
+registry_id: flood-local-demo-provider-registry
+version: v1
+updated_at: "2026-05-02T00:00:00Z"
+scope: deployment
+deployment_id: flood_local_demo
+
+providers:
+  - provider_id: rainfall_fixture
+    label: Rainfall observation fixture provider
+    domain_ids: [flood_risk]
+    provider_contract: provider_rainfall_observation_feed
+    connector_module: urban_platform.connectors.flood.ingest_file.ingest_rainfall_observation_feed_json
+    input_method: file
+    output_platform_object_types: [Observation]
+    examples:
+      - examples/flood/rainfall_observation.sample.json
+    provenance_behavior:
+      strategy: pass_through
+      notes: "Fixture JSON validated against provider contract."
+    quality_flags: [fixture]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference
+    fixture_path: specifications/examples/flood/rainfall_observation.sample.json
+
+  - provider_id: flood_incident_fixture
+    label: Flood incident fixture provider
+    domain_ids: [flood_risk]
+    provider_contract: provider_flood_incident_feed
+    connector_module: urban_platform.connectors.flood.ingest_file.ingest_flood_incident_feed_json
+    input_method: file
+    output_platform_object_types: [Event]
+    examples:
+      - examples/flood/flood_incident.sample.json
+    provenance_behavior:
+      strategy: pass_through
+    quality_flags: [fixture, unverified]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference
+    fixture_path: specifications/examples/flood/flood_incident.sample.json
+
+  - provider_id: drainage_asset_fixture
+    label: Drainage asset fixture provider
+    domain_ids: [flood_risk]
+    provider_contract: provider_drainage_asset_feed
+    connector_module: urban_platform.connectors.flood.ingest_file.ingest_drainage_asset_feed_json
+    input_method: file
+    output_platform_object_types: [Asset]
+    examples:
+      - examples/flood/drainage_asset.sample.json
+    provenance_behavior:
+      strategy: pass_through
+    quality_flags: [fixture]
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference
+    fixture_path: specifications/examples/flood/drainage_asset.sample.json

@@ -173,6 +173,19 @@ This repository already contains several “proto-plugins,” but they are not y
 4. **Introduce a dashboard shell discovery mechanism** (registry-driven panel list) while keeping current panels working; no domain logic moves into UI.  
 5. **Add a placeholder network adapter registry** and ensure envelope/receipt artifacts remain transport-agnostic and validated by conformance before any adapter code is written.
 
+### Registry-driven deployment POC (minimal, controlled)
+
+This repo includes a **minimal proof of concept** runner that demonstrates **AirOS Core + deployment-scoped registries** (providers + applications) can execute a vertical slice **without** a general plugin runtime:
+
+- Example deployment: `deployments/examples/flood_local_demo/`
+- Runner: `python tools/deployment_runner/run_deployment.py --deployment deployments/examples/flood_local_demo`
+
+The runner is intentionally constrained:
+
+- Uses an **explicit allowlist** of safe functions (no dynamic imports from arbitrary registry strings).
+- Uses **fixture JSON** under `specifications/examples/flood/` only (no external APIs).
+- Writes outputs under `data/outputs/deployments/<deployment_id>/` and validates them against consumer contracts.
+
 ---
 
 ## Cross-links

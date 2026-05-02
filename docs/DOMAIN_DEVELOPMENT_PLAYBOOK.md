@@ -83,6 +83,7 @@ Conformance **`audit_domain_specs`** validates **required top-level keys** in do
 - Run `python main.py --step conformance` and fix schema / example issues before expanding scope.
 - Run `python -m pytest -q` on behavior-affecting changes.
 - Optional: `python tools/ai_dev_supervisor/run_review.py --run-conformance --domain <domain_key>` for governance + maturity snapshot (and optional dashboard URL probe).
+- Optional (deployment POC): `python tools/deployment_runner/run_deployment.py --deployment deployments/examples/flood_local_demo` to demonstrate a registry-driven local vertical slice using fixtures only.
 - **CI:** When the repository adds automated workflows, conformance + tests should run there too; until then, treat **local** runs as the merge gate (`docs/USE_CASE_ROADMAP.md` Phase 2).
 
 ## Implement one bounded layer at a time
