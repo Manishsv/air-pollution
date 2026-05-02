@@ -15,6 +15,7 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 from conformance_probe import probe_conformance  # noqa: E402
+from dashboard_probe import probe_dashboard  # noqa: E402
 from domain_maturity_probe import probe_domain_maturity  # noqa: E402
 from spec_policy_probe import probe_spec_policy  # noqa: E402
 
@@ -186,6 +187,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
     folders = report.get("expected_spec_folders", {})
     governance = report.get("governance", {})
     conformance = report.get("conformance", {})
+    dashboard = report.get("dashboard_probe")
     domain_maturity = report.get("domain_maturity")
 
     risks = report.get("risks", [])
@@ -233,6 +235,33 @@ def _render_markdown(report: dict[str, Any]) -> str:
         for e in conformance["errors"]:
             lines.append(f"  - `{e}`")
     lines.append("")
+
+    if dashboard is not None:
+        lines.append("### Dashboard smoke probe (optional)")
+        lines.append(f"- **dashboard_url**: `{dashboard.get('dashboard_url')}`")
+        lines.append(f"- **attempted**: `{bool(dashboard.get('attempted'))}`")
+        lines.append(f"- **reachable**: `{bool(dashboard.get('reachable'))}`")
+        if dashboard.get("status_code") is not None:
+            lines.append(f"- **status_code**: `{dashboard.get('status_code')}`")
+        matched = dashboard.get("matched_labels") or []
+        missing = dashboard.get("missing_labels") or []
+        lines.append(f"- **matched_labels**: `{len(matched)}`")
+        if matched:
+            for lab in matched:
+                lines.append(f"  - `{lab}`")
+        lines.append(f"- **missing_labels**: `{len(missing)}`")
+        if missing:
+            for lab in missing:
+                lines.append(f"  - `{lab}`")
+        if dashboard.get("risks"):
+            lines.append("- **dashboard_risks**:")
+            for r in dashboard["risks"]:
+                lines.append(f"  - {r}")
+        if dashboard.get("errors"):
+            lines.append("- **dashboard_errors**:")
+            for e in dashboard["errors"]:
+                lines.append(f"  - `{e}`")
+        lines.append("")
 
     if domain_maturity is not None:
         lines.append("### Domain maturity")
@@ -282,6 +311,12 @@ def _write_reports(repo_root: Path, report: dict[str, Any]) -> tuple[Path, Path]
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local specs-first supervisor review (no external LLM).")
     parser.add_argument(
+        "--dashboard-url",
+        type=str,
+        default=None,
+        help="Optional Streamlit dashboard URL to smoke-probe (e.g. http://localhost:8501).",
+    )
+    parser.add_argument(
         "--domain",
         type=str,
         default=None,
@@ -303,6 +338,7 @@ def main() -> int:
     domain_maturity = (
         probe_domain_maturity(repo_root, args.domain) if args.domain else None
     )
+    dashboard_probe = probe_dashboard(args.dashboard_url) if args.dashboard_url else None
 
     risks = _risk_register(
         spec_policy_loaded=policy.loaded,
@@ -321,6 +357,7 @@ def main() -> int:
         "expected_spec_folders": spec_folders,
         "governance": asdict(governance),
         "conformance": conformance.to_dict(),
+        "dashboard_probe": dashboard_probe.to_dict() if dashboard_probe else None,
         "domain_maturity": domain_maturity.to_dict() if domain_maturity else None,
         "risks": risks,
         "recommended_next_task": _recommended_next_task(
