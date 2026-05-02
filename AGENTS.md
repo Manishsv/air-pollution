@@ -44,12 +44,32 @@ A PR that changes behavior is not acceptable unless it includes:
 - **No weakening of safeguards** (provenance/reliability/human-review/conformance)
 - **Conformance evidence**: `python main.py --step conformance` passes
 
+### Domain sequencing and access constraints
+
+- **Start with the lowest-friction, lowest-risk data** that can demonstrate public value (open APIs, open licenses, fixtures, and clearly bounded demos).
+- **Do not assume government system integrations are available at Phase 1.** Registries, permits, tax rolls, and cadastral systems often require procurement, legal basis, and operational agreements.
+- **For sensitive domains**, begin with **open-data observability** and **field-review candidates**—not automated enforcement, tax, or ownership conclusions.
+- **Municipal and departmental data integrations are later-stage** and must be **explicitly authorized** (contracts, access controls, consumer profiles, and governance)—see domain specs (e.g. `authorized_municipal_inputs` for `property_buildings`).
+- **Property & Buildings:** Phase 1 is **open-data built-environment change detection** (footprints, EO change, wards, roads, settlement context), **not** property-tax optimization or permit enforcement. Use `docs/USE_CASE_ROADMAP.md`, `specifications/domain_specs/property_buildings.v1.yaml`, and `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md` before designing work.
+
+### Urban governance & AI CoE context (read before sequencing or major implementation)
+
+Before changing **domain sequencing**, **integration assumptions**, or **cross-agency consumer shapes**, read:
+
+- **`docs/URBAN_CONTEXT_INDIA.md`** — why Indian urban governance is fragmented, capacity-variable, and open-data-first by necessity.
+- **`docs/AI_COE_OPERATING_STRATEGY.md`** — how the AI CoE, core platform team, and forward deployment engineers iterate safely with cities.
+
+These documents explain **why** open-data-first phases and **specs as coordination instruments** are default AirOS posture—not optional narrative.
+
 ### Further reading
 
+- **Urban governance context (India)**: `docs/URBAN_CONTEXT_INDIA.md`
+- **AI CoE operating strategy**: `docs/AI_COE_OPERATING_STRATEGY.md`
 - **Specs-first development**: `docs/SPECS_FIRST_DEVELOPMENT.md`
 - **Vision**: `docs/AIR_OS_VISION.md`
 - **Actor model**: `docs/ACTOR_MODEL.md`
 - **Use-case roadmap**: `docs/USE_CASE_ROADMAP.md`
 - **Data-source discovery**: `docs/DATA_SOURCE_CATALOG.md`
+- **Domain development playbook (Cursor / agents)**: `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`
 - **Machine-readable policy**: `specifications/spec_policy.yaml` (and `specifications/specs_policy.yaml`)
 

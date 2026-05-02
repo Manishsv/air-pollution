@@ -2,6 +2,8 @@
 
 This roadmap organizes AirOS city-management capabilities into **phases**. Each phase is designed to be specs-first: required provider contracts, platform objects, domain specs, and consumer contracts must exist and conformance must pass before the phase is considered complete.
 
+**Governance and deployment context:** Indian cities differ in capacity, data maturity, and institutional fragmentation—see [`docs/URBAN_CONTEXT_INDIA.md`](URBAN_CONTEXT_INDIA.md). The AI CoE and forward deployment model that configures AirOS per city is described in [`docs/AI_COE_OPERATING_STRATEGY.md`](AI_COE_OPERATING_STRATEGY.md). Together they explain **open-data-first** slices and **progressive** integration sequencing used throughout this roadmap.
+
 ## Phased platform roadmap
 
 ### Phase 1. City base layer
@@ -43,7 +45,7 @@ This roadmap organizes AirOS city-management capabilities into **phases**. Each 
   - “Conformance status + contract coverage”
   - “Data provenance and reliability report”
 - **acceptance criteria**:
-  - conformance step passes in CI/local runs
+  - conformance step passes on **every change** (run `python main.py --step conformance` locally until automated CI is present; then CI **and** local as needed)
   - examples/fixtures validate against their schemas
 
 ### Phase 3. Situational awareness layer
@@ -350,37 +352,80 @@ Initial dashboard:
 - Incident/event overlay
 - Recommended interventions
 
-### Property and Buildings
+### Property and Buildings — phased delivery (open data first)
+
+**Safety (all phases):** Open-data and EO outputs are **change candidates and review prompts** only. They must not be read as legal property records, permit violations, tax liabilities, ownership facts, or enforcement evidence. Privacy, provenance, blocked-use, and human-review safeguards are **not** relaxed when later-stage feeds are added.
+
+#### Phase 1 — Open-data built-environment change detection
+
+**Product framing:** *Built Environment Change Detection* using open or externally obtainable data (OSM, licensed open footprints, satellite / Sentinel–Landsat-style change signals, wards, roads, settlement context). Demonstrate value **before** assuming access to municipal registry, permit, tax, or cadastral systems.
+
 Target actors:
-- Property tax department
-- Town planning department
-- Building permission department
-- Revenue department
-- Ward officers
+- Ward engineers and field inspection teams (non-enforcement context gathering)
+- Town planning / urban analytics (spatial prioritization only)
+- Disaster management (exposure change awareness where relevant)
+- Urban analysts building public-good indicators
 
-Operational questions:
-- Which properties are under-assessed?
-- Where are new buildings appearing?
-- Which buildings may lack permissions?
-- Which areas show high development pressure?
-- Which property records need field verification?
+Primary operational question:
+- **Where does the built environment appear to have changed recently, and which areas may need field review?**
 
-Likely data sources:
-- Property registry
-- Building permits
-- OSM buildings
-- Microsoft/Google building footprints
-- Satellite imagery-derived footprints
-- Street-level surveys
-- Tax payment records
-- Land-use/zoning layers
+Supported questions (Phase 1):
+- Which wards show **built-up area growth** over the **last 6 months or 1 year** (subject to configured time windows and data availability)?
+- Where are **new building / construction candidates** visible from **open data only**?
+- Which areas need **field verification** given stacked signals and uncertainty?
+- Where is open data **coverage weak or stale**, or **license-constrained**?
+- Which locations should be **prioritized later** for municipal data integration (readiness signal—not a system demand)?
 
-Initial dashboard:
-- Property coverage map
-- Building footprint mismatch
-- New construction candidates
-- Assessment gap queue
-- Ward-level revenue risk
+Explicitly **not** supported in Phase 1:
+- Under-assessment or revenue-gap claims
+- Tax demand or reassessment generation from open signals
+- Permit violation or non-compliance verdicts from remote sensing alone
+- Demolition, penalty, or enforcement recommendations from EO/footprints
+- Owner-level analysis or ownership facts as default outputs
+- Automated non-compliance detection without authoritative municipal process
+
+Phase 1 data sources (see `specifications/domain_specs/property_buildings.v1.yaml` → `open_data_inputs`):
+- OSM building footprints
+- Open building footprint datasets where license permits derivatives
+- Satellite-derived change detection and **Sentinel/Landsat-style** indices or external derived products
+- Ward / administrative base layers
+- Roads and settlement context (e.g. **`provider_road_network_feed`**)
+- **Manually uploaded field verification results** when available under a dedicated provider contract and privacy review
+
+Initial dashboard / consumer direction (Phase 1):
+- Built-up **change candidates** and **new construction candidate areas**
+- **Footprint growth** / delta summaries with uncertainty
+- **High-change wards** (or other spatial units) for triage
+- **Field verification queue** with provenance and confidence warnings
+
+#### Phase 2 — Field verification loop
+
+Close the loop between open-signal triage and **structured field outcomes** (tasks, visit notes, photo metadata, tickets) under provider contracts and `field_verification_task` consumer shape. Outputs remain **review evidence**, not legal or tax determinations.
+
+#### Phase 3 — Authorized municipal integration *readiness*
+
+Identify which wards or workflows are **candidates for deeper municipal pipes** (access agreements, DPIA / privacy review, operational owners). AirOS documents readiness; it does **not** auto-onboard government systems.
+
+#### Phase 4 — Registry / permit / tax comparison (authorized officials only)
+
+Where cities authorize feeds, support **human-in-the-loop** comparison and reconciliation for **designated roles** (e.g. planning, revenue)—still gated by `blocked_uses`, provenance, and field verification. No automatic non-compliance or reassessment from AirOS alone.
+
+#### Phase 5 — Official workflow integration (outside automatic AirOS enforcement)
+
+Integrate with municipal case systems or revenue workflows **only** through explicit product and legal design. **Automatic enforcement, tax demands, or permit guilt from AirOS are out of scope** for the platform’s default posture; official decisions remain with the authority.
+
+#### Municipal contracts (later-stage; not Phase 1 defaults)
+
+**Contracts remain** (`property_registry_feed`, `building_permit_feed`, future cadastre): they are **valid later-stage, authorized-integration** specifications—not removed, not required for Phase 1, and not positioned as default public narratives.
+
+Later-stage inputs (examples):
+- Municipal property registry
+- Building permit system
+- Property tax assessment data
+- Cadastral / parcel system
+- Land-use / zoning **authority** datasets (distinct from **public** open zoning layers used in Phase 1)
+
+Later-stage decisions must still satisfy privacy, provenance, `blocked_uses`, `required_human_review`, and `field_verification_requirements` in the domain spec—**no** weakening of safeguards and **no** enforcement/tax automation added by specification fiat.
 
 ### Water
 Target actors:
@@ -440,4 +485,4 @@ The recommended order optimizes for:
 - **operational safety** (high-risk domains early, with verification-first patterns baked in)
 - **data availability** (weather/open sources first, then heavier enterprise/registry integrations)
 
-Air quality is first as the reference implementation. Flood/stormwater comes next because it reuses weather + spatial primitives and benefits from verification-first workflows. Property/buildings and water operations establish city registries and asset-centric operations. Traffic, sanitation, public assets, heat, emergency response, and planning/simulation then build on the same platform layers with increasing cross-domain coupling.
+Air quality is first as the reference implementation. Flood/stormwater comes next because it reuses weather + spatial primitives and benefits from verification-first workflows. **Property/buildings** is reframed as **open-data built-environment intelligence** (footprints, EO change, wards, public land use, roads)—field-review triage without assuming municipal registry or permit integration. Water operations remain asset-centric where utilities expose data. Traffic, sanitation, public assets, heat, emergency response, and planning/simulation then build on the same platform layers with increasing cross-domain coupling.

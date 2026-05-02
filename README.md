@@ -12,6 +12,8 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Actor model**: [`docs/ACTOR_MODEL.md`](docs/ACTOR_MODEL.md)
 - **Use-case roadmap**: [`docs/USE_CASE_ROADMAP.md`](docs/USE_CASE_ROADMAP.md)
 - **Data-source discovery**: [`docs/DATA_SOURCE_CATALOG.md`](docs/DATA_SOURCE_CATALOG.md)
+- **Urban governance context (India)**: [`docs/URBAN_CONTEXT_INDIA.md`](docs/URBAN_CONTEXT_INDIA.md)
+- **AI CoE operating strategy**: [`docs/AI_COE_OPERATING_STRATEGY.md`](docs/AI_COE_OPERATING_STRATEGY.md)
 - **Specs policy (machine-readable)**: [`specifications/spec_policy.yaml`](specifications/spec_policy.yaml)
 
 ### What is AirOS?
