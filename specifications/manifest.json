@@ -247,6 +247,12 @@
       "schema_path": "network_contracts/message_envelope.v1.schema.json",
       "stability": "documented"
     },
+    "network_delivery_receipt_v1": {
+      "description": "AirOS Network Layer: delivery/acknowledgement receipt for envelope messages—transport and pipeline status without domain interpretation.",
+      "contract_type": "network_contract",
+      "schema_path": "network_contracts/delivery_receipt.v1.schema.json",
+      "stability": "documented"
+    },
 
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
@@ -317,6 +323,10 @@
     "example_network_message_envelope_v1": {
       "schema_name": "network_message_envelope_v1",
       "path": "examples/network/message_envelope.sample.json"
+    },
+    "example_network_delivery_receipt_v1": {
+      "schema_name": "network_delivery_receipt_v1",
+      "path": "examples/network/delivery_receipt.sample.json"
     }
   }
 }

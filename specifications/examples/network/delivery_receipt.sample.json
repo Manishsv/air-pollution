@@ -1,0 +1,20 @@
+{
+  "receipt_id": "rcv-demo-001-PLACEHOLDER-ULB-field-ops-NO-REAL-CITY",
+  "message_id": "demo-msg-ae7c8d3d-aq-ftask-PLACEHOLDER-NO-REAL-CITY",
+  "correlation_id": "thread-aq-hotspot-review-CORR-PLACEHOLDER",
+  "from_node": "agency-node-ulb-field-ops-PLACEHOLDER",
+  "to_node": "agency-node-pcb-central-PLACEHOLDER",
+  "receipt_type": "delivery_ack",
+  "status": "received",
+  "received_at": "2026-05-02T18:32:01Z",
+  "processed_at": "2026-05-02T18:32:02Z",
+  "retryable": false,
+  "delivery_attempt": 1,
+  "transport": "email",
+  "transport_message_ref": "Message-ID:<PLACEHOLDER.Transport.MessageId@agency.example.invalid>",
+  "audit_metadata": {
+    "relay_node": "network-gateway-PLACEHOLDER-01",
+    "egress_ts": "2026-05-02T18:32:03Z",
+    "receipt_generation": "inbound-gateway-v0-placeholder"
+  }
+}

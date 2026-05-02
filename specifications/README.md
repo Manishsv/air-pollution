@@ -25,6 +25,7 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
 
 - **Network contracts** (`network_contracts/`)
   - **`message_envelope.v1`** — domain-agnostic **routing envelopes** connecting **AirOS nodes** (`schema_ref` + `payload_ref` / hash; no embedded domain payloads). Separate **transports** (email/API/queues) attach around this shape per `docs/CROSS_AGENCY_COORDINATION_LAYER.md`.
+  - **`delivery_receipt.v1`** — carrier and pipeline-level **delivery / acknowledgement** records tied to **`message_id`**, without payload or domain semantics.
   - The Network Layer is **protocol-like**: **contract-aware** and **policy-oriented**, never a substitute for **domain specs** or **agency decisions**.
 
 - **OpenAPI stubs** (`openapi/`)

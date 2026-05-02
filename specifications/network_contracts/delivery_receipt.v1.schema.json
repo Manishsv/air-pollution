@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/network/v1/delivery_receipt",
+  "title": "AirOS Network Layer: delivery / acknowledgement receipt (v1)",
+  "description": "Domain-agnostic transport and processing receipt for envelopes (message_envelope.v1). Reports delivery or processing disposition without inspecting payload semantics—no pollutants, thresholds, hazard levels, permits, SLA logic, congestion models, enforcement outcomes, tax logic, or other domain-derived decisions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_id",
+    "message_id",
+    "from_node",
+    "to_node",
+    "receipt_type",
+    "status",
+    "received_at",
+    "retryable",
+    "delivery_attempt",
+    "transport",
+    "transport_message_ref",
+    "audit_metadata"
+  ],
+  "properties": {
+    "receipt_id": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Unique receipt idempotency identifier."
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Message id being acknowledged (typically message_envelope.message_id)."
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "description": "Carried from envelope.correlation_id when present."
+    },
+    "from_node": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reporting node issuing this receipt (often the receiver or intermediary)."
+    },
+    "to_node": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Recipient of the receipt telemetry (often original sender or monitoring hub)—routing metadata only."
+    },
+    "receipt_type": {
+      "type": "string",
+      "enum": ["delivery_ack", "delivery_nack", "processing_ack", "processing_nack", "status_update"]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "delivered",
+        "received",
+        "accepted",
+        "rejected",
+        "processing",
+        "processed",
+        "failed",
+        "expired"
+      ]
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Wall-clock ingestion of the associated message into this node's transport/agent boundary."
+    },
+    "processed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When optional processing/hand-off completed locally (routing pipeline only)."
+    },
+    "error_code": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Carrier- or middleware-defined code (opaque to domain logic)."
+    },
+    "error_message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Carrier-safe diagnostic hint; must not expose restricted payload excerpts."
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "Whether the delivery/processing semantics allow a safe retry policy."
+    },
+    "retry_after_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Backoff hint for callers when retryable is true."
+    },
+    "delivery_attempt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic counter for carrier attempts correlated to message_id."
+    },
+    "transport": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Carrier label (e.g. email, api, webhook, mq, sftp)—not interchange format details."
+    },
+    "transport_message_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque carrier tracking id (Message-ID, webhook delivery id, queue offset)—no payload."
+    },
+    "audit_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Hop counts, SLA timers, span ids—operational lineage only.",
+      "properties": {
+        "relay_node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "egress_ts": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
