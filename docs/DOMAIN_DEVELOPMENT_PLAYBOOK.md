@@ -19,6 +19,8 @@ Forward deployment engineers should **create a city profile** before starting **
 
 For a **repo-specific** architecture snapshot (layout, conformance, gaps, supervisor tooling), see **`docs/reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md`** before large refactors or new domains.
 
+For the design direction on keeping **AirOS Core** independent of specific providers and consumers, see **`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`**.
+
 ## Repository layout (use the right layer)
 
 **Authoritative detail:** `specifications/ARCHITECTURE_NOTE.md` → section **“Repository code layout: `src/` vs `urban_platform/`”** (current state, **ownership table**, migration principles, and **suggested AQ migration sequence**).
