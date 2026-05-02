@@ -1,0 +1,168 @@
+# Declarative maturity checklist for AI dev supervisor (file-existence gates).
+# See tools/ai_dev_supervisor/domain_maturity_probe.py
+
+domain_id: flood_risk
+label: Flood risk
+
+open_data_first_sequence: []
+
+recommended_next_by_stage:
+  complete_read_only_vertical_slice: >-
+    Add dashboard smoke testing and/or persist flood generated artifacts from fixtures or configured inputs.
+
+checklist_groups:
+  - id: domain_spec
+    label: Domain specification
+    items:
+      - id: flood_domain_spec_v1
+        label: Flood risk domain spec
+        path: specifications/domain_specs/flood_risk.v1.yaml
+        required: true
+        category: domain_spec
+
+  - id: provider_contracts
+    label: Provider contracts
+    items:
+      - id: rainfall_observation_feed
+        label: Rainfall observation feed schema
+        path: specifications/provider_contracts/rainfall_observation_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: flood_incident_feed
+        label: Flood incident feed schema
+        path: specifications/provider_contracts/flood_incident_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: drainage_asset_feed
+        label: Drainage asset feed schema
+        path: specifications/provider_contracts/drainage_asset_feed.v1.schema.json
+        required: true
+        category: provider_contract
+
+  - id: consumer_contracts
+    label: Consumer contracts
+    items:
+      - id: flood_risk_dashboard_consumer
+        label: Flood risk dashboard consumer schema
+        path: specifications/consumer_contracts/flood_risk_dashboard.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: flood_decision_packet_consumer
+        label: Flood decision packet consumer schema
+        path: specifications/consumer_contracts/flood_decision_packet.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: field_verification_task_flood
+        label: Field verification task schema
+        path: specifications/consumer_contracts/field_verification_task.v1.schema.json
+        required: true
+        category: consumer_contract
+
+  - id: examples
+    label: Examples
+    items:
+      - id: ex_rainfall_observation
+        label: Rainfall observation sample
+        path: specifications/examples/flood/rainfall_observation.sample.json
+        required: true
+        category: example
+      - id: ex_flood_incident
+        label: Flood incident sample
+        path: specifications/examples/flood/flood_incident.sample.json
+        required: true
+        category: example
+      - id: ex_drainage_asset
+        label: Drainage asset sample
+        path: specifications/examples/flood/drainage_asset.sample.json
+        required: true
+        category: example
+      - id: ex_flood_risk_dashboard
+        label: Flood risk dashboard sample
+        path: specifications/examples/flood/flood_risk_dashboard.sample.json
+        required: true
+        category: example
+      - id: ex_flood_decision_packet
+        label: Flood decision packet sample
+        path: specifications/examples/flood/flood_decision_packet.sample.json
+        required: true
+        category: example
+
+  - id: ingestion
+    label: Ingestion
+    items:
+      - id: flood_ingest_file
+        label: Flood file ingest connector
+        path: urban_platform/connectors/flood/ingest_file.py
+        required: true
+        category: ingestion
+
+  - id: processing
+    label: Processing
+    items:
+      - id: flood_features
+        label: Flood feature builders
+        path: urban_platform/processing/flood/features.py
+        required: true
+        category: processing
+
+  - id: application
+    label: Application payloads
+    items:
+      - id: flood_dashboard_payload
+        label: Flood dashboard payload
+        path: urban_platform/applications/flood/dashboard_payload.py
+        required: true
+        category: application
+      - id: flood_decision_packets
+        label: Flood decision packets
+        path: urban_platform/applications/flood/decision_packets.py
+        required: true
+        category: application
+      - id: flood_field_tasks
+        label: Flood field tasks
+        path: urban_platform/applications/flood/field_tasks.py
+        required: true
+        category: application
+
+  - id: dashboard
+    label: Dashboard presentation
+    items:
+      - id: flood_panel
+        label: Flood review dashboard panel
+        path: review_dashboard/components/flood_panel.py
+        required: true
+        category: dashboard
+
+  - id: tests
+    label: Tests
+    items:
+      - id: test_flood_ingestion
+        label: Flood ingestion tests
+        path: tests/test_flood_ingestion.py
+        required: true
+        category: tests
+      - id: test_flood_features
+        label: Flood features tests
+        path: tests/test_flood_features.py
+        required: true
+        category: tests
+      - id: test_flood_dashboard_payload
+        label: Flood dashboard payload tests
+        path: tests/test_flood_dashboard_payload.py
+        required: true
+        category: tests
+      - id: test_flood_decision_packets
+        label: Flood decision packet tests
+        path: tests/test_flood_decision_packets.py
+        required: true
+        category: tests
+      - id: test_flood_field_tasks
+        label: Flood field task tests
+        path: tests/test_flood_field_tasks.py
+        required: true
+        category: tests
+      - id: test_flood_dashboard_panel_demo
+        label: Flood dashboard panel demo test
+        path: tests/test_flood_dashboard_panel_demo.py
+        required: true
+        category: tests

@@ -2,19 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-# Open-data-first maturity path for `property_buildings` (see docs/USE_CASE_ROADMAP.md).
-PROPERTY_BUILDINGS_OPEN_DATA_SEQUENCE: tuple[str, ...] = (
-    "1. Domain spec: property_buildings.v1.yaml (phasing, open_data_inputs, authorized_municipal_inputs, blocked_uses, required_human_review).",
-    "2. Open-data provider contracts + examples: building_footprint, ward_boundary, satellite_change_signal, land_use; road_network_feed for context.",
-    "3. Open-data feature scaffolding: urban_platform/processing/property_buildings/open_data_features.py (+ tests).",
-    "4. Open-data-aligned dashboard payload: consumer property_building_dashboard + applications/property_buildings/dashboard_payload.py.",
-    "5. Review packet: consumer property_building_review_packet + review_packets.py.",
-    "6. Field verification task: field_verification_task contract + field_tasks.py.",
-    "7. Read-only dashboard: review_dashboard/components/property_buildings_panel.py (+ panel demo test).",
-    "8. Later-stage municipal integration contracts: property_registry_feed, building_permit_feed (specs only until authorized; not Phase 1 defaults).",
-)
+import yaml
+
+CHECKLISTS_DIR = Path(__file__).resolve().parent / "domain_checklists"
+
+
+def _unknown_domain_recommended(domain: str) -> str:
+    return (
+        "Create a domain checklist at "
+        f"tools/ai_dev_supervisor/domain_checklists/{domain}.yaml."
+    )
 
 
 @dataclass(frozen=True)
@@ -31,89 +30,75 @@ class DomainMaturityResult:
         return asdict(self)
 
 
-def _required_paths_for_domain(domain: str) -> Optional[list[str]]:
-    if domain == "flood_risk":
-        return [
-            # domain spec
-            "specifications/domain_specs/flood_risk.v1.yaml",
-            # provider contracts
-            "specifications/provider_contracts/rainfall_observation_feed.v1.schema.json",
-            "specifications/provider_contracts/flood_incident_feed.v1.schema.json",
-            "specifications/provider_contracts/drainage_asset_feed.v1.schema.json",
-            # consumer contracts
-            "specifications/consumer_contracts/flood_risk_dashboard.v1.schema.json",
-            "specifications/consumer_contracts/flood_decision_packet.v1.schema.json",
-            "specifications/consumer_contracts/field_verification_task.v1.schema.json",
-            # examples
-            "specifications/examples/flood/rainfall_observation.sample.json",
-            "specifications/examples/flood/flood_incident.sample.json",
-            "specifications/examples/flood/drainage_asset.sample.json",
-            "specifications/examples/flood/flood_risk_dashboard.sample.json",
-            "specifications/examples/flood/flood_decision_packet.sample.json",
-            # ingestion
-            "urban_platform/connectors/flood/ingest_file.py",
-            # features
-            "urban_platform/processing/flood/features.py",
-            # dashboard payload
-            "urban_platform/applications/flood/dashboard_payload.py",
-            # decision packets
-            "urban_platform/applications/flood/decision_packets.py",
-            # field tasks
-            "urban_platform/applications/flood/field_tasks.py",
-            # dashboard UI
-            "review_dashboard/components/flood_panel.py",
-            # tests
-            "tests/test_flood_ingestion.py",
-            "tests/test_flood_features.py",
-            "tests/test_flood_dashboard_payload.py",
-            "tests/test_flood_decision_packets.py",
-            "tests/test_flood_field_tasks.py",
-            "tests/test_flood_dashboard_panel_demo.py",
-        ]
-    if domain == "property_buildings":
-        return [
-            # domain spec
-            "specifications/domain_specs/property_buildings.v1.yaml",
-            # provider contracts (open-data MVP path + optional partner feeds)
-            "specifications/provider_contracts/building_footprint_feed.v1.schema.json",
-            "specifications/provider_contracts/ward_boundary_feed.v1.schema.json",
-            "specifications/provider_contracts/satellite_change_signal_feed.v1.schema.json",
-            "specifications/provider_contracts/land_use_feed.v1.schema.json",
-            "specifications/provider_contracts/property_registry_feed.v1.schema.json",
-            "specifications/provider_contracts/building_permit_feed.v1.schema.json",
-            # consumer contracts
-            "specifications/consumer_contracts/property_building_dashboard.v1.schema.json",
-            "specifications/consumer_contracts/property_building_review_packet.v1.schema.json",
-            "specifications/consumer_contracts/field_verification_task.v1.schema.json",
-            # examples
-            "specifications/examples/property_buildings/building_footprint.sample.json",
-            "specifications/examples/property_buildings/ward_boundary.sample.json",
-            "specifications/examples/property_buildings/satellite_change_signal.sample.json",
-            "specifications/examples/property_buildings/land_use.sample.json",
-            "specifications/examples/property_buildings/property_registry.sample.json",
-            "specifications/examples/property_buildings/building_permit.sample.json",
-            "specifications/examples/property_buildings/property_building_dashboard.sample.json",
-            "specifications/examples/property_buildings/property_building_review_packet.sample.json",
-            # features
-            "urban_platform/processing/property_buildings/features.py",
-            "urban_platform/processing/property_buildings/open_data_features.py",
-            # dashboard payload
-            "urban_platform/applications/property_buildings/dashboard_payload.py",
-            # review packets
-            "urban_platform/applications/property_buildings/review_packets.py",
-            # field tasks
-            "urban_platform/applications/property_buildings/field_tasks.py",
-            # dashboard UI (read-only tab) - not implemented yet
-            "review_dashboard/components/property_buildings_panel.py",
-            # tests
-            "tests/test_property_buildings_features.py",
-            "tests/test_property_buildings_open_data_features.py",
-            "tests/test_property_buildings_dashboard_payload.py",
-            "tests/test_property_buildings_review_packets.py",
-            "tests/test_property_buildings_field_tasks.py",
-            "tests/test_property_buildings_dashboard_panel_demo.py",
-        ]
-    return None
+def load_domain_checklist(domain: str) -> Optional[dict[str, Any]]:
+    """
+    Load declarative checklist YAML for ``domain``, or None if no file exists.
+    """
+    path = CHECKLISTS_DIR / f"{domain}.yaml"
+    if not path.is_file():
+        return None
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "__load_error__": True,
+            "__error_message__": str(exc),
+            "domain_id": domain,
+        }
+    if not isinstance(data, dict):
+        return {
+            "__load_error__": True,
+            "__error_message__": "Checklist root must be a mapping",
+            "domain_id": domain,
+        }
+    return data
+
+
+def required_paths_from_checklist(checklist: dict[str, Any]) -> list[str]:
+    """
+    Ordered required relative paths from a loaded checklist (``required: true`` only).
+    Supports ``checklist_groups`` and optional top-level ``items``.
+    """
+    paths: list[str] = []
+    top_items = checklist.get("items")
+    if isinstance(top_items, list):
+        for item in top_items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("required", True) is not True:
+                continue
+            p = item.get("path")
+            if isinstance(p, str) and p.strip():
+                paths.append(p)
+
+    groups = checklist.get("checklist_groups")
+    if isinstance(groups, list):
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            group_items = group.get("items")
+            if not isinstance(group_items, list):
+                continue
+            for item in group_items:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("required", True) is not True:
+                    continue
+                p = item.get("path")
+                if isinstance(p, str) and p.strip():
+                    paths.append(p)
+    return paths
+
+
+def _open_data_sequence_from_checklist(checklist: dict[str, Any]) -> tuple[str, ...]:
+    raw = checklist.get("open_data_first_sequence")
+    if not isinstance(raw, list):
+        return ()
+    out: list[str] = []
+    for line in raw:
+        if isinstance(line, str) and line.strip():
+            out.append(line.strip())
+    return tuple(out)
 
 
 def _stage_for_missing(missing: list[str]) -> str:
@@ -149,22 +134,32 @@ def _stage_for_missing(missing: list[str]) -> str:
     return "partial"
 
 
-def _recommended_next_task(domain: str, missing: list[str], stage: str) -> str:
-    if domain == "flood_risk" and stage == "complete_read_only_vertical_slice":
-        return "Add dashboard smoke testing and/or persist flood generated artifacts from fixtures or configured inputs."
-    if domain == "property_buildings":
-        if stage == "complete_read_only_vertical_slice":
-            return (
-                "Follow docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md: bounded open-data ingest or payload alignment next; "
-                "keep registry/permit contracts later-stage only."
-            )
-        if any(p.startswith("review_dashboard/components/property_buildings_panel.py") for p in missing) or any(
-            p.endswith("test_property_buildings_dashboard_panel_demo.py") for p in missing
-        ):
-            return "Add a read-only `property_buildings` dashboard panel and a panel demo test (no connectors, no tax/enforcement claims)."
+def _recommended_next_task_from_checklist(
+    checklist: dict[str, Any], missing: list[str], stage: str
+) -> str:
+    by_stage = checklist.get("recommended_next_by_stage")
+    if isinstance(by_stage, dict) and stage in by_stage:
+        val = by_stage[stage]
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    rules = checklist.get("recommended_next_when_any_missing_matches")
+    if isinstance(rules, list):
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            msg = rule.get("message")
+            if not isinstance(msg, str) or not msg.strip():
+                continue
+            prefix = rule.get("missing_path_prefix")
+            suffix = rule.get("missing_path_suffix")
+            for m in missing:
+                if isinstance(prefix, str) and prefix and m.startswith(prefix):
+                    return msg.strip()
+                if isinstance(suffix, str) and suffix and m.endswith(suffix):
+                    return msg.strip()
 
     if missing:
-        # keep it simple: prioritize the first missing item
         return f"Add missing maturity item: `{missing[0]}`"
 
     return "Add domain improvements via specs-first sequence, then run conformance."
@@ -173,18 +168,32 @@ def _recommended_next_task(domain: str, missing: list[str], stage: str) -> str:
 def probe_domain_maturity(repo_root: Path, domain: str) -> DomainMaturityResult:
     errors: list[str] = []
 
-    required = _required_paths_for_domain(domain)
-    if required is None:
+    checklist = load_domain_checklist(domain)
+    if checklist is None:
         return DomainMaturityResult(
             domain=domain,
             completed_items=[],
             missing_items=[],
             maturity_stage="unknown_domain",
-            recommended_next_task="Add a domain maturity checklist for this domain.",
-            errors=[f"Unknown domain `{domain}` (no maturity checklist configured)."],
+            recommended_next_task=_unknown_domain_recommended(domain),
+            errors=errors,
             open_data_first_sequence=(),
         )
 
+    if checklist.get("__load_error__"):
+        err = str(checklist.get("__error_message__", "checklist load failed"))
+        errors.append(err)
+        return DomainMaturityResult(
+            domain=domain,
+            completed_items=[],
+            missing_items=[],
+            maturity_stage="checklist_error",
+            recommended_next_task="Fix domain checklist YAML syntax or structure.",
+            errors=errors,
+            open_data_first_sequence=(),
+        )
+
+    required = required_paths_from_checklist(checklist)
     completed: list[str] = []
     missing: list[str] = []
     for rel in required:
@@ -194,8 +203,8 @@ def probe_domain_maturity(repo_root: Path, domain: str) -> DomainMaturityResult:
             missing.append(rel)
 
     stage = _stage_for_missing(missing)
-    rec = _recommended_next_task(domain, missing, stage)
-    seq: tuple[str, ...] = PROPERTY_BUILDINGS_OPEN_DATA_SEQUENCE if domain == "property_buildings" else ()
+    rec = _recommended_next_task_from_checklist(checklist, missing, stage)
+    seq = _open_data_sequence_from_checklist(checklist)
     return DomainMaturityResult(
         domain=domain,
         completed_items=completed,
@@ -205,4 +214,3 @@ def probe_domain_maturity(repo_root: Path, domain: str) -> DomainMaturityResult:
         errors=errors,
         open_data_first_sequence=seq,
     )
-

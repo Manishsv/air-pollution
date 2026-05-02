@@ -1,0 +1,212 @@
+# Declarative maturity checklist for AI dev supervisor (file-existence gates).
+# Open-data-first path aligns with docs/USE_CASE_ROADMAP.md
+
+domain_id: property_buildings
+label: Property buildings
+
+open_data_first_sequence:
+  - "1. Domain spec: property_buildings.v1.yaml (phasing, open_data_inputs, authorized_municipal_inputs, blocked_uses, required_human_review)."
+  - "2. Open-data provider contracts + examples: building_footprint, ward_boundary, satellite_change_signal, land_use; road_network_feed for context."
+  - "3. Open-data feature scaffolding: urban_platform/processing/property_buildings/open_data_features.py (+ tests)."
+  - "4. Open-data-aligned dashboard payload: consumer property_building_dashboard + applications/property_buildings/dashboard_payload.py."
+  - "5. Review packet: consumer property_building_review_packet + review_packets.py."
+  - "6. Field verification task: field_verification_task contract + field_tasks.py."
+  - "7. Read-only dashboard: review_dashboard/components/property_buildings_panel.py (+ panel demo test)."
+  - "8. Later-stage municipal integration contracts: property_registry_feed, building_permit_feed (specs only until authorized; not Phase 1 defaults)."
+
+recommended_next_by_stage:
+  complete_read_only_vertical_slice: >-
+    Follow docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md: bounded open-data ingest or payload alignment next;
+    keep registry/permit contracts later-stage only.
+
+# If any missing path matches these rules, use this message (before generic first-missing fallback).
+recommended_next_when_any_missing_matches:
+  - missing_path_prefix: review_dashboard/components/property_buildings_panel.py
+    message: >-
+      Add a read-only `property_buildings` dashboard panel and a panel demo test (no connectors, no tax/enforcement claims).
+  - missing_path_suffix: test_property_buildings_dashboard_panel_demo.py
+    message: >-
+      Add a read-only `property_buildings` dashboard panel and a panel demo test (no connectors, no tax/enforcement claims).
+
+checklist_groups:
+  - id: domain_spec
+    label: Domain specification
+    items:
+      - id: pb_domain_spec_v1
+        label: Property buildings domain spec
+        path: specifications/domain_specs/property_buildings.v1.yaml
+        required: true
+        category: domain_spec
+
+  - id: provider_contracts
+    label: Provider contracts
+    items:
+      - id: building_footprint_feed
+        label: Building footprint feed schema
+        path: specifications/provider_contracts/building_footprint_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: ward_boundary_feed
+        label: Ward boundary feed schema
+        path: specifications/provider_contracts/ward_boundary_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: satellite_change_signal_feed
+        label: Satellite change signal feed schema
+        path: specifications/provider_contracts/satellite_change_signal_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: land_use_feed
+        label: Land use feed schema
+        path: specifications/provider_contracts/land_use_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: property_registry_feed
+        label: Property registry feed schema
+        path: specifications/provider_contracts/property_registry_feed.v1.schema.json
+        required: true
+        category: provider_contract
+      - id: building_permit_feed
+        label: Building permit feed schema
+        path: specifications/provider_contracts/building_permit_feed.v1.schema.json
+        required: true
+        category: provider_contract
+
+  - id: consumer_contracts
+    label: Consumer contracts
+    items:
+      - id: property_building_dashboard_consumer
+        label: Property building dashboard consumer schema
+        path: specifications/consumer_contracts/property_building_dashboard.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: property_building_review_packet_consumer
+        label: Property building review packet consumer schema
+        path: specifications/consumer_contracts/property_building_review_packet.v1.schema.json
+        required: true
+        category: consumer_contract
+      - id: field_verification_task_pb
+        label: Field verification task schema
+        path: specifications/consumer_contracts/field_verification_task.v1.schema.json
+        required: true
+        category: consumer_contract
+
+  - id: examples
+    label: Examples
+    items:
+      - id: ex_building_footprint
+        label: Building footprint sample
+        path: specifications/examples/property_buildings/building_footprint.sample.json
+        required: true
+        category: example
+      - id: ex_ward_boundary
+        label: Ward boundary sample
+        path: specifications/examples/property_buildings/ward_boundary.sample.json
+        required: true
+        category: example
+      - id: ex_satellite_change_signal
+        label: Satellite change signal sample
+        path: specifications/examples/property_buildings/satellite_change_signal.sample.json
+        required: true
+        category: example
+      - id: ex_land_use
+        label: Land use sample
+        path: specifications/examples/property_buildings/land_use.sample.json
+        required: true
+        category: example
+      - id: ex_property_registry
+        label: Property registry sample
+        path: specifications/examples/property_buildings/property_registry.sample.json
+        required: true
+        category: example
+      - id: ex_building_permit
+        label: Building permit sample
+        path: specifications/examples/property_buildings/building_permit.sample.json
+        required: true
+        category: example
+      - id: ex_property_building_dashboard
+        label: Property building dashboard sample
+        path: specifications/examples/property_buildings/property_building_dashboard.sample.json
+        required: true
+        category: example
+      - id: ex_property_building_review_packet
+        label: Property building review packet sample
+        path: specifications/examples/property_buildings/property_building_review_packet.sample.json
+        required: true
+        category: example
+
+  - id: processing
+    label: Processing
+    items:
+      - id: pb_features
+        label: Property buildings features
+        path: urban_platform/processing/property_buildings/features.py
+        required: true
+        category: processing
+      - id: pb_open_data_features
+        label: Property buildings open-data features
+        path: urban_platform/processing/property_buildings/open_data_features.py
+        required: true
+        category: processing
+
+  - id: application
+    label: Application payloads
+    items:
+      - id: pb_dashboard_payload
+        label: Property buildings dashboard payload
+        path: urban_platform/applications/property_buildings/dashboard_payload.py
+        required: true
+        category: application
+      - id: pb_review_packets
+        label: Property buildings review packets
+        path: urban_platform/applications/property_buildings/review_packets.py
+        required: true
+        category: application
+      - id: pb_field_tasks
+        label: Property buildings field tasks
+        path: urban_platform/applications/property_buildings/field_tasks.py
+        required: true
+        category: application
+
+  - id: dashboard
+    label: Dashboard presentation
+    items:
+      - id: property_buildings_panel
+        label: Property buildings review dashboard panel
+        path: review_dashboard/components/property_buildings_panel.py
+        required: true
+        category: dashboard
+
+  - id: tests
+    label: Tests
+    items:
+      - id: test_pb_features
+        label: Property buildings features tests
+        path: tests/test_property_buildings_features.py
+        required: true
+        category: tests
+      - id: test_pb_open_data_features
+        label: Property buildings open-data features tests
+        path: tests/test_property_buildings_open_data_features.py
+        required: true
+        category: tests
+      - id: test_pb_dashboard_payload
+        label: Property buildings dashboard payload tests
+        path: tests/test_property_buildings_dashboard_payload.py
+        required: true
+        category: tests
+      - id: test_pb_review_packets
+        label: Property buildings review packet tests
+        path: tests/test_property_buildings_review_packets.py
+        required: true
+        category: tests
+      - id: test_pb_field_tasks
+        label: Property buildings field task tests
+        path: tests/test_property_buildings_field_tasks.py
+        required: true
+        category: tests
+      - id: test_pb_dashboard_panel_demo
+        label: Property buildings dashboard panel demo test
+        path: tests/test_property_buildings_dashboard_panel_demo.py
+        required: true
+        category: tests

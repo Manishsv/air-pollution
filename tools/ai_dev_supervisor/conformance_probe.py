@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 import json
 import subprocess
+import sys
 import time
 
 
@@ -59,7 +60,7 @@ def probe_conformance(
         repo_root / "data" / "outputs" / "conformance_report.json"
     )
 
-    cmd = ["python", "main.py", "--step", "conformance"]
+    cmd = [sys.executable, "main.py", "--step", "conformance"]
     attempted = False
     exit_code: Optional[int] = None
     duration_s: Optional[float] = None
