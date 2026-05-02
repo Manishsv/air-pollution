@@ -16,3 +16,6 @@ data/outputs/
 tools/ai_dev_supervisor/reports/*.json
 tools/ai_dev_supervisor/reports/*.md
 !tools/ai_dev_supervisor/reports/.gitkeep
+
+# Local edge/runtime feeds
+data/edge/*.jsonl
