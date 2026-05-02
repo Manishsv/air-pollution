@@ -77,7 +77,7 @@ def build_fire_features_panel(
     api_key = os.getenv("FIRMS_API_KEY", "").strip()
     end = _utc_now_hour()
     start = end - timedelta(days=int(lookback_days))
-    hours = pd.date_range(start=start, end=end, freq="H", tz="UTC")
+    hours = pd.date_range(start=start, end=end, freq="1h", tz="UTC")
 
     if not api_key or bbox_south_north_west_east is None:
         logger.info("Fire data disabled (missing FIRMS_API_KEY or bbox).")

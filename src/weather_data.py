@@ -74,7 +74,7 @@ def generate_synthetic_weather(lookback_days: int, seed: int = 7) -> pd.DataFram
     rng = np.random.default_rng(seed)
     end = _utc_now_hour()
     start = end - timedelta(days=int(lookback_days))
-    hours = pd.date_range(start=start, end=end, freq="H", tz="UTC")
+    hours = pd.date_range(start=start, end=end, freq="1h", tz="UTC")
     # Bengaluru-like ranges
     base_temp = 26 + 4 * np.sin(2 * np.pi * (hours.hour.values / 24.0) - 1.2)
     temp = base_temp + rng.normal(0, 0.8, size=len(hours))

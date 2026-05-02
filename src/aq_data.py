@@ -25,7 +25,7 @@ def _utc_now_hour() -> datetime:
 
 def _date_range_hours(end_utc: datetime, lookback_days: int) -> pd.DatetimeIndex:
     start = end_utc - timedelta(days=int(lookback_days))
-    return pd.date_range(start=start, end=end_utc, freq="H", tz="UTC")
+    return pd.date_range(start=start, end=end_utc, freq="1h", tz="UTC")
 
 
 def _haversine_km(lat1, lon1, lat2, lon2) -> float:
@@ -89,7 +89,7 @@ def fetch_openaq_pm25(city_name: str, lookback_days: int) -> pd.DataFrame:
             return df
 
         # Hourly aggregate (OpenAQ can have sub-hourly readings)
-        df["timestamp"] = df["timestamp"].dt.floor("H")
+        df["timestamp"] = df["timestamp"].dt.floor("h")
         df = (
             df.groupby(["station_id", "station_name", "latitude", "longitude", "timestamp"], as_index=False)["pm25"]
             .mean()
@@ -322,7 +322,7 @@ def fetch_openaq_pm25_v3(
                             "station_name": s["station_name"],
                             "latitude": s["latitude"],
                             "longitude": s["longitude"],
-                            "timestamp": pd.to_datetime(dt_utc, utc=True).floor("H"),
+                            "timestamp": pd.to_datetime(dt_utc, utc=True).floor("h"),
                             "pm25": float(val),
                             "data_source": "openaq_v3",
                         }
@@ -581,7 +581,7 @@ def spatial_station_holdout_validation(
         hid = str(holdout_station_id)
     else:
         tmp = real.copy()
-        tmp["timestamp"] = pd.to_datetime(tmp["timestamp"], utc=True).dt.floor("H")
+        tmp["timestamp"] = pd.to_datetime(tmp["timestamp"], utc=True).dt.floor("h")
         # For each hour, how many distinct stations report?
         n_by_t = tmp.groupby("timestamp")["station_id"].nunique()
         # Candidate hours where at least (1 holdout + N others) stations report.
@@ -620,10 +620,10 @@ def spatial_station_holdout_validation(
 
     # hourly compare
     held = held[["timestamp", "pm25"]].copy()
-    held["timestamp"] = pd.to_datetime(held["timestamp"], utc=True).dt.floor("H")
+    held["timestamp"] = pd.to_datetime(held["timestamp"], utc=True).dt.floor("h")
     held = held.groupby("timestamp", as_index=False)["pm25"].mean()
 
-    others["timestamp"] = pd.to_datetime(others["timestamp"], utc=True).dt.floor("H")
+    others["timestamp"] = pd.to_datetime(others["timestamp"], utc=True).dt.floor("h")
     errors = []
     for row in held.itertuples(index=False):
         t = row.timestamp  # pandas Timestamp (tz-aware)
