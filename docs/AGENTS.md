@@ -10,9 +10,10 @@ If the required specification does not exist, the agent must first propose or ad
 
 ## Repository architecture (brief)
 
+- **Contracts + code layout (`src/` vs `urban_platform/`)**: [`../specifications/ARCHITECTURE_NOTE.md`](../specifications/ARCHITECTURE_NOTE.md) — section *Repository code layout* (ownership table, delegation chain, migration principles, suggested AQ migration sequence).
 - Consolidated review (layout, conformance, forward deployment, tooling): [`docs/reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md`](reviews/AIR_OS_ARCHITECTURE_REVIEW_2026_05_02.md).
-- Prefer **new** platform and domain logic under **`urban_platform/`**. The **air-quality** reference pipeline still runs largely from **`src/`** via **`urban_platform/applications/air_pollution/pipeline.py`**—when editing AQ, choose the layer deliberately or migrate in a **bounded** PR.
-- **Dashboards** must use **`urban_platform/sdk`**; consumer payloads are built under **`urban_platform/applications/<domain>/`**, not ad hoc in Streamlit.
+- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → delegates to **`src.pipeline`** today. **`src/`** = **legacy AQ MVP** only. **New domains and shared logic** → **`urban_platform/`** only (see root **`AGENTS.md`** *Code layout*).
+- **Dashboards** must use **`urban_platform/sdk`**; consumer payloads live under **`urban_platform/applications/<domain>/`**, not ad hoc in Streamlit.
 
 ## Mandatory conformance
 

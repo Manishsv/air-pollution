@@ -137,7 +137,7 @@ The algorithm is intentionally simple:
     edge/
   notebooks/
     01_exploration.ipynb
-  src/                    # legacy pipeline modules (backward compatible)
+  src/                    # legacy AQ MVP pipeline (see specifications/ARCHITECTURE_NOTE.md — src vs urban_platform)
     __init__.py
     cache.py
     config.py
@@ -175,6 +175,8 @@ The algorithm is intentionally simple:
     openapi/
   main.py
 ```
+
+**Code layout:** `main.py` calls `urban_platform.applications.air_pollution.pipeline`, which **delegates** to `src.pipeline` for the reference AQ run. **`src/`** is legacy AQ only; **new domains and shared platform code** belong under **`urban_platform/`**. Full ownership map and migration guidance: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md) (*Repository code layout: `src/` vs `urban_platform/`*).
 
 During the migration to `urban_platform/`, **connectors expose two entrypoints**:
 

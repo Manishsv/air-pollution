@@ -44,6 +44,13 @@ A PR that changes behavior is not acceptable unless it includes:
 - **No weakening of safeguards** (provenance/reliability/human-review/conformance)
 - **Conformance evidence**: `python main.py --step conformance` passes
 
+### Code layout: `src/` (legacy AQ) vs `urban_platform/` (platform)
+
+- **`main.py`** calls **`urban_platform.applications.air_pollution.pipeline`**, which **delegates** to **`src.pipeline`** for the reference AQ run. **`src/`** is the **legacy MVP** air-quality pipeline (orchestration, features, model, recommendations, etc.).
+- **`urban_platform/`** is the **canonical** package for **new** connectors, processing, applications, SDK/API, and conformance **code**; contracts remain under root **`specifications/`** (see `specifications/ARCHITECTURE_NOTE.md` — *Repository code layout*).
+- **Do not** add **new domains** or **shared cross-domain** logic under **`src/`**. New vertical slices follow **`urban_platform/`** (e.g. flood, property_buildings). AQ migration out of `src/` is **incremental** and must keep **tests and conformance** green.
+- **Dashboards** consume **SDK + application-layer** contract payloads, not new domain rules in Streamlit.
+
 ### Domain sequencing and access constraints
 
 - **Start with the lowest-friction, lowest-risk data** that can demonstrate public value (open APIs, open licenses, fixtures, and clearly bounded demos).
@@ -71,5 +78,6 @@ These documents explain **why** open-data-first phases and **specs as coordinati
 - **Use-case roadmap**: `docs/USE_CASE_ROADMAP.md`
 - **Data-source discovery**: `docs/DATA_SOURCE_CATALOG.md`
 - **Domain development playbook (Cursor / agents)**: `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`
+- **Contract architecture + `src/` vs `urban_platform/` layout**: `specifications/ARCHITECTURE_NOTE.md`
 - **Machine-readable policy**: `specifications/spec_policy.yaml` (and `specifications/specs_policy.yaml`)
 

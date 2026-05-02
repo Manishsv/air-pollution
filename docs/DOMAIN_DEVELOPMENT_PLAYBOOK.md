@@ -15,12 +15,19 @@ For a **repo-specific** architecture snapshot (layout, conformance, gaps, superv
 
 ## Repository layout (use the right layer)
 
-- **`urban_platform/`** — Intended home for **connectors**, **fabric** (stores), **processing**, **domain applications** (payloads, packets, field tasks), **SDK/API**, and **conformance implementation** (`urban_platform/specifications/*.py`). That Python package **reads** contracts from the **repository root** `specifications/` tree only.
-- **`src/`** — Legacy **air-quality reference pipeline** (orchestration and much AQ feature/model logic). `urban_platform/applications/air_pollution/pipeline.py` **delegates** here today. Prefer **new shared** logic under `urban_platform/`. If you change AQ behavior, be explicit whether the edit belongs in `src/` or is part of **migration** into `urban_platform/`.
-- **`review_dashboard/`** — Streamlit **presentation** only: consume via **`urban_platform/sdk`**. Build contract-shaped payloads in **`urban_platform/applications/<domain>/`**; do **not** add domain semantics or safety rules only in UI code.
-- **`specifications/examples/`** — Versioned **fixtures** for schemas; **`data/`** — **runtime** inputs/outputs. Do not treat them interchangeably.
+**Authoritative detail:** `specifications/ARCHITECTURE_NOTE.md` → section **“Repository code layout: `src/` vs `urban_platform/`”** (current state, **ownership table**, migration principles, and **suggested AQ migration sequence**).
 
-More contract layout detail: `specifications/ARCHITECTURE_NOTE.md`.
+Summary:
+
+- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → today still **delegates** to **`src.pipeline.run_pipeline`** for the AQ reference run. **`src/`** is **legacy AQ MVP** only—not where new domains or shared platform logic should land.
+- **`urban_platform/`** — **Canonical** home for **connectors**, **fabric**, **processing**, **applications** (contract-shaped payloads), **SDK/API**, and **conformance Python** (`urban_platform/specifications/*.py`), which **reads** root **`specifications/`** only.
+- **`review_dashboard/`** — **Presentation** only via **`urban_platform/sdk`**; build payloads under **`urban_platform/applications/<domain>/`**.
+- **`specifications/examples/`** — versioned fixtures; **`data/`** — local runtime outputs, not source of truth.
+
+### Migration rule of thumb
+
+- **New work:** `urban_platform/` (+ specs). **Do not** add new domain stacks under `src/`.
+- **AQ edits:** choose **`src/`** vs **`urban_platform/`** deliberately, or do a **bounded migration PR** with tests + conformance.
 
 ## Reference vertical slice (copy this shape)
 
