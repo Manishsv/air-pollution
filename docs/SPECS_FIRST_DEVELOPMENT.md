@@ -32,7 +32,7 @@ Specs-first keeps multi-domain development interoperable and safe:
 - explicit provenance and reliability semantics
 - clear interpretation rules (units, thresholds, categories)
 - predictable consumer payloads and warnings
-- mandatory conformance gates before merge
+- mandatory conformance gates before merge (local today; CI when available—see `docs/USE_CASE_ROADMAP.md` Phase 2 and `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`)
 
 ## Specification families (contracts)
 
@@ -105,6 +105,12 @@ Domain specs may define:
 - review questions and verification guidance
 
 Location: `specifications/domain_specs/`
+
+**Every active domain should have a domain YAML** so provider, platform, domain, and consumer layers stay traceable. Examples: `flood_risk.v1.yaml`, `property_buildings.v1.yaml`, and **`air_quality.v1.yaml`** for the PM2.5 reference application (CPCB_PM25_ONLY framing, provenance, safety gates, blocked uses). Consumer JSON Schemas under `specifications/json_schema/v1/` remain the strict payload shapes; **revise the domain spec first** when changing thresholds, gates, or review policy—then align contracts and code per `AGENTS.md`.
+
+### Note: `urban_platform/specifications/` vs `specifications/`
+
+Python modules under **`urban_platform/specifications/`** (for example `conformance.py`, `audit.py`) **load** the manifest and schemas from the **repository root** **`specifications/`** directory. There is a single **content** tree for contracts; the package name reflects where **enforcement code** lives, not a second copy of specs.
 
 ### 4) Consumer contracts (dashboards, APIs, SDKs, reports)
 

@@ -1,0 +1,352 @@
+domain_id: air_quality
+version: v1
+status: documented
+
+purpose: >
+  Provide **probabilistic PM2.5 observability** and **forecast decision support** over an H3 grid for
+  urban air quality management. The reference application fuses station observations (OpenAQ v3 and
+  CPCB-like feeds when integrated), Open-Meteo weather, optional NASA FIRMS fire detections, and
+  OSM-derived static urban form proxies. Outputs are **indicative** under sparse coverage: cells may
+  be observed, **inverse-distance-weighted (IDW) interpolated**, or driven by **documented synthetic
+  fallback** when APIs fail. The system emits **data audits**, **source reliability** signals,
+  **forecast uncertainty** (e.g. tree-model quantile bands), **decision packets**, and **review-dashboard**
+  views. **Human review** is required before operational or enforcement-style action; the platform must
+  never treat models or proxies as **causal attribution** of pollution sources.
+
+target_actors:
+  - city_air_quality_manager
+  - pollution_control_board_analyst
+  - ward_health_officer
+  - urban_planner_transport_liaison
+  - emergency_or_health_communications_reviewer
+  - field_inspector
+
+supported_decisions:
+  - decision_id: triage_grid_hotspots_for_field_verification
+    description: >
+      Prioritize H3 cells or areas for inspection or supplemental monitoring based on forecast PM2.5,
+      uncertainty, and proxy hints—not as proof of a specific emitter.
+    decision_scope: grid_cell
+    operational_risk: medium
+  - decision_id: plan_sensor_or_campaign_placement
+    description: >
+      Support planning for additional monitoring (e.g. sensor siting modes) using coverage and
+      uncertainty proxies; not a claim of ground-truth concentration ranking alone.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: issue_internal_operational_brief
+    description: >
+      Summarize confidence-rated conditions for internal coordination (traffic, construction inspection,
+      fire follow-up) when quality gates pass; still subject to human review for external messaging.
+    decision_scope: city
+    operational_risk: medium
+  - decision_id: authorize_public_health_advisory_or_enforcement_step
+    description: >
+      Any **public** advisory, regulatory notice, or enforcement action based on this pipeline requires
+      **authorized human review** outside AirOS and must not rely on synthetic or low-confidence grid data.
+    decision_scope: city
+    operational_risk: high
+
+canonical_entities:
+  - entity_type: air_quality_station
+    description: >
+      Fixed or mobile monitoring location reporting PM2.5 (or mapped variables) with identity and coordinates.
+    examples: [openaq_sensor_12345, cpcb_station_BLR_01]
+  - entity_type: h3_cell
+    description: H3 hexagonal analysis unit for gridded forecasts, interpolation, and recommendations.
+    examples: [8928308280fffff]
+  - entity_type: city_boundary
+    description: Bounding polygon or place boundary used for OSM fetch, grid extent, and context.
+    examples: [bbox:london_central, ward:WD42]
+  - entity_type: fire_detection_hotspot
+    description: Optional satellite fire hotspot used as a coarse burning proxy (FIRMS when configured).
+    examples: [firms_modis_202405021200]
+
+observations:
+  - observed_property: pm25
+    description: Particulate matter 2.5 micrometers mass concentration at station or derived cell level.
+    typical_sources: [openaq_v3, cpcb_caaqms, synthetic_demo_station]
+    required_provenance_fields: [source_id, source_type, collected_at, license, quality_flag]
+  - observed_property: weather_state
+    description: >
+      Weather variables used as model inputs (e.g. wind, temperature, humidity, precipitation) from
+      archive or forecast APIs.
+    typical_sources: [open_meteo_archive, open_meteo_forecast, synthetic_weather]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: fire_event_proxy
+    description: Optional hotspot / thermal anomaly used as burning proxy near the study area.
+    typical_sources: [nasa_firms]
+    required_provenance_fields: [source_id, collected_at, license]
+
+features:
+  - feature_id: static_osm_urban_form
+    description: >
+      Per-cell static proxies from OSM (roads, buildings, land use, POIs) joined spatially to H3 for
+      model covariates—not causal drivers.
+    inputs: [osm_roads, osm_buildings, osm_landuse, osm_pois]
+  - feature_id: pm25_lags_and_neighbors
+    description: Temporal lags and neighbor summaries for panel model features.
+    inputs: [pm25_time_series_by_station_or_cell]
+  - feature_id: interpolated_cell_pm25
+    description: Cell-level PM2.5 estimated via IDW from nearby stations when no in-cell sensor exists.
+    inputs: [pm25, station_coordinates, h3_cell]
+  - feature_id: forecast_pm25_distribution
+    description: >
+      Forecast mean and simple uncertainty band (e.g. quantiles / std) for horizon configured in
+      `forecast_horizon_hours`; intervals are approximate, not formally calibrated conformal bounds.
+    inputs: [panel_features, trained_regressor]
+
+allowed_variables:
+  - variable: pm25
+    description: PM2.5 concentration (observed, interpolated, or cell-level estimate).
+    type: number
+    unit: ug_m3
+    value_range: 0..999
+    allowed_values: []
+    notes: Must carry aq_source_type (real, interpolated, synthetic, unavailable) at consumer boundary.
+  - variable: forecast_pm25_mean
+    description: Point forecast of future PM2.5 for an H3 cell at configured horizon.
+    type: number
+    unit: ug_m3
+    value_range: 0..999
+    allowed_values: []
+    notes: Paired with uncertainty fields where emitted by the model.
+  - variable: forecast_pm25_uncertainty
+    description: Simple uncertainty proxy (e.g. quantile spread, std) for forecast_pm25_mean.
+    type: number
+    unit: ug_m3
+    value_range: 0..999
+    allowed_values: []
+    notes: Documented as heuristic; not a calibrated prediction interval unless upgraded in spec+code.
+  - variable: pm25_category_india
+    description: >
+      India-style **PM2.5-only** category label derived from configured breakpoints (not full
+      multi-pollutant AQI).
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [good, satisfactory, moderate, poor, very_poor, severe]
+    notes: Must align with CPCB_PM25_ONLY framing in consumer docs.
+  - variable: aq_source_type
+    description: Provenance class for air-quality values at cell or packet level.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [real, interpolated, synthetic, unavailable]
+    notes: Synthetic must trigger visible warnings and recommendation blocks per safety_gates.
+  - variable: weather_source_type
+    description: Provenance class for weather inputs.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [real, synthetic, unavailable]
+    notes: ""
+  - variable: fire_source_type
+    description: Provenance class for fire proxy inputs.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [real, unavailable]
+    notes: Absence of detections is real signal “no fires detected,” not missing synthetic substitute.
+  - variable: nearest_station_distance_km
+    description: Distance from cell centroid to nearest contributing station for interpolation context.
+    type: number
+    unit: km
+    value_range: 0..500
+    allowed_values: []
+    notes: ""
+  - variable: station_count_used
+    description: Count of stations used in interpolation for a cell.
+    type: integer
+    unit: none
+    value_range: 0..1000
+    allowed_values: []
+    notes: ""
+  - variable: data_quality_score
+    description: Composite quality score used in audit and packets.
+    type: number
+    unit: none
+    value_range: 0..1
+    allowed_values: []
+    notes: ""
+  - variable: likely_contributing_factors
+    description: >
+      Rule-based **proxy** labels (traffic density, built-up, fire, meteorology) for cautious
+      operational hints—not causal attribution.
+    type: object
+    unit: none
+    value_range: null
+    allowed_values: []
+    notes: Must never be presented as proven source apportionment.
+
+units:
+  - unit: ug_m3
+    symbol: µg/m³
+    description: Micrograms per cubic meter for PM2.5 mass concentration.
+  - unit: km
+    symbol: km
+    description: Kilometers for distances and spatial context.
+  - unit: none
+    symbol: ""
+    description: Unitless scores, counts, or category labels.
+  - unit: m_s
+    symbol: m/s
+    description: Wind speed where used in weather features.
+  - unit: celsius
+    symbol: °C
+    description: Air temperature where used in weather features.
+
+thresholds_or_categories:
+  - id: pm25_categories_india_cpcb_pm25_only
+    variable: pm25_category_india
+    type: categories
+    definition: >
+      PM2.5 concentration bands aligned to **Indian AQI-style breakpoints for PM2.5 only** (configured
+      in `pm25_categories_india`); **not** a full CPCB multi-pollutant AQI index. Labels must be presented
+      as PM2.5 category, not as composite AQI.
+    levels:
+      - level: good
+        criteria: "PM2.5 in [0, 30] µg/m³ (inclusive upper bound per deployment config)"
+        severity: low
+      - level: satisfactory
+        criteria: "PM2.5 in (30, 60] µg/m³ per deployment config"
+        severity: low
+      - level: moderate
+        criteria: "PM2.5 in (60, 90] µg/m³ per deployment config"
+        severity: medium
+      - level: poor
+        criteria: "PM2.5 in (90, 120] µg/m³ per deployment config"
+        severity: medium
+      - level: very_poor
+        criteria: "PM2.5 in (120, 250] µg/m³ per deployment config"
+        severity: high
+      - level: severe
+        criteria: "PM2.5 > 250 µg/m³ per deployment config"
+        severity: critical
+
+safety_gates:
+  - gate_id: block_operational_recommendations_if_synthetic_aq
+    description: >
+      When any synthetic air-quality data is used for the run or cell, **operational recommendations**
+      must be blocked or replaced with verify-only language; maps and audit must show visible warnings.
+    when_to_block: operational_recommendations_for_affected_scope
+    required_evidence: [aq_source_type != synthetic for cells used in recommendation, or explicit human override outside AirOS]
+    override_policy: human_approval_only
+  - gate_id: downgrade_confidence_low_station_coverage
+    description: >
+      When real station count or spatial coverage falls below configured quality gates, downgrade
+      confidence and actionability; do not present high-confidence operational narratives.
+    when_to_block: high_confidence_operational_claims
+    required_evidence: [data_audit.json meets min_real_stations_required and distance thresholds]
+    override_policy: human_approval_only
+  - gate_id: high_interpolation_ratio_requires_caution
+    description: >
+      When a large fraction of grid cells rely on IDW interpolation rather than in-cell observations,
+      require explicit caution language and restrict strong operational language.
+    when_to_block: high_actionability_without_caveat
+    required_evidence: [percent_cells_interpolated within configured thresholds for claimed confidence tier]
+    override_policy: human_approval_only
+  - gate_id: suspect_or_offline_sources_require_review
+    description: >
+      Observations or sources marked suspect/offline/degraded by the source reliability layer must
+      trigger review prompts and reduced confidence; operational recommendations may be blocked.
+    when_to_block: operational_recommendations_relying_on_degraded_sources
+    required_evidence: [source_reliability_status in healthy OR human-confirmed replacement source]
+    override_policy: human_approval_only
+  - gate_id: no_causal_attribution_from_model_or_proxies
+    description: >
+      Models and OSM proxies must not be interpreted as **verified** emission sources or legal causes.
+    when_to_block: causal_or_enforcement_narratives_from_proxies
+    required_evidence: [independent source apportionment study or authorized investigation]
+    override_policy: none
+  - gate_id: pm25_category_is_not_full_aqi
+    description: >
+      Consumer surfaces must not label PM2.5 breakpoint category as “full AQI” or imply multi-pollutant compliance.
+    when_to_block: mislabeled_public_comms_from_pipeline_outputs
+    required_evidence: [explicit CPCB_PM25_ONLY labeling in consumer payloads and UI]
+    override_policy: none
+  - gate_id: public_advisory_or_enforcement_requires_authorized_human_review
+    description: >
+      Public advisories, enforcement, fines, or health orders are **outside** automated AirOS scope;
+      outputs support internal review only until authorized humans and processes approve messaging.
+    when_to_block: automated_public_advisory_or_enforcement_without_external_authorization
+    required_evidence: [authorized human sign-off per municipal/legal process]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields: [source_id, source_type, license, collected_at, ingested_at]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing, offline_development]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status, source_reliability_issues]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+
+decision_packet_profile:
+  profile_id: decision_packet_air_quality
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+    - field_verification
+  notes: >
+    Strict JSON Schema profile is `specifications/json_schema/v1/decision_packet.profile.air_quality.v1.schema.json`
+    (manifest key `decision_packet_air_quality`). Packets must surface aq_source_type, interpolation context,
+    and model vs persistence baseline warnings where applicable.
+
+dashboard_consumer_requirements:
+  required_payload_sections:
+    - summary
+    - map_layers_or_equivalent
+    - review_queue_or_packet_links
+    - provenance_and_reliability_callouts
+  required_warnings:
+    - show_synthetic_data_banner_if_present
+    - show_high_interpolation_ratio_warning_when_configured
+    - show_degraded_or_offline_sensor_warning_when_present
+    - show_pm25_only_not_full_aqi_disclaimer
+
+human_review_prompts:
+  - prompt: Is air quality data for this area **real**, **interpolated**, or **synthetic**?
+    applies_when: any recommendation or hotspot is shown
+    required_response: yes/no/free_text
+  - prompt: Are there enough nearby stations and acceptable distances to support the forecast confidence shown?
+    applies_when: data_audit flags low coverage or high interpolation share
+    required_response: yes/no
+  - prompt: Are “likely contributing factors” understood as **non-causal proxies** only?
+    applies_when: likely_contributing_factors is non-empty
+    required_response: yes
+  - prompt: Has an authorized officer approved any **public** advisory or enforcement step?
+    applies_when: decision may affect public behavior or legal obligations
+    required_response: yes/no
+
+field_verification_requirements:
+  required_before_operational_action:
+    - confirm_on_site_pm25_or_reference_station_reading_where_feasible
+    - photograph_or_document_visible_sources_if_inspecting_traffic_construction_or_burning
+    - record_ticket_or_work_order_id_when_escalating_to_ops
+  evidence_to_capture: [photo, sensor_reading, site_visit_note, ticket_id]
+
+blocked_uses:
+  - treat_proxy_based_likely_contributing_factors_as_causal_proof
+  - issue_enforcement_action_without_field_verification
+  - use_synthetic_air_quality_data_for_operational_decisions
+  - represent_pm25_category_as_full_multi_pollutant_aqi
+  - use_low_confidence_or_suspect_forecasts_for_public_action_without_human_review
+  - automated_fines_penalties_or_demolition_recommendations_from_this_pipeline
+  - hide_or_minimize_synthetic_interpolation_or_reliability_warnings_in_consumer_surfaces
+
+open_questions:
+  - Which operational CPCB/CAAQMS feed replaces OpenAQ for production Indian cities and under what license?
+  - Should conformal or residual-based calibration become mandatory before “high confidence” external messaging?
+  - What city-specific minimum station density and max interpolation distance should replace global defaults?

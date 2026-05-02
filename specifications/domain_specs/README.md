@@ -20,8 +20,9 @@ Domain specs answer questions like:
 ## File structure
 
 - `domain_spec_template.v1.yaml`: authoring template
+- `air_quality.v1.yaml`: PM2.5 reference application (H3, stations, weather, optional fire, OSM; CPCB_PM25_ONLY; decision packets; documented)
 - `flood_risk.v1.yaml`: flood risk + waterlogging + drainage assets (stub)
-- `property_buildings.v1.yaml`: property/buildings intelligence (stub)
+- `property_buildings.v1.yaml`: phased built-environment change + field review; Phase 1 open-data MVP before optional municipal integrations; see `product_delivery_phases` and `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md` (documented)
 - `water_operations.v1.yaml`: water supply/network operations (stub)
 
 ## Non-negotiable principle
