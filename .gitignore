@@ -19,3 +19,6 @@ tools/ai_dev_supervisor/reports/*.md
 
 # Local edge/runtime feeds
 data/edge/*.jsonl
+
+# Local CI/virtualenv artifacts
+.ci_venv/
