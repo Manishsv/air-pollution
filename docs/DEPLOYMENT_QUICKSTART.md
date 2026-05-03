@@ -18,6 +18,18 @@ It is designed to help another engineer clone the repo, install dependencies, ru
 - Optional system dependencies if geospatial wheels fail to install (Linux/macOS):
   - GDAL/GEOS/PROJ build deps (see `.github/workflows/ci.yml` for a known-good Ubuntu package list)
 
+### Docker alternative (optional)
+
+If you prefer not to manage a local venv, use the Docker image (Python 3.11 + geo/OpenCV deps baked in). Full details: [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
+
+```bash
+docker build -t air-os:local .
+docker run --rm air-os:local python tools/airos_cli.py doctor
+docker run --rm air-os:local python tools/airos_cli.py conformance
+docker run --rm air-os:local python tools/airos_cli.py review --run-conformance
+docker run --rm -v "$(pwd)/data:/app/data" air-os:local python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+```
+
 ## 3) Fresh clone setup
 
 ```bash
@@ -60,6 +72,29 @@ Expected result:
 - **tests pass**
 - **conformance exits 0** and writes `data/outputs/conformance_report.json`
 - **supervisor exits 0**
+
+## Recommended CLI workflow (forward deployment)
+
+Use the AirOS CLI for a predictable loop: **scaffold → validate → run (supported demo) → inspect → review**.
+
+```bash
+# 1) Scaffold a private/workspace folder from templates (edit YAML before trusting it)
+python tools/airos_cli.py deployment init --help
+
+# 2) Config-only validation (manifest keys, required fields, fixture paths, secret-like keys)
+python tools/airos_cli.py deployment validate <path/to/deployment_dir>
+
+# 3) Run only when the deployment matches a supported POC (today: flood fixtures)
+python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+
+# 4) Inspect outputs (example: flood POC)
+find data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
+
+# 5) Supervisor + optional conformance
+python tools/airos_cli.py review --run-conformance
+```
+
+**Runnable demo vs scaffolding:** `deployment init` produces **templates and placeholders**. It is **not** guaranteed runnable until provider contracts, consumer contracts, and any `fixture_path` entries match the repo’s `specifications/manifest.json` and your chosen POC runner. For a **known-good** fixture-only path, use `deployments/examples/flood_local_demo` and `deployment validate` / `deployment run` on that directory.
 
 ## 5) Run the registry-driven flood deployment demo
 

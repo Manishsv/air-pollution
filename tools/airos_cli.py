@@ -9,6 +9,14 @@ from pathlib import Path
 
 import yaml
 
+# Support `python tools/airos_cli.py ...` (repo root may not be on sys.path yet).
+_CLI_FILE = Path(__file__).resolve()
+_REPO_ROOT_FOR_IMPORTS = _CLI_FILE.parents[1]
+if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
+
+from tools.deployment_runner.validate_deployment import ValidationSummary, validate_deployment
+
 
 @dataclass(frozen=True)
 class ExecPlan:
@@ -29,7 +37,10 @@ def _find_repo_root(start: Path) -> Path:
 
 def _run(plan: ExecPlan) -> int:
     proc = subprocess.run(plan.argv, cwd=str(plan.cwd))
-    return int(proc.returncode)
+    rc = int(proc.returncode)
+    if rc != 0:
+        print(f"(subprocess exited with code {rc})", file=sys.stderr)
+    return rc
 
 
 def _plan_supervisor(repo_root: Path, *, domain: str | None, run_conformance: bool) -> ExecPlan:
@@ -46,18 +57,6 @@ def _plan_supervisor(repo_root: Path, *, domain: str | None, run_conformance: bo
 
 def _plan_conformance(repo_root: Path) -> ExecPlan:
     return ExecPlan(argv=[sys.executable, "main.py", "--step", "conformance"], cwd=repo_root)
-
-
-def _plan_deployment_validate(repo_root: Path, deployment: str) -> ExecPlan:
-    return ExecPlan(
-        argv=[
-            sys.executable,
-            "tools/deployment_runner/validate_deployment.py",
-            "--deployment",
-            deployment,
-        ],
-        cwd=repo_root,
-    )
 
 
 def _plan_deployment_run(repo_root: Path, deployment: str) -> ExecPlan:
@@ -97,13 +96,51 @@ def _doctor(repo_root: Path, *, run_conformance: bool) -> int:
     return _run(_plan_supervisor(repo_root, domain=None, run_conformance=run_conformance))
 
 
+def _resolve_deployment_dir(repo_root: Path, deployment_path: str) -> Path:
+    p = Path(deployment_path)
+    return p.resolve() if p.is_absolute() else (repo_root / p).resolve()
+
+
+def _print_validation_summary(summary: ValidationSummary) -> None:
+    status = "valid" if not summary.errors else "invalid"
+    print("AirOS deployment validation")
+    print(f"- status: {status}")
+    print(f"- deployment_id: {summary.deployment_id or '<unknown>'}")
+    print(f"- enabled_domains: {', '.join(summary.enabled_domains) if summary.enabled_domains else '<none>'}")
+    print(f"- provider_count: {summary.provider_count}")
+    print(f"- application_count: {summary.application_count}")
+    print(f"- network_adapter_count: {summary.network_adapter_count}")
+    if summary.warnings:
+        print("- warnings:")
+        for w in summary.warnings:
+            print(f"  - {w}")
+    else:
+        print("- warnings: (none)")
+    if summary.errors:
+        print("- errors:")
+        for e in summary.errors:
+            print(f"  - {e}")
+    else:
+        print("- errors: (none)")
+    print(f"- recommended_next_task: {summary.recommended_next_task}")
+
+
 def _deployment_validate(repo_root: Path, deployment: str) -> int:
     validator = repo_root / "tools" / "deployment_runner" / "validate_deployment.py"
     if not validator.is_file():
         print("Deployment validation is not implemented yet.")
         print("Recommended next task: add tools/deployment_runner/validate_deployment.py")
         return 2
-    return _run(_plan_deployment_validate(repo_root, deployment))
+    dep_dir = _resolve_deployment_dir(repo_root, deployment)
+    if not dep_dir.exists():
+        print(f"Deployment path not found: {dep_dir}", file=sys.stderr)
+        return 1
+    if not dep_dir.is_dir():
+        print(f"Deployment path is not a directory: {dep_dir}", file=sys.stderr)
+        return 1
+    summary = validate_deployment(deployment_dir=dep_dir, repo_root=repo_root)
+    _print_validation_summary(summary)
+    return 1 if summary.errors else 0
 
 
 def _parse_csv(value: str | None) -> list[str]:
@@ -371,8 +408,8 @@ def _deployment_init(
                 "## Next steps",
                 "",
                 "- Review and edit the generated YAML files (replace placeholders).",
-                "- Validate config:",
-                "  - `python tools/deployment_runner/validate_deployment.py --deployment <this-folder>`",
+                "- Validate config (config-only):",
+                "  - `python tools/airos_cli.py deployment validate <this-folder>`",
                 "- Run conformance:",
                 "  - `python main.py --step conformance`",
                 "- Do not commit secrets, credentials, API keys, mailbox passwords, restricted datasets, or sensitive operational details to the public AirOS repository.",
@@ -384,45 +421,115 @@ def _deployment_init(
     )
 
     print(f"Initialized deployment workspace at: {out_path}")
+    rel = out_path
+    try:
+        rel = out_path.relative_to(repo_root)
+    except ValueError:
+        pass
     print("Next steps:")
-    print("- Review generated YAML and replace placeholders.")
-    print(f"- Validate: {sys.executable} tools/deployment_runner/validate_deployment.py --deployment {out_path}")
-    print(f"- Conformance: {sys.executable} main.py --step conformance")
-    print("- Do not commit sensitive deployment data to the public repo.")
+    print("1) Edit the generated YAML (replace PLACEHOLDER values; align provider_contract and consumer_contracts with manifest keys).")
+    print(
+        "   Note: this workspace is scaffolding unless your provider/application IDs match a supported in-repo demo "
+        "(e.g. flood fixtures: deployments/examples/flood_local_demo)."
+    )
+    print(f"2) Validate config only: {sys.executable} tools/airos_cli.py deployment validate {rel}")
+    print(f"3) When valid and configured for a supported demo, run: {sys.executable} tools/airos_cli.py deployment run <path>")
+    print(f"4) Inspect outputs under data/outputs/deployments/<deployment_id>/ after a successful run.")
+    print(f"5) Run governance checks: {sys.executable} tools/airos_cli.py review --run-conformance")
+    print(f"   (and {sys.executable} main.py --step conformance as needed)")
+    print("- Do not commit secrets, credentials, API keys, restricted datasets, or sensitive operational data.")
     return 0
 
 
+_DEPLOYMENT_INIT_EPILOG = """Example:
+  python tools/airos_cli.py deployment init --deployment-id my_city --deployment-name "My City" \\
+    --deployment-type single_agency --owner-organization "Demo Org" --environment local \\
+    --domains air_quality --output-dir deployments/local/my_city
+
+Notes:
+  - Output is scaffolding from deployments/templates/; it is not guaranteed runnable until placeholders are fixed.
+  - For a ready-made fixture demo (flood), use: deployments/examples/flood_local_demo
+"""
+
+_DEPLOYMENT_PATH_HELP = "Deployment directory path (relative to repo root or absolute)."
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="airos", description="Minimal AirOS CLI (thin wrappers over existing tools).")
+    p = argparse.ArgumentParser(
+        prog="airos",
+        description="AirOS CLI: thin wrappers over conformance, supervisor review, and deployment tools.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Typical flow: deployment init → deployment validate → deployment run (supported demo) → review --run-conformance",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
-    doctor = sub.add_parser("doctor", help="Health summary + optional supervisor checks.")
+    doctor = sub.add_parser(
+        "doctor",
+        help="Print environment/repo health and run the AI supervisor (optional conformance).",
+        description="Shows Python version, detected repo root, key spec folders, then runs tools/ai_dev_supervisor/run_review.py.",
+    )
     doctor.add_argument("--run-conformance", action="store_true", help="Run conformance as part of the supervisor review.")
 
-    sub.add_parser("conformance", help="Run conformance checks (main.py --step conformance).")
+    sub.add_parser("conformance", help="Run python main.py --step conformance.")
 
-    review = sub.add_parser("review", help="Run AI supervisor review.")
-    review.add_argument("--run-conformance", action="store_true", help="Run conformance as part of the review.")
+    review = sub.add_parser(
+        "review",
+        help="Run the AI supervisor review.",
+        description="Runs tools/ai_dev_supervisor/run_review.py (registry hygiene, deployment examples, domain maturity when --domain is used elsewhere).",
+    )
+    review.add_argument("--run-conformance", action="store_true", help="Also run the conformance step inside the supervisor.")
 
-    domain = sub.add_parser("domain", help="Domain-focused commands.")
+    domain = sub.add_parser("domain", help="Domain-scoped supervisor commands.")
     domain_sub = domain.add_subparsers(dest="domain_command", required=True)
-    domain_review = domain_sub.add_parser("review", help="Run AI supervisor review for a domain.")
-    domain_review.add_argument("domain_id", type=str)
+    domain_review = domain_sub.add_parser(
+        "review",
+        help="Run supervisor review for one domain checklist.",
+        description="Equivalent to run_review.py --domain <id>.",
+    )
+    domain_review.add_argument("domain_id", type=str, help="Domain id (e.g. air_quality, flood_risk, property_buildings).")
     domain_review.add_argument("--run-conformance", action="store_true")
 
-    deployment = sub.add_parser("deployment", help="Deployment-focused commands.")
+    deployment = sub.add_parser(
+        "deployment",
+        help="Initialize, validate, or run a deployment workspace.",
+        description="init: scaffold YAML from templates. validate: config-only checks (no connectors). run: POC runner (allowlisted).",
+    )
     dep_sub = deployment.add_subparsers(dest="deployment_command", required=True)
-    dep_validate = dep_sub.add_parser("validate", help="Validate a deployment configuration directory.")
-    dep_validate.add_argument("deployment_path", type=str)
-    dep_run = dep_sub.add_parser("run", help="Run a registry-driven deployment (POC).")
-    dep_run.add_argument("deployment_path", type=str)
-    dep_init = dep_sub.add_parser("init", help="Initialize a deployment workspace from templates.")
-    dep_init.add_argument("--deployment-id", required=True, type=str)
-    dep_init.add_argument("--deployment-name", required=True, type=str)
+    dep_validate = dep_sub.add_parser(
+        "validate",
+        help="Validate deployment YAML and registry references (no execution).",
+        description=(
+            "Loads deployment_profile.yaml, provider/application registries, optional profiles, and checks manifest "
+            "artifact keys, required fields, fixture paths, and obvious secret-like keys. Does not run connectors or pipelines."
+        ),
+    )
+    dep_validate.add_argument("deployment_path", type=str, help=_DEPLOYMENT_PATH_HELP)
+    dep_run = dep_sub.add_parser(
+        "run",
+        help="Run the registry-driven deployment POC (fixtures / allowlist).",
+        description=(
+            "Runs tools/deployment_runner/run_deployment.py for deployments that the POC supports (e.g. flood_local_demo). "
+            "Exits non-zero on failure; stderr/stdout are not captured."
+        ),
+    )
+    dep_run.add_argument("deployment_path", type=str, help=_DEPLOYMENT_PATH_HELP)
+    dep_init = dep_sub.add_parser(
+        "init",
+        help="Create a deployment workspace from templates (scaffolding).",
+        description=(
+            "Writes deployment_profile.yaml, registries, optional profiles, and README under --output-dir. "
+            "Uses deployments/templates/ when present. Pass --force to overwrite an existing directory."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_DEPLOYMENT_INIT_EPILOG,
+    )
+    dep_init.add_argument("--deployment-id", required=True, type=str, metavar="ID", help="Stable deployment identifier.")
+    dep_init.add_argument("--deployment-name", required=True, type=str, metavar="NAME", help="Human-readable deployment name.")
     dep_init.add_argument(
         "--deployment-type",
         required=True,
         type=str,
+        metavar="TYPE",
         choices=[
             "single_agency",
             "multi_agency_city",
@@ -431,25 +538,74 @@ def build_parser() -> argparse.ArgumentParser:
             "regional_corridor",
             "public_transparency",
         ],
+        help="Deployment topology / coordination mode.",
     )
-    dep_init.add_argument("--owner-organization", required=True, type=str)
-    dep_init.add_argument("--environment", required=True, type=str, choices=["local", "staging", "production"])
-    dep_init.add_argument("--domains", required=True, type=str, help="Comma-separated domain ids.")
-    dep_init.add_argument("--output-dir", required=True, type=str)
-    dep_init.add_argument("--agency-id", type=str, default=None)
-    dep_init.add_argument("--agency-name", type=str, default=None)
-    dep_init.add_argument("--agency-type", type=str, default=None)
-    dep_init.add_argument("--jurisdiction-type", type=str, default=None, choices=["city", "multi_city", "district", "regional", "state", "national"])
-    dep_init.add_argument("--jurisdiction-id", type=str, default=None)
-    dep_init.add_argument("--jurisdiction-name", type=str, default=None)
-    dep_init.add_argument("--providers", type=str, default=None, help="Comma-separated provider ids.")
-    dep_init.add_argument("--applications", type=str, default=None, help="Comma-separated application ids.")
-    dep_init.add_argument("--network-adapters", type=str, default=None, help="Comma-separated adapter ids.")
-    dep_init.add_argument("--force", action="store_true")
+    dep_init.add_argument("--owner-organization", required=True, type=str, metavar="ORG", help="Owning organization label or placeholder.")
+    dep_init.add_argument(
+        "--environment",
+        required=True,
+        type=str,
+        metavar="ENV",
+        choices=["local", "staging", "production"],
+        help="Runtime environment label.",
+    )
+    dep_init.add_argument(
+        "--domains",
+        required=True,
+        type=str,
+        metavar="LIST",
+        help="Comma-separated enabled domain ids (e.g. air_quality,flood_risk).",
+    )
+    dep_init.add_argument(
+        "--output-dir",
+        required=True,
+        type=str,
+        metavar="DIR",
+        help="Directory to create (absolute, or relative to repo root). Fails if it exists unless --force.",
+    )
+    dep_init.add_argument("--agency-id", type=str, default=None, metavar="ID", help="Optional agency id for agency_node_profile.")
+    dep_init.add_argument("--agency-name", type=str, default=None, metavar="NAME", help="Optional agency display name.")
+    dep_init.add_argument("--agency-type", type=str, default=None, metavar="TYPE", help="Optional agency type (e.g. ulb, pcb).")
+    dep_init.add_argument(
+        "--jurisdiction-type",
+        type=str,
+        default=None,
+        choices=["city", "multi_city", "district", "regional", "state", "national"],
+        metavar="TYPE",
+        help="Optional jurisdiction type for profiles.",
+    )
+    dep_init.add_argument("--jurisdiction-id", type=str, default=None, metavar="ID", help="Optional jurisdiction id (with or without jurisdiction: prefix).")
+    dep_init.add_argument("--jurisdiction-name", type=str, default=None, metavar="NAME", help="Optional jurisdiction display name.")
+    dep_init.add_argument(
+        "--providers",
+        type=str,
+        default=None,
+        metavar="LIST",
+        help="Optional comma-separated provider_id values. Unknown ids become placeholder rows (not runnable until fixed).",
+    )
+    dep_init.add_argument(
+        "--applications",
+        type=str,
+        default=None,
+        metavar="LIST",
+        help="Optional comma-separated application_id values. Unknown ids become placeholder rows.",
+    )
+    dep_init.add_argument(
+        "--network-adapters",
+        type=str,
+        default=None,
+        metavar="LIST",
+        help="Optional comma-separated adapter_id values for network_adapter_registry.yaml.",
+    )
+    dep_init.add_argument("--force", action="store_true", help="Overwrite an existing output directory.")
 
-    sub.add_parser("registry", help="Registry hygiene checks (via supervisor).").add_subparsers(
-        dest="registry_command", required=True
-    ).add_parser("check", help="Run supervisor review and surface registry hygiene info.")
+    reg = sub.add_parser("registry", help="Registry hygiene via the AI supervisor.")
+    reg_sub = reg.add_subparsers(dest="registry_command", required=True)
+    reg_sub.add_parser(
+        "check",
+        help="Run supervisor review (registry probe surfaces in the report).",
+        description="Runs tools/ai_dev_supervisor/run_review.py without --run-conformance (fast).",
+    )
 
     return p
 

@@ -217,13 +217,15 @@ cp .env.example .env
 
 ### AirOS CLI (thin wrappers)
 
-AirOS includes a minimal CLI that wraps existing checks and demos (no plugin loading):
+AirOS includes a minimal CLI that wraps existing checks and demos (no plugin loading). **Forward deployment flow:** `deployment init` → `deployment validate` → `deployment run` (supported demo only) → inspect outputs → `review --run-conformance`. See **Recommended CLI workflow** in [`docs/DEPLOYMENT_QUICKSTART.md`](docs/DEPLOYMENT_QUICKSTART.md).
 
 ```bash
 python tools/airos_cli.py doctor
 python tools/airos_cli.py conformance
 python tools/airos_cli.py review --run-conformance
 python tools/airos_cli.py deployment init --help
+python tools/airos_cli.py deployment validate --help
+python tools/airos_cli.py deployment run --help
 python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 ```

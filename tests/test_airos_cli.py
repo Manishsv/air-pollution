@@ -65,7 +65,7 @@ def test_domain_review_command_construction(monkeypatch) -> None:
     assert "--run-conformance" in calls[0]
 
 
-def test_deployment_validate_command_construction(monkeypatch) -> None:
+def test_deployment_validate_runs_in_process_without_subprocess(monkeypatch) -> None:
     calls: list[list[str]] = []
 
     def fake_run(argv, cwd=None, **_kwargs):
@@ -76,8 +76,7 @@ def test_deployment_validate_command_construction(monkeypatch) -> None:
 
     rc = cli.main(["deployment", "validate", "deployments/examples/flood_local_demo"])
     assert rc == 0
-    assert "tools/deployment_runner/validate_deployment.py" in calls[0]
-    assert "--deployment" in calls[0]
+    assert calls == []
 
 
 def test_deployment_run_command_construction(monkeypatch) -> None:
