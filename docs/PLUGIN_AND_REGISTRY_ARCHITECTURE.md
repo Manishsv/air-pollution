@@ -191,6 +191,8 @@ The runner is intentionally constrained:
 - Uses **fixture JSON** under `specifications/examples/flood/` only (no external APIs).
 - Writes outputs under `data/outputs/deployments/<deployment_id>/` and validates them against consumer contracts.
 
+**Service boundaries (future):** the same registries describe *which* providers and applications exist; in a **multi-container AirOS node**, each registry entry would map to a **separate deployable** (see `docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`). The reference repo remains closer to **Level 0/1** until those services are split deliberately.
+
 ---
 
 ## Cross-links
@@ -198,4 +200,5 @@ The runner is intentionally constrained:
 - Specs-first and conformance: `AGENTS.md`, `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`, `specifications/README.md`
 - Federation and Network Layer: `docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`, `docs/AGENCY_NODE_MODEL.md`, `docs/CROSS_AGENCY_COORDINATION_LAYER.md`
 - Architecture diagrams: `docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`
+- Container maturity (single image vs multi-service node): `docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`
 - Deployment-scoped templates (profiles + registries): `deployments/templates/`

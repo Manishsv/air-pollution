@@ -16,6 +16,8 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Architecture overview (text diagrams)**: [`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`](docs/AIR_OS_ARCHITECTURE_OVERVIEW.md)
 - **Plugin + registry model**: [`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`](docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md)
 - **Deployment quickstart (clean-machine test)**: [`docs/DEPLOYMENT_QUICKSTART.md`](docs/DEPLOYMENT_QUICKSTART.md)
+- **Docker (optional)**: [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md)
+- **Multi-container deployment (target architecture)**: [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
 - **Forward deployment templates**: [`deployments/templates/`](deployments/templates/)
 - **Federated deployment (node-first)**: [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md)
 - **Agency node model**: [`docs/AGENCY_NODE_MODEL.md`](docs/AGENCY_NODE_MODEL.md)
@@ -225,6 +227,10 @@ python tools/airos_cli.py deployment init --help
 python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 ```
+
+### Docker (optional)
+
+Run the same workflows in a container without a local venv: see [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md). Quick start: `docker build -t air-os:local .` then `docker run --rm air-os:local python tools/airos_cli.py doctor`.
 
 ### Run
 

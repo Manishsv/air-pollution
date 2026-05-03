@@ -183,8 +183,15 @@ Actors → Apps/UI (presentation) → Domain applications (contract-shaped outpu
 Federation: AirOS Nodes ↔ (optional) Network Layer ↔ transports (email/api/bus/file)
 ```
 
+## 5) Container deployment maturity (single image vs multi-service)
+
+The **logical layers** in section 1 can be deployed at different **maturity levels**: from a single developer process, to **one Docker image** (quickstart demos), to a **multi-container AirOS node** where **AirOS Core**, **provider services**, **application services**, **network adapter services**, and the **dashboard** run as separate units with clear network and trust boundaries.
+
+Today’s repository and Docker quickstart are intentionally closer to **Level 0–1**; splitting into separate services is a **governed, incremental** path, not a prerequisite to use specs or conformance. See **`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`** for the target roles, communication patterns, and a suggested rollout sequence.
+
 ## Cross-links
 
 - Federation and Network Layer: `docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`, `docs/AGENCY_NODE_MODEL.md`, `docs/CROSS_AGENCY_COORDINATION_LAYER.md`
 - Specs-first + layers: `specifications/ARCHITECTURE_NOTE.md`, `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`
+- Multi-container deployment target: `docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`
 - City profile template (deployment context, not behavior): `docs/CITY_PROFILE_TEMPLATE.md`
