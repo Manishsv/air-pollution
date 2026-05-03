@@ -6,7 +6,13 @@ These files are **templates** for forward deployment teams. They contain **no re
 
 1. Copy `deployments/templates/` into a **private deployment repository** or secure configuration workspace.
 2. Replace placeholder values (`TEMPLATE`, `PLACEHOLDER`, `EXAMPLE`) with deployment-specific details.
-3. Keep operational profiles (endpoints, MoUs, staff roles, restricted datasets) out of the public AirOS repository unless explicitly authorized.
+3. Validate your deployment config before running anything:
+
+```bash
+python tools/deployment_runner/validate_deployment.py --deployment <path>
+```
+
+4. Keep operational profiles (endpoints, MoUs, staff roles, restricted datasets) out of the public AirOS repository unless explicitly authorized.
 
 ## Deployment registries are overlays
 
