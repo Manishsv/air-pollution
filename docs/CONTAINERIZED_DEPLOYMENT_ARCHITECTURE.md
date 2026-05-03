@@ -2,7 +2,7 @@
 
 This document describes the **target multi-container deployment architecture** for AirOS: how responsibilities split across services, how they communicate, and how deployment configuration stays **registry-driven** and **specs-first**. It is **design and documentation only**—no new Compose stacks, no code splits, and no change to current runtime behavior in this repository.
 
-**Related:** single-image quickstart and Docker usage are in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md). That path is intentionally **Level 1** (one image, one process model). This document explains **why** that is a stepping stone and **what** comes next.
+**Related:** single-image quickstart and Docker usage are in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md) (**Level 1**). A minimal multi-container **Compose POC** that demonstrates the **Level 2 topology** (Core service + app service + shared volumes) is in [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md). This document explains **why** Level 1 is a stepping stone and **what** comes next.
 
 ---
 

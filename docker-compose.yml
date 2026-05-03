@@ -1,0 +1,55 @@
+# AirOS Docker Compose POC (Level 2 topology).
+#
+# This file demonstrates a future multi-container AirOS node shape:
+# - `airos-core`: core health / conformance / supervisor surface (short-running commands in this POC)
+# - `flood-demo-app`: a separate "application workload" container running the flood demo
+# - optional `review-dashboard`: Streamlit UI reading outputs from the shared data volume
+#
+# This is packaging/orchestration only. No plugin loading. No external providers. No secrets.
+
+services:
+  airos-core:
+    build: .
+    image: air-os:local
+    working_dir: /app
+    volumes:
+      - ./deployments:/app/deployments
+      - ./data:/app/data
+    command: ["python", "tools/airos_cli.py", "doctor"]
+
+  flood-demo-app:
+    build: .
+    image: air-os:local
+    working_dir: /app
+    depends_on:
+      - airos-core
+    volumes:
+      - ./deployments:/app/deployments
+      - ./data:/app/data
+    command:
+      [
+        "python",
+        "tools/airos_cli.py",
+        "deployment",
+        "run",
+        "deployments/examples/flood_local_demo",
+      ]
+
+  review-dashboard:
+    profiles: ["dashboard"]
+    build: .
+    image: air-os:local
+    working_dir: /app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./deployments:/app/deployments
+      - ./data:/app/data
+    command:
+      [
+        "streamlit",
+        "run",
+        "review_dashboard/app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+      ]

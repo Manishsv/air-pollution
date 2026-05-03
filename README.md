@@ -17,6 +17,7 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Plugin + registry model**: [`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`](docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md)
 - **Deployment quickstart (clean-machine test)**: [`docs/DEPLOYMENT_QUICKSTART.md`](docs/DEPLOYMENT_QUICKSTART.md)
 - **Docker (optional)**: [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md)
+- **Docker Compose POC (Level 2 topology)**: [`docs/DOCKER_COMPOSE_POC.md`](docs/DOCKER_COMPOSE_POC.md)
 - **Multi-container deployment (target architecture)**: [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
 - **Forward deployment templates**: [`deployments/templates/`](deployments/templates/)
 - **Federated deployment (node-first)**: [`docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](docs/FEDERATED_DEPLOYMENT_ARCHITECTURE.md)

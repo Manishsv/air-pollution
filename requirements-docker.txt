@@ -1,0 +1,26 @@
+# Docker image dependency set for AirOS Core workflows (doctor, conformance, supervisor,
+# registry-driven demos, Streamlit). Keeps the image smaller and faster to build than
+# the full repo `requirements.txt` by omitting optional YOLO/camera stack packages that
+# pull PyTorch + CUDA wheels via `ultralytics`.
+#
+# For camera / `--use-yolo` flows, install the full `requirements.txt` on the host or
+# extend this image with `opencv-python` and `ultralytics`.
+
+geopandas
+shapely
+pyproj
+osmnx
+h3
+pandas
+numpy
+requests
+scikit-learn
+xgboost
+folium
+joblib
+pyyaml
+python-dotenv
+tqdm
+streamlit
+streamlit-folium
+jsonschema>=4.17.0
