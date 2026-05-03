@@ -24,10 +24,10 @@ If you prefer not to manage a local venv, use the Docker image (Python 3.11 + ge
 
 ```bash
 docker build -t air-os:local .
-docker run --rm air-os:local python tools/airos_cli.py doctor
-docker run --rm air-os:local python tools/airos_cli.py conformance
-docker run --rm air-os:local python tools/airos_cli.py review --run-conformance
-docker run --rm -v "$(pwd)/data:/app/data" air-os:local python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+docker run --rm air-os:local doctor
+docker run --rm air-os:local conformance
+docker run --rm air-os:local review --run-conformance
+docker run --rm -v "$(pwd)/data:/app/data" air-os:local deployment run deployments/examples/flood_local_demo
 ```
 
 ## 3) Fresh clone setup

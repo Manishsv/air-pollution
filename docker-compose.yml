@@ -15,7 +15,7 @@ services:
     volumes:
       - ./deployments:/app/deployments
       - ./data:/app/data
-    command: ["python", "tools/airos_cli.py", "doctor"]
+    command: ["doctor"]
 
   flood-demo-app:
     build: .
@@ -28,8 +28,6 @@ services:
       - ./data:/app/data
     command:
       [
-        "python",
-        "tools/airos_cli.py",
         "deployment",
         "run",
         "deployments/examples/flood_local_demo",

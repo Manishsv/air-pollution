@@ -38,34 +38,43 @@ Or with Compose:
 docker compose build
 ```
 
+## Pull from GitHub Container Registry (no git clone)
+
+If you just want to run AirOS without cloning this repository:
+
+```bash
+docker pull ghcr.io/manishsv/air-os:latest
+docker run --rm ghcr.io/manishsv/air-os:latest doctor
+```
+
 ## Health check (doctor)
 
 ```bash
-docker run --rm air-os:local python tools/airos_cli.py doctor
+docker run --rm air-os:local doctor
 ```
 
 With conformance as part of the supervisor step:
 
 ```bash
-docker run --rm air-os:local python tools/airos_cli.py doctor --run-conformance
+docker run --rm air-os:local doctor --run-conformance
 ```
 
 ## Conformance
 
 ```bash
-docker run --rm air-os:local python tools/airos_cli.py conformance
+docker run --rm air-os:local conformance
 ```
 
 ## AI supervisor review
 
 ```bash
-docker run --rm air-os:local python tools/airos_cli.py review --run-conformance
+docker run --rm air-os:local review --run-conformance
 ```
 
 ## Registry-driven flood demo (fixtures only)
 
 ```bash
-docker run --rm air-os:local python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+docker run --rm air-os:local deployment run deployments/examples/flood_local_demo
 ```
 
 ### Persist outputs on the host
@@ -76,7 +85,7 @@ By default, generated artifacts go under `data/` inside the container filesystem
 docker run --rm \
   -v "$(pwd)/data:/app/data" \
   air-os:local \
-  python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+  deployment run deployments/examples/flood_local_demo
 ```
 
 Conformance reports and other outputs written under `/app/data/outputs` will then appear in your host `./data/outputs`.

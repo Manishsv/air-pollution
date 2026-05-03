@@ -37,5 +37,11 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
+# Friendly CLI entrypoint:
+#   docker run --rm ghcr.io/manishsv/air-os:latest doctor
+#   docker run --rm ghcr.io/manishsv/air-os:latest conformance
+#   docker run --rm ghcr.io/manishsv/air-os:latest deployment run deployments/examples/flood_local_demo
+ENTRYPOINT ["python", "tools/airos_cli.py"]
+
 # Safe default: lightweight doctor (prints env + runs supervisor without conformance by default).
-CMD ["python", "tools/airos_cli.py", "doctor"]
+CMD ["doctor"]

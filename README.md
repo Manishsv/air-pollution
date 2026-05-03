@@ -235,6 +235,13 @@ python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 
 Run the same workflows in a container without a local venv: see [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md). Quick start: `docker build -t air-os:local .` then `docker run --rm air-os:local python tools/airos_cli.py doctor`.
 
+You can also pull a published image from GitHub Container Registry (GHCR):
+
+```bash
+docker pull ghcr.io/manishsv/air-os:latest
+docker run --rm ghcr.io/manishsv/air-os:latest doctor
+```
+
 ### Run
 
 Default config runs **fast `bbox` mode** (recommended for development):
