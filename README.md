@@ -221,6 +221,7 @@ AirOS includes a minimal CLI that wraps existing checks and demos (no plugin loa
 python tools/airos_cli.py doctor
 python tools/airos_cli.py conformance
 python tools/airos_cli.py review --run-conformance
+python tools/airos_cli.py deployment init --help
 python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 ```

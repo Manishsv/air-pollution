@@ -124,6 +124,28 @@ streamlit run review_dashboard/app.py
 - Only later replace `fixture_path` entries with **authorized** provider inputs and contracts.
 - **Do not commit** secrets, API keys, credentials, mailbox passwords, restricted datasets, or sensitive city/agency operational profiles into the public AirOS repository.
 
+You can also scaffold a new deployment workspace from templates via the CLI:
+
+```bash
+python tools/airos_cli.py deployment init \
+  --deployment-id demo_city_air_quality \
+  --deployment-name "Demo City Air Quality" \
+  --deployment-type single_agency \
+  --owner-organization "Demo Agency" \
+  --environment local \
+  --domains air_quality \
+  --agency-id demo_agency \
+  --agency-name "Demo Agency" \
+  --agency-type pollution_control_board \
+  --jurisdiction-type city \
+  --jurisdiction-id demo_city \
+  --jurisdiction-name "Demo City" \
+  --providers openaq_v3,open_meteo \
+  --applications air_quality_review_console \
+  --network-adapters email_phase1_adapter \
+  --output-dir /tmp/demo_city_air_quality
+```
+
 ## 11) Troubleshooting
 
 - **`No module named pytest`**: ensure you activated the venv and installed pytest: `pip install pytest` (or `python -m pip install pytest`).  

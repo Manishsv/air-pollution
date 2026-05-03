@@ -180,6 +180,10 @@ This repo includes a **minimal proof of concept** runner that demonstrates **Air
 - Example deployment: `deployments/examples/flood_local_demo/`
 - Runner: `python tools/deployment_runner/run_deployment.py --deployment deployments/examples/flood_local_demo`
   - Quickstart: `docs/DEPLOYMENT_QUICKSTART.md`
+- Validate config first: `python tools/deployment_runner/validate_deployment.py --deployment deployments/examples/flood_local_demo`
+
+Deployment teams can also **initialize a deployment workspace from templates** (placeholders only; no secrets) via:
+`python tools/airos_cli.py deployment init ...`
 
 The runner is intentionally constrained:
 

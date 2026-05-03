@@ -94,3 +94,7 @@ def test_deployment_run_command_construction(monkeypatch) -> None:
     assert "tools/deployment_runner/run_deployment.py" in calls[0]
     assert "--deployment" in calls[0]
 
+
+def test_parse_csv() -> None:
+    assert cli._parse_csv("a,b, c,,") == ["a", "b", "c"]
+
