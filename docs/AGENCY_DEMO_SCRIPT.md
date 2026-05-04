@@ -6,7 +6,7 @@ This is a **practical, demo-ready** walkthrough of **AirOS** as a **governed, re
 
 **Related:** technical Docker details and troubleshooting live in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
 
-**Optional state-level demo:** Program Reporting Phase 1 (two synthetic cities → review packets + state summary; **no** automated disbursement). Run:
+**Optional state-level demo:** Program Reporting Phase 1 (two synthetic cities → review packets + state-level financial + program progress summary + action items; **no** automated disbursement). Run:
 
 ```bash
 python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo

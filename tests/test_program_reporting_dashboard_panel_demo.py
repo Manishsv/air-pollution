@@ -28,6 +28,70 @@ def test_panel_loader_reads_state_summary_and_packets(tmp_path: Path) -> None:
         "city_count": 2,
         "review_status_counts": {"review_ready": 1, "clarification_required": 1},
         "fund_release_review_status_counts": {"ready_for_authorized_review": 1, "clarification_needed": 1},
+        "financial_totals": {
+            "amount_approved_total": 2000000.0,
+            "amount_released_total": 1200000.0,
+            "amount_spent_total": 600000.0,
+            "utilization_pct": 50.0,
+        },
+        "city_financial_rows": [
+            {
+                "city_id": "city_demo_a",
+                "amount_approved": 1000000.0,
+                "amount_released": 800000.0,
+                "amount_spent": 500000.0,
+                "utilization_pct": 62.5,
+                "fund_release_review_status": "ready_for_authorized_review",
+            },
+            {
+                "city_id": "city_demo_b",
+                "amount_approved": 1000000.0,
+                "amount_released": 400000.0,
+                "amount_spent": 100000.0,
+                "utilization_pct": 25.0,
+                "fund_release_review_status": "clarification_needed",
+            },
+        ],
+        "city_progress_rows": [
+            {
+                "city_id": "city_demo_a",
+                "projects_total": 10,
+                "projects_completed": 6,
+                "projects_in_progress": 3,
+                "projects_delayed": 1,
+                "overall_progress_pct": 60.0,
+                "flags": [],
+                "review_status": "review_ready",
+            },
+            {
+                "city_id": "city_demo_b",
+                "projects_total": 10,
+                "projects_completed": 2,
+                "projects_in_progress": 4,
+                "projects_delayed": 4,
+                "overall_progress_pct": 30.0,
+                "flags": ["progress_delay"],
+                "review_status": "clarification_required",
+            },
+        ],
+        "action_items": [
+            {
+                "action_id": "action_authorized_review_city_demo_a",
+                "action_label": "Queue for authorized review",
+                "responsible_role": "state_program_reviewer",
+                "city_id": "city_demo_a",
+                "status": "open",
+                "reason": "City submission is review-ready; proceed with authorized review workflow outside AirOS.",
+            },
+            {
+                "action_id": "action_request_clarification_city_demo_b",
+                "action_label": "Request clarification from city",
+                "responsible_role": "state_program_reviewer",
+                "city_id": "city_demo_b",
+                "status": "open",
+                "reason": "Submission needs clarification based on demo rules and/or flags; request supporting clarification (no fund release automation).",
+            },
+        ],
         "flagged_cities": [],
         "cities_ready_for_authorized_review": ["city_demo_a"],
         "cities_needing_clarification": ["city_demo_b"],
@@ -73,6 +137,26 @@ def test_panel_loader_reads_state_summary_and_packets(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.state_summary is not None
     assert len(loaded.review_packets) == 2
+
+
+def test_program_reporting_panel_contains_business_sections() -> None:
+    panel = (
+        Path(__file__).resolve().parents[1]
+        / "review_dashboard"
+        / "components"
+        / "program_reporting_panel.py"
+    )
+    text = panel.read_text(encoding="utf-8")
+    for s in (
+        "Program Reporting & Fund Release Review",
+        "Financial progress",
+        "Program progress",
+        "Needs attention",
+        "Action items",
+        "Do not use this dashboard for",
+        "Technical details:",
+    ):
+        assert s in text
 
 
 def test_panel_loader_falls_back_to_single_packet(tmp_path: Path) -> None:

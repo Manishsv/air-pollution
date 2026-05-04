@@ -24,6 +24,7 @@ from review_dashboard.components.packet_summary import render_packet_summary
 from review_dashboard.components.flood_panel import render_flood_panel
 from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
 from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
+from review_dashboard.design_system import apply_airos_design_system
 from review_dashboard.ui_shell import (
     render_context_metrics,
     render_domain_header,
@@ -34,6 +35,7 @@ from review_dashboard.ui_shell import (
 
 
 st.set_page_config(page_title="AirOS Review Console", layout="wide")
+apply_airos_design_system()
 
 
 def _horizon_label(metrics: dict) -> str:
