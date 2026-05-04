@@ -6,6 +6,124 @@ This document describes a **Docker-based alternative** to installing Python and 
 
 If you want a minimal multi-container demonstration of the Level 2 topology (Core service + app service + shared deployment/data volumes), see [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md).
 
+## 5-minute Docker quickstart (GHCR)
+
+You only need Docker (no local Python). Create a host folder for outputs, pull the image, run health checks, run the built-in flood demo, and list the JSON artifacts.
+
+```bash
+mkdir -p airos-data
+
+docker pull ghcr.io/manishsv/air-os:latest
+
+docker run --rm ghcr.io/manishsv/air-os:latest doctor
+
+docker run --rm ghcr.io/manishsv/air-os:latest conformance
+
+docker run --rm \
+  -v "$(pwd)/airos-data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment run deployments/examples/flood_local_demo
+
+find airos-data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
+```
+
+**Mounts:** the flood demo writes under `/app/data` in the container. Mount a host directory to `airos-data` (or any path you choose) so outputs survive after the container exits. Deployment YAML for the built-in example lives inside the image under `/app/deployments/examples/…`; you do not need to mount it for this quick path.
+
+## What you should see
+
+- **`doctor`:** prints Python/platform, detected repo root (`/app`), and checks that key specification and deployment example folders are present.
+- **`conformance`:** runs the full specification conformance step (`main.py --step conformance`); on success it writes `conformance_report.json` under the mounted data volume (e.g. `airos-data/outputs/conformance_report.json`).
+- **Flood demo (`deployment run deployments/examples/flood_local_demo`):** writes fixture-driven, contract-shaped outputs under `airos-data/outputs/deployments/flood_local_demo/`:
+  - `flood_risk_dashboard_payload.json`
+  - `flood_decision_packets.json`
+  - `flood_field_verification_tasks.json`
+  - `deployment_run_summary.json`
+- **Dashboard (next section):** after you have run the demo (or any pipeline that writes artifacts), open **http://localhost:8501** while the Streamlit container is running.
+
+## Run the dashboard from Docker
+
+The published image uses an **AirOS CLI entrypoint** (`python tools/airos_cli.py`). To run Streamlit, **override the entrypoint** so Docker invokes `streamlit` directly.
+
+```bash
+docker run --rm \
+  -p 8501:8501 \
+  -v "$(pwd)/airos-data:/app/data" \
+  --entrypoint streamlit \
+  ghcr.io/manishsv/air-os:latest \
+  run review_dashboard/app.py --server.address=0.0.0.0 --server.port=8501
+```
+
+Then open **http://localhost:8501** in a browser.
+
+- **Keep the terminal running** while you use the dashboard; stopping the container stops the UI.
+- Use **`docker ps`** to confirm the container is up and that port **8501** is published (`0.0.0.0:8501->8501/tcp`).
+- **`--entrypoint streamlit` is required** with the default image; without it, Docker would pass `run review_dashboard/...` to the CLI instead of to Streamlit.
+
+Mount the same **`airos-data`** (or your chosen host folder) to **`/app/data`** so the dashboard can read persisted outputs (e.g. GeoJSON, parquet, decision packets) written by earlier runs.
+
+## Initialize your own flood deployment from the runnable example
+
+To work with a **copy** of the runnable example under a mounted host tree (validate/edit/run without touching the in-image example), use `deployment init --from-example`. Outputs use your **`deployment_id`** (here: `demo_city_flood`).
+
+```bash
+rm -rf airos-runtime
+mkdir -p airos-runtime/deployments airos-runtime/data
+
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment init \
+    --from-example flood_local_demo \
+    --deployment-id demo_city_flood \
+    --deployment-name "Demo City Flood" \
+    --output-dir deployments/local/demo_city_flood \
+    --force
+
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment validate deployments/local/demo_city_flood
+
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment run deployments/local/demo_city_flood
+
+find airos-runtime/data/outputs/deployments/demo_city_flood -maxdepth 1 -type f | sort
+```
+
+**Why two mounts:** `deployments/local/…` holds your copied registry YAML; `data` holds runtime and conformance outputs. Do not put secrets in either tree for public demos.
+
+## Troubleshooting
+
+- **Dashboard site cannot be reached**
+  - Confirm the **`docker run`** that starts Streamlit is **still running** (foreground terminal).
+  - Include **`-p 8501:8501`** so the host can reach the server.
+  - Include **`--entrypoint streamlit`** as shown above.
+  - Run **`docker ps`** and look for a mapping like `0.0.0.0:8501->8501/tcp`.
+
+- **`deployment init: error: unrecognized arguments: --from-example`** (or flag not found)
+  - Your image may be old; **`docker pull ghcr.io/manishsv/air-os:latest`** again.
+  - If needed: `docker image rm ghcr.io/manishsv/air-os:latest` then pull again.
+
+- **`no matching manifest for linux/arm64/v8`** (Apple Silicon)
+  - The published image is **multi-arch** (`linux/amd64` and `linux/arm64`); **`docker pull`** again to refresh manifests.
+
+- **Flood outputs missing on the host**
+  - Pass **`-v "$(pwd)/<folder>:/app/data"`** so writes under `/app/data/outputs/...` land on your machine.
+
+- **Permission errors on mounted folders**
+  - **`mkdir -p`** the host directories **before** `docker run` so Docker creates the mount with predictable ownership.
+
+## Why this matters for developers
+
+- You can **see AirOS running without installing Python** or geo stack packages on the host.
+- You can run a **governed, registry-driven** flood demo with **fixture-only** data and inspect **contract-shaped** JSON outputs.
+- From there you can decide whether to **clone the repo** for deeper work, or **mount source** into a container for iterative development—without treating the Docker image as a substitute for specs and conformance on your branch.
+
 ## When to use Docker
 
 - You want a **reproducible environment** (Python 3.11 + geo/OpenCV system libs) without managing a local venv.
@@ -36,15 +154,6 @@ Or with Compose:
 
 ```bash
 docker compose build
-```
-
-## Pull from GitHub Container Registry (no git clone)
-
-If you just want to run AirOS without cloning this repository:
-
-```bash
-docker pull ghcr.io/manishsv/air-os:latest
-docker run --rm ghcr.io/manishsv/air-os:latest doctor
 ```
 
 ## Health check (doctor)
@@ -103,54 +212,24 @@ docker run --rm \
 
 Adjust paths to match how you organize private configs.
 
-## Initialize a runnable deployment from an example (recommended)
+## Optional Streamlit dashboard (local image / Compose)
 
-The generic `deployment init` flow creates scaffolding and may include placeholders. To create a **runnable** deployment workspace from a known-good example (currently: `flood_local_demo`), copy the example into a mounted host folder and override identity fields:
+For the **default CLI entrypoint** image (including `ghcr.io/manishsv/air-os:latest`), use the **Run the dashboard from Docker** section above (`--entrypoint streamlit`).
+
+If you built **`air-os:local`** from this repo with the same Dockerfile, the same override applies:
 
 ```bash
-mkdir -p airos-runtime/deployments airos-runtime/data
-
-docker run --rm \
-  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
-  -v "$(pwd)/airos-runtime/data:/app/data" \
-  ghcr.io/manishsv/air-os:latest \
-  deployment init \
-    --from-example flood_local_demo \
-    --deployment-id demo_city_flood \
-    --deployment-name "Demo City Flood" \
-    --output-dir deployments/local/demo_city_flood \
-    --force
+docker run --rm -p 8501:8501 \
+  -v "$(pwd)/airos-data:/app/data" \
+  --entrypoint streamlit \
+  air-os:local \
+  run review_dashboard/app.py --server.address=0.0.0.0 --server.port=8501
 ```
 
-Then validate and run:
+With Compose (profile `dashboard`; the service runs Streamlit directly—no entrypoint override needed in that YAML):
 
 ```bash
-docker run --rm \
-  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
-  -v "$(pwd)/airos-runtime/data:/app/data" \
-  ghcr.io/manishsv/air-os:latest \
-  deployment validate deployments/local/demo_city_flood
-
-docker run --rm \
-  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
-  -v "$(pwd)/airos-runtime/data:/app/data" \
-  ghcr.io/manishsv/air-os:latest \
-  deployment run deployments/local/demo_city_flood
-```
-
-## Optional Streamlit dashboard
-
-Expose port **8501** and bind Streamlit to all interfaces:
-
-```bash
-docker run --rm -p 8501:8501 air-os:local \
-  streamlit run review_dashboard/app.py --server.address=0.0.0.0 --server.port=8501
-```
-
-With Compose (profile `dashboard`):
-
-```bash
-docker compose --profile dashboard up dashboard
+docker compose --profile dashboard up --build review-dashboard
 ```
 
 ## Avoiding secrets in images and build context

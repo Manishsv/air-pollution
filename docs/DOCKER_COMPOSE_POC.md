@@ -6,8 +6,10 @@ This document describes a **minimal Docker Compose proof-of-concept** that demon
 
 Related:
 
-- Single-image Docker usage (Level 1): [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md)
+- Single-image Docker usage (Level 1), including **GHCR quickstart**, **`--from-example`** init, and **dashboard via `--entrypoint streamlit`**: [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md)
 - Target multi-container architecture (Levels 0–4): [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
+
+**Note:** If you only need a quick demo on a laptop, start with the single-image flow in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md). This Compose file is for proving **service topology** and shared volumes.
 
 ---
 
@@ -34,10 +36,10 @@ Defined in `docker-compose.yml`:
 
 - **`airos-core`**
   - **Purpose**: Core health/conformance/supervisor layer (represented as short-running CLI commands in this POC).
-  - **Default command**: `python tools/airos_cli.py doctor`
+  - **Default command**: `doctor` (image `ENTRYPOINT` is the AirOS CLI)
 - **`flood-demo-app`**
   - **Purpose**: A domain/application workload consuming AirOS-compatible deployment configuration.
-  - **Default command**: `python tools/airos_cli.py deployment run deployments/examples/flood_local_demo`
+  - **Default command**: `deployment run deployments/examples/flood_local_demo` (via CLI `ENTRYPOINT`)
 - **`review-dashboard`** (optional)
   - **Purpose**: Streamlit review UI reading the shared outputs.
   - **Enabled**: only when using the `dashboard` profile.
@@ -73,29 +75,30 @@ docker compose up --build
 ### Run only AirOS Core doctor
 
 ```bash
-docker compose run --rm airos-core python tools/airos_cli.py doctor
+docker compose run --rm airos-core doctor
 ```
 
 ### Run conformance
 
 ```bash
-docker compose run --rm airos-core python tools/airos_cli.py conformance
+docker compose run --rm airos-core conformance
 ```
 
 ### Run supervisor
 
 ```bash
-docker compose run --rm airos-core python tools/airos_cli.py review --run-conformance
+docker compose run --rm airos-core review --run-conformance
 ```
 
 ### Run flood demo
 
 ```bash
-docker compose run --rm flood-demo-app \
-  python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+docker compose run --rm flood-demo-app
 ```
 
 ### Optional dashboard
+
+The `review-dashboard` service runs **Streamlit as the container command** (not via the CLI entrypoint), so no `--entrypoint` override is needed here. For **`docker run`** on the GHCR image, see [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md) (**Run the dashboard from Docker**).
 
 ```bash
 docker compose --profile dashboard up --build review-dashboard
@@ -176,8 +179,8 @@ If Docker is available:
 
 ```bash
 docker compose config
-docker compose run --rm airos-core python tools/airos_cli.py doctor
-docker compose run --rm airos-core python tools/airos_cli.py conformance
-docker compose run --rm flood-demo-app python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+docker compose run --rm airos-core doctor
+docker compose run --rm airos-core conformance
+docker compose run --rm flood-demo-app
 ```
 

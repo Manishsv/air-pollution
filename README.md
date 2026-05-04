@@ -246,14 +246,17 @@ python tools/airos_cli.py deployment run deployments/local/demo_city_flood
 
 ### Docker (optional)
 
-Run the same workflows in a container without a local venv: see [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md). Quick start: `docker build -t air-os:local .` then `docker run --rm air-os:local python tools/airos_cli.py doctor`.
-
-You can also pull a published image from GitHub Container Registry (GHCR):
+Try AirOS in about five minutes with Docker only—**doctor**, **conformance**, the **flood fixture demo**, optional **`deployment init --from-example`**, and the **Streamlit review dashboard** (requires **`--entrypoint streamlit`** because the image defaults to the AirOS CLI). See **[`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md)** for the full quickstart, expected outputs, and troubleshooting.
 
 ```bash
+mkdir -p airos-data
 docker pull ghcr.io/manishsv/air-os:latest
 docker run --rm ghcr.io/manishsv/air-os:latest doctor
+docker run --rm -v "$(pwd)/airos-data:/app/data" ghcr.io/manishsv/air-os:latest \
+  deployment run deployments/examples/flood_local_demo
 ```
+
+From a git checkout you can instead `docker build -t air-os:local .` and use `docker run --rm air-os:local doctor` (same CLI entrypoint as GHCR).
 
 ### Run
 

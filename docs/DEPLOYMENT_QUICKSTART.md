@@ -20,10 +20,33 @@ It is designed to help another engineer clone the repo, install dependencies, ru
 
 ### Docker alternative (optional)
 
-If you prefer not to manage a local venv, use the Docker image (Python 3.11 + geo/OpenCV deps baked in). Full details: [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
+If you prefer not to manage a local venv, use the published **GHCR** image or build **`air-os:local`** from the repo. Full walkthrough (5-minute quickstart, flood demo, **`--from-example`** init, dashboard with **`--entrypoint streamlit`**, troubleshooting): [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
+
+**Fastest try (GHCR, no clone):**
 
 ```bash
-docker build -t air-os:local .
+mkdir -p airos-data
+docker pull ghcr.io/manishsv/air-os:latest
+docker run --rm ghcr.io/manishsv/air-os:latest doctor
+docker run --rm ghcr.io/manishsv/air-os:latest conformance
+docker run --rm -v "$(pwd)/airos-data:/app/data" ghcr.io/manishsv/air-os:latest \
+  deployment run deployments/examples/flood_local_demo
+find airos-data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
+```
+
+**Review dashboard in Docker** (CLI is the default image entrypoint; override for Streamlit):
+
+```bash
+docker run --rm -p 8501:8501 -v "$(pwd)/airos-data:/app/data" \
+  --entrypoint streamlit ghcr.io/manishsv/air-os:latest \
+  run review_dashboard/app.py --server.address=0.0.0.0 --server.port=8501
+```
+
+Open **http://localhost:8501** (keep that terminal running).
+
+From source (after `docker build -t air-os:local .`):
+
+```bash
 docker run --rm air-os:local doctor
 docker run --rm air-os:local conformance
 docker run --rm air-os:local review --run-conformance
