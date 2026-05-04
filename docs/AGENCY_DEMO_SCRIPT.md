@@ -6,7 +6,14 @@ This is a **practical, demo-ready** walkthrough of **AirOS** as a **governed, re
 
 **Related:** technical Docker details and troubleshooting live in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
 
-**Future state-level demo:** programmatic **program reporting** and **fund-release review** (evidence-backed submissions; **no** automated disbursement)—see the design doc [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](PROGRAM_REPORTING_AND_FUND_RELEASE.md). That flow is **not** part of today’s Docker script; the script below uses the existing **flood** fixture demo.
+**Optional state-level demo:** Program Reporting Phase 1 (two synthetic cities → review packets + state summary; **no** automated disbursement). Run:
+
+```bash
+python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo
+streamlit run review_dashboard/app.py
+```
+
+Then open the **Program Reporting** tab in the review dashboard. Design context: [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](PROGRAM_REPORTING_AND_FUND_RELEASE.md).
 
 ---
 

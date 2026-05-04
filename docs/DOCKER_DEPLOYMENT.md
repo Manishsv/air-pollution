@@ -40,6 +40,10 @@ find airos-data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
   - `flood_decision_packets.json`
   - `flood_field_verification_tasks.json`
   - `deployment_run_summary.json`
+- **Program Reporting demo (optional):** after running `deployment run deployments/examples/program_reporting_state_demo` (either from source or in Docker), the dashboard will show a **Program Reporting** tab that renders:
+  - `fund_release_review_packets.json`
+  - `state_program_summary.json`
+  - `deployment_run_summary.json`
 - **Dashboard (next section):** after you have run the demo (or any pipeline that writes artifacts), open **http://localhost:8501** while the Streamlit container is running.
 
 ## Run the dashboard from Docker

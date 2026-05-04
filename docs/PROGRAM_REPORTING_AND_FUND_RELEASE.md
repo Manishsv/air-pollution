@@ -23,8 +23,14 @@ The **first Program Reporting demo** in `specifications/` is deliberately minima
 #### Phase 1 fixture demo implementation
 
 - **City submission sample:** `specifications/examples/program_reporting/city_program_submission.sample.json` (synthetic).
+- **Second city submission:** `specifications/examples/program_reporting/city_program_submission_city_b.sample.json` (synthetic; intentionally triggers multiple flags).
 - **Review packet builder:** `urban_platform.applications.program_reporting.review_packets.build_fund_release_review_packet` reads a submission-shaped `dict` and emits a **`fund_release_review_packet`**-shaped `dict` with deterministic flags (`progress_delay` if `overall_progress_pct < 50`, `low_fund_utilization` if `utilization_pct < 50`, `financial_inconsistency` if `amount_spent > amount_released`), fixed **`blocked_uses`**, and role-based **`required_human_approvals`**. **No automatic fund release** or finance integration.
-- **Deployment example:** `deployments/examples/program_reporting_state_demo/` — after `deployment validate`, run `python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo` to write `data/outputs/deployments/program_reporting_state_demo/fund_release_review_packet.json` and `deployment_run_summary.json`, with output validated against the consumer schema.
+- **State summary builder:** `urban_platform.applications.program_reporting.review_packets.build_program_reporting_state_summary` aggregates multiple review packets into a small multi-city monitoring payload (demo-only; no schema yet).
+- **Deployment example:** `deployments/examples/program_reporting_state_demo/` — after `deployment validate`, run `python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo` to write:
+  - `fund_release_review_packets.json` (two cities, schema-validated)
+  - `state_program_summary.json` (multi-city monitoring summary)
+  - `deployment_run_summary.json` (counts + warnings)
+- **Review dashboard tab:** run `streamlit run review_dashboard/app.py` and open the **Program Reporting** tab to render these generated JSON outputs (presentation-only; no additional decision logic in the UI).
 - **Future:** catalog pull/cache, dashboards, signed envelopes / network submission flows, and evidence-heavy workflows.
 
 ---
