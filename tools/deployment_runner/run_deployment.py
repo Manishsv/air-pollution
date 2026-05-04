@@ -16,11 +16,7 @@ _REPO_ROOT_FOR_IMPORTS = _THIS_FILE.parents[2]
 if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
-from urban_platform.applications.flood.dashboard_payload import build_flood_risk_dashboard_payload
-from urban_platform.applications.flood.decision_packets import build_flood_decision_packets
-from urban_platform.applications.flood.field_tasks import build_flood_field_verification_tasks
 from urban_platform.applications.program_reporting.review_packets import (
-    build_fund_release_review_packet,
     build_program_reporting_state_summary,
 )
 from urban_platform.connectors.flood.ingest_file import (
@@ -30,6 +26,7 @@ from urban_platform.connectors.flood.ingest_file import (
 )
 from urban_platform.processing.flood.features import build_flood_feature_rows
 from urban_platform.deployments.config_loader import load_deployment_config
+from urban_platform.deployments.builder_registry import get_builder, has_builder
 from urban_platform.specifications.conformance import assert_conforms, load_manifest
 
 
@@ -72,11 +69,10 @@ PROVIDER_INGEST_ALLOWLIST: dict[str, Callable[[Path], pd.DataFrame]] = {
     "drainage_asset_fixture": lambda p: ingest_drainage_asset_feed_json(json_path=p)[0],
 }
 
-APPLICATION_ALLOWLIST: dict[str, Callable[..., Any]] = {
-    "flood_risk_dashboard_payload": build_flood_risk_dashboard_payload,
-    "flood_decision_packets": build_flood_decision_packets,
-    "flood_field_verification_tasks": build_flood_field_verification_tasks,
-}
+def _resolve_application_callable(application_id: str) -> Callable[..., Any]:
+    """Resolve allowlisted application builder callable (fail closed)."""
+    reg = get_builder(application_id)
+    return reg.resolve_callable()
 
 
 def _run_program_reporting_state_demo(
@@ -99,7 +95,9 @@ def _run_program_reporting_state_demo(
 
     packets: list[dict[str, Any]] = []
     for sub in submissions:
-        pkt = build_fund_release_review_packet(sub)
+        # Use the allowlisted builder registry (do not resolve from YAML strings).
+        pkt_builder = _resolve_application_callable("program_reporting_review_packet")
+        pkt = pkt_builder(sub)
         assert_conforms(pkt, schema_name="consumer_fund_release_review_packet")
         packets.append(pkt)
 
@@ -239,16 +237,16 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
         if a.get("enabled_by_default") is not True:
             continue
         aid = str(a.get("application_id") or "")
-        if aid not in APPLICATION_ALLOWLIST:
+        if not has_builder(aid):
             raise ValueError(f"application_id not allowlisted for this POC: {aid}")
         applications_enabled.append(aid)
 
         if aid == "flood_risk_dashboard_payload":
-            dashboard_payload = APPLICATION_ALLOWLIST[aid](feature_rows)
+            dashboard_payload = _resolve_application_callable(aid)(feature_rows)
         elif aid == "flood_decision_packets":
-            decision_packets = APPLICATION_ALLOWLIST[aid](feature_rows)
+            decision_packets = _resolve_application_callable(aid)(feature_rows)
         elif aid == "flood_field_verification_tasks":
-            field_tasks = APPLICATION_ALLOWLIST[aid](decision_packets)
+            field_tasks = _resolve_application_callable(aid)(decision_packets)
 
     if dashboard_payload is None:
         raise ValueError("Deployment did not produce flood dashboard payload (missing enabled application).")
