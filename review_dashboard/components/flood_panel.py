@@ -152,42 +152,49 @@ def render_flood_panel() -> None:
         else:
             st.dataframe(pd.DataFrame(prov_rows), hide_index=True, use_container_width=True)
 
-        render_section_title("Risk areas (placeholder categories)")
-        ra_rows = []
-        for a in payload.get("risk_areas") or []:
-            if not isinstance(a, dict):
-                continue
-            unc = a.get("uncertainty") or {}
-            ra_rows.append(
-                {
-                    "Area": str(a.get("area_id") or "—"),
-                    "Risk level": str(a.get("risk_level") or "—"),
-                    "Confidence score": a.get("confidence_score"),
-                    "Uncertainty note": str(unc.get("notes") or ""),
-                }
-            )
-        if not ra_rows:
-            st.caption("No risk areas in this payload.")
-        else:
-            st.dataframe(pd.DataFrame(ra_rows), hide_index=True, use_container_width=True)
+        tab_list, tab_map = st.tabs(["List View", "Map View"])
 
-        render_section_title("Review queue (candidates)")
-        q = payload.get("recommended_review_queue") or []
-        if not q:
-            st.caption("No review queue entries.")
-        else:
-            qrows = []
-            for item in q:
-                if not isinstance(item, dict):
+        with tab_list:
+            render_section_title("Risk areas (review queue)")
+            ra_rows = []
+            for a in payload.get("risk_areas") or []:
+                if not isinstance(a, dict):
                     continue
-                qrows.append(
+                unc = a.get("uncertainty") or {}
+                ra_rows.append(
                     {
-                        "Packet ID": str(item.get("packet_id") or ""),
-                        "Priority": str(item.get("priority") or ""),
-                        "Reason": str(item.get("reason") or ""),
+                        "Area": str(a.get("area_id") or "—"),
+                        "Risk level": str(a.get("risk_level") or "—"),
+                        "Confidence score": a.get("confidence_score"),
+                        "Uncertainty note": str(unc.get("notes") or ""),
                     }
                 )
-            st.dataframe(pd.DataFrame(qrows), hide_index=True, use_container_width=True)
+            if not ra_rows:
+                st.caption("No risk areas in this payload.")
+            else:
+                st.dataframe(pd.DataFrame(ra_rows), hide_index=True, use_container_width=True)
+
+            render_section_title("Recommended review queue (candidates)")
+            q = payload.get("recommended_review_queue") or []
+            if not q:
+                st.caption("No review queue entries.")
+            else:
+                qrows = []
+                for item in q:
+                    if not isinstance(item, dict):
+                        continue
+                    qrows.append(
+                        {
+                            "Packet ID": str(item.get("packet_id") or ""),
+                            "Priority": str(item.get("priority") or ""),
+                            "Reason": str(item.get("reason") or ""),
+                        }
+                    )
+                st.dataframe(pd.DataFrame(qrows), hide_index=True, use_container_width=True)
+
+        with tab_map:
+            render_section_title("Map View (placeholder)")
+            st.info("Map view is not implemented in this flood demo panel yet. Use List View for review.")
 
     def _detail() -> None:
         render_section_title("Browse queue and drill-down")
