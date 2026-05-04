@@ -5,6 +5,7 @@
 Air pollution management, heat risk assessment, flood preparedness, mobility planning, crowd monitoring, and sensor siting are all **applications that can be built on top of AirOS** — sharing the same data infrastructure, reliability layer, and decision-support tools.
 
 - **For junior developers / first-time contributors**: [`docs/BEGINNER_DEVELOPER_GUIDE.md`](docs/BEGINNER_DEVELOPER_GUIDE.md) (web-friendly mental model + copy-paste templates in [`docs/developer_templates/`](docs/developer_templates/))
+- **Interoperability (contracts, registries, catalogs, deployments, federation)**: [`docs/INTEROPERABILITY_MODEL.md`](docs/INTEROPERABILITY_MODEL.md)
 - **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
 - **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
 - **Specifications**: [`specifications/README.md`](specifications/README.md)

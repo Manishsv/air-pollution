@@ -2,6 +2,8 @@
 
 **New to AirOS? Start with [`docs/BEGINNER_DEVELOPER_GUIDE.md`](BEGINNER_DEVELOPER_GUIDE.md).**
 
+For how contracts, deployments, catalogs, and future federation fit together, see [`docs/INTEROPERABILITY_MODEL.md`](INTEROPERABILITY_MODEL.md).
+
 This guide is for developers extending the AirOS repository safely and consistently.
 
 ## What AirOS is (and what it is not)
