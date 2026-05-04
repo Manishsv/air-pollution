@@ -2,6 +2,8 @@
 
 This quickstart is a **clean-machine sanity check** for AirOS Core using a **registry-driven local flood demo** (`deployments/examples/flood_local_demo`) with **fixture data only**.
 
+It also includes a **Program Reporting Phase 1** fixture demo (`deployments/examples/program_reporting_state_demo`) that generates **two** city review packets and a **state summary** (no automatic fund release).
+
 It is designed to help another engineer clone the repo, install dependencies, run health checks, execute the flood local deployment, and understand how AirOS Core can be **configured** with deployment-scoped registries (providers + applications) without any external integrations.
 
 ## 1) Purpose
@@ -107,11 +109,13 @@ python tools/airos_cli.py deployment init --help
 # 2) Config-only validation (manifest keys, required fields, fixture paths, secret-like keys)
 python tools/airos_cli.py deployment validate <path/to/deployment_dir>
 
-# 3) Run only when the deployment matches a supported POC (today: flood fixtures)
+# 3) Run only when the deployment matches a supported POC (today: flood fixtures or program-reporting fixtures)
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo
 
-# 4) Inspect outputs (example: flood POC)
+# 4) Inspect outputs (examples)
 find data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
+find data/outputs/deployments/program_reporting_state_demo -maxdepth 1 -type f | sort
 
 # 5) Supervisor + optional conformance
 python tools/airos_cli.py review --run-conformance
@@ -128,8 +132,10 @@ python tools/airos_cli.py deployment init \
   --deployment-name "Demo City Flood" \
   --output-dir deployments/local/demo_city_flood
 
-python tools/airos_cli.py deployment validate deployments/local/demo_city_flood
-python tools/airos_cli.py deployment run deployments/local/demo_city_flood
+python tools/airos_cli.py deployment validate deployments/examples/program_reporting_state_demo
+python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo
+find data/outputs/deployments/program_reporting_state_demo -maxdepth 1 -type f | sort
+cat data/outputs/deployments/program_reporting_state_demo/deployment_run_summary.json
 ```
 
 ## 5) Run the registry-driven flood deployment demo

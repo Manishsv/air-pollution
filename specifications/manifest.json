@@ -385,6 +385,10 @@
       "schema_name": "consumer_city_program_submission",
       "path": "examples/program_reporting/city_program_submission.sample.json"
     },
+    "example_program_reporting_city_program_submission_city_b": {
+      "schema_name": "consumer_city_program_submission",
+      "path": "examples/program_reporting/city_program_submission_city_b.sample.json"
+    },
     "example_program_reporting_fund_release_review_packet": {
       "schema_name": "consumer_fund_release_review_packet",
       "path": "examples/program_reporting/fund_release_review_packet.sample.json"

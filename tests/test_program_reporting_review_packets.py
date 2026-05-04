@@ -7,15 +7,23 @@ from pathlib import Path
 from urban_platform.applications.program_reporting.review_packets import (
     build_fund_release_review_packet,
     build_program_reporting_demo_outputs,
+    build_program_reporting_state_summary,
 )
 from urban_platform.specifications.conformance import assert_conforms
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SAMPLE_SUBMISSION = _REPO_ROOT / "specifications/examples/program_reporting/city_program_submission.sample.json"
+_SAMPLE_SUBMISSION_CITY_B = (
+    _REPO_ROOT / "specifications/examples/program_reporting/city_program_submission_city_b.sample.json"
+)
 
 
 def _load_sample_submission() -> dict:
     return json.loads(_SAMPLE_SUBMISSION.read_text(encoding="utf-8"))
+
+
+def _load_city_b_submission() -> dict:
+    return json.loads(_SAMPLE_SUBMISSION_CITY_B.read_text(encoding="utf-8"))
 
 
 def _base_submission(**overrides) -> dict:
@@ -29,6 +37,9 @@ def test_sample_submission_builds_valid_review_packet() -> None:
     assert_conforms(sub, schema_name="consumer_city_program_submission")
     packet = build_fund_release_review_packet(sub, generated_at="2026-05-04T12:00:00Z")
     assert_conforms(packet, schema_name="consumer_fund_release_review_packet")
+    # City A sample has overall_progress_pct < 50, so it should be flagged for progress_delay.
+    assert "progress_delay" in packet["flags"]
+    assert packet["review_status"] in ("human_review_required", "clarification_required")
 
 
 def test_preserves_reference_data_versions() -> None:
@@ -116,6 +127,58 @@ def test_demo_outputs_envelope() -> None:
     out = build_program_reporting_demo_outputs(sub, generated_at="2026-05-04T12:00:00Z")
     assert set(out.keys()) == {"fund_release_review_packet"}
     assert_conforms(out["fund_release_review_packet"], schema_name="consumer_fund_release_review_packet")
+
+
+def test_city_b_sample_triggers_progress_delay_and_low_utilization() -> None:
+    sub = _load_city_b_submission()
+    assert_conforms(sub, schema_name="consumer_city_program_submission")
+    pkt = build_fund_release_review_packet(sub, generated_at="2026-05-04T12:00:00Z")
+    assert_conforms(pkt, schema_name="consumer_fund_release_review_packet")
+    assert "progress_delay" in pkt["flags"]
+    assert "low_fund_utilization" in pkt["flags"]
+
+
+def test_state_summary_aggregates_counts_and_includes_safety_fields() -> None:
+    sub_a = _load_sample_submission()
+    sub_b = _load_city_b_submission()
+    a = build_fund_release_review_packet(sub_a, generated_at="2026-05-04T12:00:00Z")
+    b = build_fund_release_review_packet(sub_b, generated_at="2026-05-04T12:00:00Z")
+    summary = build_program_reporting_state_summary(
+        [a, b],
+        city_submissions=[sub_a, sub_b],
+        generated_at="2026-05-04T12:05:00Z",
+    )
+
+    assert summary["city_count"] == 2
+    assert "review_status_counts" in summary
+    assert "fund_release_review_status_counts" in summary
+    assert "financial_totals" in summary
+    assert "city_financial_rows" in summary
+    assert "city_progress_rows" in summary
+    assert "action_items" in summary
+    assert len(summary["blocked_uses"]) >= 4
+    assert "automatic_fund_release" in summary["blocked_uses"]
+    for w in (
+        "fixture/demo data only",
+        "review support only",
+        "no automatic fund release",
+        "authorized finance process required",
+    ):
+        assert w in summary["warnings"]
+
+    # Guardrail: action items must not imply approval, penalties, blacklisting, or enforcement.
+    forbidden = [
+        "release funds",
+        "approve funds",
+        "reject funds",
+        "penal",
+        "enforce",
+        "blacklist",
+    ]
+    for a in summary["action_items"]:
+        blob = json.dumps(a).lower()
+        for s in forbidden:
+            assert s not in blob
 
 
 def test_no_personal_names_or_emails_in_output() -> None:

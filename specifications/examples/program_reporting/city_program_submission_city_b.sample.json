@@ -1,0 +1,50 @@
+{
+  "submission_id": "sub_city_demo_b_2026q1",
+  "city_id": "city_demo_b",
+  "program_id": "stormwater_resilience_grant_2026",
+  "program_spec_version": "v1",
+  "reporting_period": "2026_Q1",
+  "submitted_at": "2026-05-04T10:10:00Z",
+  "reporting_officer_role": "city_nodal_officer",
+  "program_progress": {
+    "projects_total": 10,
+    "projects_completed": 2,
+    "projects_in_progress": 4,
+    "projects_delayed": 4,
+    "overall_progress_pct": 30.0
+  },
+  "financial_progress": {
+    "amount_approved": 9000000,
+    "amount_released": 3000000,
+    "amount_spent": 1200000,
+    "utilization_pct": 40.0
+  },
+  "self_reported_issues": [
+    {
+      "code": "PROCUREMENT_DELAY",
+      "description": "Demo-only narrative: procurement for one work package delayed (synthetic; no vendor names)."
+    }
+  ],
+  "provenance_summary": {
+    "submission_source": "demo_ulb_portal_stub",
+    "contains_real_pii": false,
+    "amounts_are_placeholders": true
+  },
+  "warnings": [
+    "self_reported_progress_and_financials_only",
+    "not_audited_against_bank_or_treasury_systems",
+    "no_photo_or_field_evidence_in_phase_1_contract"
+  ],
+  "blocked_uses": [
+    "automatic_fund_release",
+    "automatic_penalty_or_recovery",
+    "blacklisting_without_authorized_review",
+    "public_disclosure_without_authorization"
+  ],
+  "human_review_required": true,
+  "reference_data_versions": {
+    "administrative_units": "v1",
+    "program_catalog": "v1",
+    "reporting_periods": "v1"
+  }
+}

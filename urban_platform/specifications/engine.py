@@ -12,6 +12,7 @@ from urban_platform.specifications.audit import (
     audit_examples,
     audit_manifest,
     audit_output_artifacts,
+    audit_program_spec_bundles,
     audit_schema_validity,
 )
 
@@ -186,6 +187,7 @@ def run_conformance(
     if mode == "full":
         results.extend(audit_schema_validity(validated_at=validated_at))
         results.extend(audit_domain_specs(validated_at=validated_at))
+        results.extend(audit_program_spec_bundles(validated_at=validated_at))
         results.extend(audit_examples(validated_at=validated_at))
         results.extend(audit_manifest(validated_at=validated_at))
 

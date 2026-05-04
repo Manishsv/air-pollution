@@ -20,7 +20,10 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 from urban_platform.applications.flood.dashboard_payload import build_flood_risk_dashboard_payload
 from urban_platform.applications.flood.decision_packets import build_flood_decision_packets
 from urban_platform.applications.flood.field_tasks import build_flood_field_verification_tasks
-from urban_platform.applications.program_reporting.review_packets import build_fund_release_review_packet
+from urban_platform.applications.program_reporting.review_packets import (
+    build_fund_release_review_packet,
+    build_program_reporting_state_summary,
+)
 from urban_platform.connectors.flood.ingest_file import (
     ingest_drainage_asset_feed_json,
     ingest_flood_incident_feed_json,
@@ -39,6 +42,10 @@ class DeploymentRunSummary:
     applications_enabled: list[str]
     warnings: list[str]
     validated_outputs: dict[str, bool]
+    submissions_processed: int = 0
+    review_packets_generated: int = 0
+    cities_ready_for_authorized_review: list[str] | None = None
+    cities_needing_clarification: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -86,20 +93,44 @@ def _run_program_reporting_state_demo(
     output_root: Path | None = None,
 ) -> DeploymentRunSummary:
     """Allowlisted Phase 1 path: fixture submission → review packet (no providers)."""
-    fixture = _ensure_exists(
-        repo_root, "specifications/examples/program_reporting/city_program_submission.sample.json"
-    )
-    city_submission = json.loads(fixture.read_text(encoding="utf-8"))
-    assert_conforms(city_submission, schema_name="consumer_city_program_submission")
-    packet = build_fund_release_review_packet(city_submission)
-    assert_conforms(packet, schema_name="consumer_fund_release_review_packet")
+    fixture_paths = [
+        "specifications/examples/program_reporting/city_program_submission.sample.json",
+        "specifications/examples/program_reporting/city_program_submission_city_b.sample.json",
+    ]
+    submissions: list[dict[str, Any]] = []
+    for rel in fixture_paths:
+        p = _ensure_exists(repo_root, rel)
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        assert_conforms(doc, schema_name="consumer_city_program_submission")
+        submissions.append(doc)
+
+    packets: list[dict[str, Any]] = []
+    for sub in submissions:
+        pkt = build_fund_release_review_packet(sub)
+        assert_conforms(pkt, schema_name="consumer_fund_release_review_packet")
+        packets.append(pkt)
 
     dep_id = "program_reporting_state_demo"
     out_dir = (output_root or (repo_root / "data" / "outputs" / "deployments")).resolve() / dep_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Backward compatibility: keep a single-file output (first packet).
     (out_dir / "fund_release_review_packet.json").write_text(
-        json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(packets[0], indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    (out_dir / "fund_release_review_packets.json").write_text(
+        json.dumps(packets, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    state_summary = build_program_reporting_state_summary(
+        packets,
+        city_submissions=submissions,
+        state_node_id="state_urban_department_demo",
+        program_id="stormwater_resilience_grant_2026",
+        reporting_period="2026_Q1",
+    )
+    (out_dir / "state_program_summary.json").write_text(
+        json.dumps(state_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
     warnings = [
@@ -109,6 +140,9 @@ def _run_program_reporting_state_demo(
         "authorized finance process required",
     ]
 
+    cities_ready = list(state_summary.get("cities_ready_for_authorized_review") or [])
+    cities_clarify = list(state_summary.get("cities_needing_clarification") or [])
+
     summary = DeploymentRunSummary(
         deployment_id=dep_id,
         deployment_dir=str(deployment_dir),
@@ -116,7 +150,14 @@ def _run_program_reporting_state_demo(
         providers_enabled=[],
         applications_enabled=["program_reporting_review_packet"],
         warnings=warnings,
-        validated_outputs={"consumer_fund_release_review_packet": True},
+        validated_outputs={
+            "consumer_fund_release_review_packet": True,
+            "state_program_summary": True,
+        },
+        submissions_processed=len(submissions),
+        review_packets_generated=len(packets),
+        cities_ready_for_authorized_review=cities_ready,
+        cities_needing_clarification=cities_clarify,
     )
     (out_dir / "deployment_run_summary.json").write_text(
         json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
