@@ -3,7 +3,7 @@
   "city_id": "city_demo_a",
   "program_id": "stormwater_resilience_grant_2026",
   "program_spec_version": "v1",
-  "reporting_period": "2026-Q1",
+  "reporting_period": "2026_Q1",
   "submitted_at": "2026-05-04T10:00:00Z",
   "reporting_officer_role": "ulb_program_cell_officer",
   "program_progress": {
@@ -41,5 +41,10 @@
     "blacklisting_without_authorized_review",
     "public_disclosure_without_authorization"
   ],
-  "human_review_required": true
+  "human_review_required": true,
+  "reference_data_versions": {
+    "administrative_units": "v1",
+    "program_catalog": "v1",
+    "reporting_periods": "v1"
+  }
 }

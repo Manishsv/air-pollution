@@ -1,0 +1,32 @@
+{
+  "catalog_id": "reporting_periods_demo_in",
+  "version": "v1",
+  "publisher_node_id": "state_urban_department_demo",
+  "catalog_type": "reporting_periods",
+  "status": "draft_demo",
+  "valid_from": "2026-01-01",
+  "expires_at": "2026-12-31",
+  "entries": [
+    {
+      "code": "2026_Q1",
+      "label": "Calendar year 2026 quarter 1 (synthetic)",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-03-31",
+      "metadata": { "calendar_quarter": 1 }
+    },
+    {
+      "code": "2026_Q2",
+      "label": "Calendar year 2026 quarter 2 (synthetic)",
+      "status": "active",
+      "valid_from": "2026-04-01",
+      "valid_until": "2026-06-30",
+      "metadata": { "calendar_quarter": 2 }
+    }
+  ],
+  "provenance": {
+    "fixture_only": true,
+    "contains_real_pii": false,
+    "notes": "Demo catalog for conformance and documentation only."
+  }
+}

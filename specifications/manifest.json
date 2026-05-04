@@ -167,6 +167,12 @@
       "schema_path": "platform_objects/event.v1.schema.json",
       "stability": "stable"
     },
+    "platform_reference_catalog": {
+      "description": "Shared reference catalog (codes, labels, validity): administrative units, programs, reporting periods, etc. Declarative payloads for aligned state–city reporting.",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/reference_catalog.v1.schema.json",
+      "stability": "documented"
+    },
 
     "consumer_urban_decision_packet_core": {
       "description": "Consumer contract: core decision packet shell (copy of current core schema).",
@@ -386,6 +392,18 @@
     "example_program_reporting_program_spec_registry": {
       "schema_name": "registry_program_spec_registry_v1",
       "path": "examples/program_reporting/program_spec_registry.sample.json"
+    },
+    "example_reference_data_administrative_units": {
+      "schema_name": "platform_reference_catalog",
+      "path": "examples/reference_data/administrative_units.sample.json"
+    },
+    "example_reference_data_program_catalog": {
+      "schema_name": "platform_reference_catalog",
+      "path": "examples/reference_data/program_catalog.sample.json"
+    },
+    "example_reference_data_reporting_periods": {
+      "schema_name": "platform_reference_catalog",
+      "path": "examples/reference_data/reporting_periods.sample.json"
     }
   }
 }

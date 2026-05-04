@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://urban-platform.local/spec/consumer/v1/city_program_submission",
   "title": "Consumer contract: city program submission (v1, Phase 1)",
-  "description": "Phase 1: self-reported program progress and financial utilization for a reporting period. Review-only; not a fund release instruction. No photo/field/geo evidence in this contract.",
+  "description": "Phase 1: self-reported program progress and financial utilization for a reporting period. Review-only; not a fund release instruction. No photo/field/geo evidence in this contract. city_id, program_id, and reporting_period are expected to align with state-published reference catalogs; reference_data_versions records which catalog versions the submitter used.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,7 +19,8 @@
     "provenance_summary",
     "warnings",
     "blocked_uses",
-    "human_review_required"
+    "human_review_required",
+    "reference_data_versions"
   ],
   "properties": {
     "submission_id": { "type": "string", "minLength": 1 },
@@ -77,6 +78,17 @@
       "minItems": 4,
       "items": { "type": "string", "minLength": 1 }
     },
-    "human_review_required": { "const": true }
+    "human_review_required": { "const": true },
+    "reference_data_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["administrative_units", "program_catalog", "reporting_periods"],
+      "properties": {
+        "administrative_units": { "type": "string", "minLength": 1 },
+        "program_catalog": { "type": "string", "minLength": 1 },
+        "reporting_periods": { "type": "string", "minLength": 1 }
+      },
+      "description": "Version strings (e.g. v1) for each required reference catalog declared by the program spec."
+    }
   }
 }

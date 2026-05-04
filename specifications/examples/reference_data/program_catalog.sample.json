@@ -1,0 +1,24 @@
+{
+  "catalog_id": "program_catalog_demo_in",
+  "version": "v1",
+  "publisher_node_id": "state_urban_department_demo",
+  "catalog_type": "program_catalog",
+  "status": "draft_demo",
+  "valid_from": "2026-01-01",
+  "expires_at": "2026-12-31",
+  "entries": [
+    {
+      "code": "stormwater_resilience_grant_2026",
+      "label": "Stormwater resilience grant 2026 (synthetic program)",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-12-31",
+      "metadata": { "reporting_frequency_hint": "quarterly" }
+    }
+  ],
+  "provenance": {
+    "fixture_only": true,
+    "contains_real_pii": false,
+    "notes": "Demo catalog for conformance and documentation only."
+  }
+}

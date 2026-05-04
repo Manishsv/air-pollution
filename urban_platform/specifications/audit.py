@@ -178,6 +178,7 @@ def _validate_program_spec_bundle_yaml(path: Path) -> list[str]:
         "required_submission_contract",
         "review_output_contract",
         "required_sections",
+        "required_reference_catalogs",
         "review_rules",
         "blocked_uses",
         "versioning_policy",
@@ -198,6 +199,11 @@ def _validate_program_spec_bundle_yaml(path: Path) -> list[str]:
     bu = doc.get("blocked_uses")
     if not isinstance(bu, list) or not bu:
         errs.append("blocked_uses must be a non-empty list")
+    rrc = doc.get("required_reference_catalogs")
+    if not isinstance(rrc, list) or not rrc:
+        errs.append("required_reference_catalogs must be a non-empty list")
+    elif not all(isinstance(x, str) and x.strip() for x in rrc):
+        errs.append("required_reference_catalogs entries must be non-empty strings")
     return errs
 
 

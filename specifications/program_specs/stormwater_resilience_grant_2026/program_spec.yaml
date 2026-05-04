@@ -14,6 +14,14 @@ required_sections:
   - program_progress
   - financial_progress
 
+# Shared reference catalogs (Phase 1): state publishes; cities declare versions used on each submission.
+# Semantics: city_id must be a `code` from the administrative_units catalog; program_id from program_catalog;
+# reporting_period from reporting_periods. Runtime validation against catalog payloads is future work.
+required_reference_catalogs:
+  - administrative_units
+  - program_catalog
+  - reporting_periods
+
 review_rules:
   - rule_id: progress_delay
     description: If overall_progress_pct is below program_threshold_progress_pct, flag progress_delay.
@@ -38,3 +46,5 @@ notes: >
   Phase 1 is intentionally limited to self-reported progress and financial aggregates in the submission
   contract. Photo evidence, field inspections, geo-tagged assets, utilization certificates, deficiency memos,
   and aggregate dashboards are deferred to later phases.
+  Cities must declare reference_data_versions on each submission (see consumer_city_program_submission);
+  state publishes matching reference_catalog payloads under specifications/examples/reference_data/ for demos only.

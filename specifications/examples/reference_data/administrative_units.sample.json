@@ -1,0 +1,51 @@
+{
+  "catalog_id": "administrative_units_demo_in",
+  "version": "v1",
+  "publisher_node_id": "state_urban_department_demo",
+  "catalog_type": "administrative_units",
+  "status": "draft_demo",
+  "valid_from": "2026-01-01",
+  "expires_at": "2026-12-31",
+  "entries": [
+    {
+      "code": "state_demo",
+      "label": "Synthetic demo state (not a real jurisdiction)",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-12-31",
+      "metadata": { "unit_type": "state" }
+    },
+    {
+      "code": "district_demo_1",
+      "label": "Synthetic demo district 1",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-12-31",
+      "parent_code": "state_demo",
+      "metadata": { "unit_type": "district" }
+    },
+    {
+      "code": "city_demo_a",
+      "label": "Synthetic demo city A (ULB placeholder)",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-12-31",
+      "parent_code": "district_demo_1",
+      "metadata": { "unit_type": "city" }
+    },
+    {
+      "code": "city_demo_b",
+      "label": "Synthetic demo city B (ULB placeholder)",
+      "status": "active",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-12-31",
+      "parent_code": "district_demo_1",
+      "metadata": { "unit_type": "city" }
+    }
+  ],
+  "provenance": {
+    "fixture_only": true,
+    "contains_real_pii": false,
+    "notes": "Demo catalog for conformance and documentation only."
+  }
+}

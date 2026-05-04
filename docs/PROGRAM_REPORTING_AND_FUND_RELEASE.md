@@ -12,6 +12,14 @@ The **first Program Reporting demo** in `specifications/` is deliberately minima
 
 **Explicitly deferred to later phases:** separate **provider** feeds (per-project progress, line-item expenditure, field inspection, geo-tagged assets, utilization certificates as structured inputs), **photographic / field / geo evidence** as required contract data, **deficiency_memo** and **program_progress_dashboard** consumer contracts, and detailed deficiency workflows. Those capabilities remain valid **design directions** below; they are **not** Phase 1 conformance artifacts.
 
+#### Phase 1 reference data (catalogs)
+
+- The **state** (publisher) maintains **shared reference catalogs** so cities and the state program office use the same **codes** for administrative units, programs, and reporting periods. The canonical shape is **`platform_objects/reference_catalog.v1.schema.json`** (manifest: `platform_reference_catalog`).
+- **Demo fixtures** live under `specifications/examples/reference_data/` (`administrative_units`, `program_catalog`, `reporting_periods`) and are registered for **conformance example validation only**.
+- Each **`city_program_submission`** and **`fund_release_review_packet`** carries **`reference_data_versions`** (e.g. `v1` per catalog family) so reviewers know which catalog revision the payload assumed.
+- The **program spec** lists **`required_reference_catalogs`** and states that **`city_id`**, **`program_id`**, and **`reporting_period`** on submissions should match **`code`** values from the administrative-units, program, and reporting-period catalogs respectively.
+- **Distribution, pull/cache, TTL, and cryptographic signing** of catalogs are **out of scope** for this specs step; they remain **future implementation** work.
+
 ---
 
 ## 2) Governance problem
@@ -150,7 +158,7 @@ These are **placeholders for product/CLI design**; today, use **manual file plac
 
 ## 9) Contracts and fixtures (Phase 1 demo pack in repo)
 
-The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` includes **domain spec**, **registry schema**, **program bundle YAML**, **two consumer schemas**, and **three JSON examples** (still **no runtime** program reporting pipeline in application code). Manifest keys:
+The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` includes **domain spec**, **registry schema**, **program bundle YAML**, **two consumer schemas**, one **reference catalog** platform schema, **six** registered JSON examples under program reporting + reference data (still **no runtime** program reporting pipeline in application code). Manifest keys:
 
 **Domain**
 
@@ -162,7 +170,11 @@ The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` in
 
 **Program bundle**
 
-- `specifications/program_specs/stormwater_resilience_grant_2026/program_spec.yaml`
+- `specifications/program_specs/stormwater_resilience_grant_2026/program_spec.yaml` (includes `required_reference_catalogs`)
+
+**Platform object — reference catalog**
+
+- `specifications/platform_objects/reference_catalog.v1.schema.json` → `platform_reference_catalog`
 
 **Consumer contracts** (`specifications/consumer_contracts/`)
 
@@ -174,6 +186,12 @@ The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` in
 - `city_program_submission.sample.json` → `example_program_reporting_city_program_submission`  
 - `fund_release_review_packet.sample.json` → `example_program_reporting_fund_release_review_packet`  
 - `program_spec_registry.sample.json` → `example_program_reporting_program_spec_registry`  
+
+**Examples** (`specifications/examples/reference_data/`)
+
+- `administrative_units.sample.json` → `example_reference_data_administrative_units`  
+- `program_catalog.sample.json` → `example_reference_data_program_catalog`  
+- `reporting_periods.sample.json` → `example_reference_data_reporting_periods`  
 
 **Deferred (not in Phase 1 manifest):** separate program-reporting **provider** schemas (project progress feed, expenditure feed, field evidence, geo-tagged progress), `deficiency_memo`, `program_progress_dashboard`, and their samples—**future phases** when provider contracts and consumer surfaces are specified again.
 

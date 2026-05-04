@@ -4,7 +4,7 @@
   "city_id": "city_demo_a",
   "program_id": "stormwater_resilience_grant_2026",
   "program_spec_version": "v1",
-  "reporting_period": "2026-Q1",
+  "reporting_period": "2026_Q1",
   "submission_id": "sub_city_demo_a_2026q1",
   "generated_at": "2026-05-04T11:00:00Z",
   "review_status": "human_review_required",
@@ -30,5 +30,10 @@
   "provenance": {
     "generated_by": "demo_state_review_stub",
     "fixture_only": true
+  },
+  "reference_data_versions": {
+    "administrative_units": "v1",
+    "program_catalog": "v1",
+    "reporting_periods": "v1"
   }
 }
