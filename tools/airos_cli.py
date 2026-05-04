@@ -102,6 +102,140 @@ def _resolve_deployment_dir(repo_root: Path, deployment_path: str) -> Path:
     return p.resolve() if p.is_absolute() else (repo_root / p).resolve()
 
 
+def _read_yaml_file(path: Path) -> dict:
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError(f"YAML root must be an object: {path}")
+    return doc
+
+
+def _read_first_line(path: Path) -> str | None:
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if s:
+                return s
+    except Exception:
+        return None
+    return None
+
+
+def _examples_root(repo_root: Path) -> Path:
+    return (repo_root / "deployments" / "examples").resolve()
+
+
+def _example_dirs(repo_root: Path) -> list[Path]:
+    root = _examples_root(repo_root)
+    if not root.is_dir():
+        return []
+    out: list[Path] = []
+    for p in sorted(root.iterdir(), key=lambda x: x.name):
+        if p.is_dir() and (p / "deployment_profile.yaml").is_file():
+            out.append(p)
+    return out
+
+
+def _example_summary_row(repo_root: Path, example_dir: Path) -> dict:
+    prof_path = example_dir / "deployment_profile.yaml"
+    prof = _read_yaml_file(prof_path)
+    deployment_id = str(prof.get("deployment_id") or "—")
+    enabled_domains = prof.get("enabled_domains") or []
+    if not isinstance(enabled_domains, list):
+        enabled_domains = []
+    enabled_domains = [str(x) for x in enabled_domains if x]
+
+    readme = example_dir / "README.md"
+    desc = _read_first_line(readme) if readme.is_file() else None
+    if desc and desc.startswith("#"):
+        desc = desc.lstrip("#").strip()
+
+    return {
+        "name": example_dir.name,
+        "path": str(example_dir.relative_to(repo_root)),
+        "deployment_id": deployment_id,
+        "enabled_domains": enabled_domains,
+        "description": desc or "",
+    }
+
+
+def _examples_list(repo_root: Path) -> int:
+    rows = [_example_summary_row(repo_root, d) for d in _example_dirs(repo_root)]
+    if not rows:
+        print("No examples found under deployments/examples/")
+        return 0
+
+    print("AirOS examples (deployments/examples)")
+    for r in rows:
+        dom = ", ".join(r["enabled_domains"]) if r["enabled_domains"] else "—"
+        line = f"- {r['name']}  (deployment_id={r['deployment_id']}, domains={dom})"
+        print(line)
+        if r["description"]:
+            print(f"  {r['description']}")
+    return 0
+
+
+def _examples_describe(repo_root: Path, name: str) -> int:
+    example_dir = (_examples_root(repo_root) / name).resolve()
+    if not example_dir.is_dir():
+        print(f"Example not found: deployments/examples/{name}", file=sys.stderr)
+        print("Run: python tools/airos_cli.py examples list", file=sys.stderr)
+        return 1
+
+    prof_path = example_dir / "deployment_profile.yaml"
+    if not prof_path.is_file():
+        print(f"Invalid example (missing deployment_profile.yaml): {example_dir}", file=sys.stderr)
+        return 1
+
+    prof = _read_yaml_file(prof_path)
+    deployment_id = str(prof.get("deployment_id") or "—")
+    enabled_domains = prof.get("enabled_domains") or []
+    if not isinstance(enabled_domains, list):
+        enabled_domains = []
+    enabled_domains = [str(x) for x in enabled_domains if x]
+
+    provider_count = 0
+    application_count = 0
+    prov_reg_paths = prof.get("enabled_provider_registries") or []
+    app_reg_paths = prof.get("enabled_application_registries") or []
+
+    def _count_items(rel_paths: list, *, key: str) -> int:
+        n = 0
+        for rp in rel_paths:
+            if not isinstance(rp, str) or not rp.strip():
+                continue
+            p = (repo_root / rp).resolve() if not Path(rp).is_absolute() else Path(rp).resolve()
+            if not p.is_file():
+                continue
+            try:
+                doc = _read_yaml_file(p)
+                items = doc.get(key) or []
+                if isinstance(items, list):
+                    n += len([x for x in items if isinstance(x, dict)])
+            except Exception:
+                continue
+        return n
+
+    provider_count = _count_items(prov_reg_paths, key="providers")
+    application_count = _count_items(app_reg_paths, key="applications")
+
+    files_present = sorted([p.name for p in example_dir.iterdir() if p.is_file()])
+    rel = str(example_dir.relative_to(repo_root))
+    dom = ", ".join(enabled_domains) if enabled_domains else "—"
+
+    print("AirOS example description")
+    print(f"- name: {name}")
+    print(f"- path: {rel}")
+    print(f"- deployment_id: {deployment_id}")
+    print(f"- enabled_domains: {dom}")
+    print(f"- provider_count: {provider_count}")
+    print(f"- application_count: {application_count}")
+    print(f"- files: {', '.join(files_present) if files_present else '—'}")
+    print("Recommended commands:")
+    print(f"- validate: {sys.executable} tools/airos_cli.py deployment validate {rel}")
+    print(f"- run: {sys.executable} tools/airos_cli.py deployment run {rel}")
+    return 0
+
+
 def _print_validation_summary(summary: ValidationSummary) -> None:
     status = "valid" if not summary.errors else "invalid"
     print("AirOS deployment validation")
@@ -706,6 +840,16 @@ def build_parser() -> argparse.ArgumentParser:
         description="Runs tools/ai_dev_supervisor/run_review.py without --run-conformance (fast).",
     )
 
+    examples = sub.add_parser(
+        "examples",
+        help="Discover runnable deployment examples (read-only).",
+        description="Scans deployments/examples/ and prints example metadata. Does not validate or run deployments.",
+    )
+    ex_sub = examples.add_subparsers(dest="examples_command", required=True)
+    ex_sub.add_parser("list", help="List available examples under deployments/examples/.")
+    ex_desc = ex_sub.add_parser("describe", help="Describe one example and print recommended commands.")
+    ex_desc.add_argument("example_name", type=str, metavar="NAME", help="Example folder name under deployments/examples/.")
+
     return p
 
 
@@ -759,6 +903,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "registry" and args.registry_command == "check":
         # Keep this simple: supervisor already includes registry hygiene probes.
         return _run(_plan_supervisor(repo_root, domain=None, run_conformance=False))
+
+    if args.command == "examples" and args.examples_command == "list":
+        return _examples_list(repo_root)
+
+    if args.command == "examples" and args.examples_command == "describe":
+        return _examples_describe(repo_root, str(args.example_name))
 
     raise SystemExit("Unknown command")
 
