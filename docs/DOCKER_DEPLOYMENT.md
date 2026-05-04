@@ -103,6 +103,41 @@ docker run --rm \
 
 Adjust paths to match how you organize private configs.
 
+## Initialize a runnable deployment from an example (recommended)
+
+The generic `deployment init` flow creates scaffolding and may include placeholders. To create a **runnable** deployment workspace from a known-good example (currently: `flood_local_demo`), copy the example into a mounted host folder and override identity fields:
+
+```bash
+mkdir -p airos-runtime/deployments airos-runtime/data
+
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment init \
+    --from-example flood_local_demo \
+    --deployment-id demo_city_flood \
+    --deployment-name "Demo City Flood" \
+    --output-dir deployments/local/demo_city_flood \
+    --force
+```
+
+Then validate and run:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment validate deployments/local/demo_city_flood
+
+docker run --rm \
+  -v "$(pwd)/airos-runtime/deployments:/app/deployments/local" \
+  -v "$(pwd)/airos-runtime/data:/app/data" \
+  ghcr.io/manishsv/air-os:latest \
+  deployment run deployments/local/demo_city_flood
+```
+
 ## Optional Streamlit dashboard
 
 Expose port **8501** and bind Streamlit to all interfaces:

@@ -94,7 +94,20 @@ find data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
 python tools/airos_cli.py review --run-conformance
 ```
 
-**Runnable demo vs scaffolding:** `deployment init` produces **templates and placeholders**. It is **not** guaranteed runnable until provider contracts, consumer contracts, and any `fixture_path` entries match the repo’s `specifications/manifest.json` and your chosen POC runner. For a **known-good** fixture-only path, use `deployments/examples/flood_local_demo` and `deployment validate` / `deployment run` on that directory.
+**Runnable demo vs scaffolding:** `deployment init` without flags produces **templates and placeholders**. It is **not** guaranteed runnable until provider contracts, consumer contracts, and any `fixture_path` entries match the repo’s `specifications/manifest.json` and your chosen POC runner.
+
+For a **known-good runnable** fixture-only starting point, initialize from the built-in example:
+
+```bash
+python tools/airos_cli.py deployment init \
+  --from-example flood_local_demo \
+  --deployment-id demo_city_flood \
+  --deployment-name "Demo City Flood" \
+  --output-dir deployments/local/demo_city_flood
+
+python tools/airos_cli.py deployment validate deployments/local/demo_city_flood
+python tools/airos_cli.py deployment run deployments/local/demo_city_flood
+```
 
 ## 5) Run the registry-driven flood deployment demo
 

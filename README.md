@@ -231,6 +231,19 @@ python tools/airos_cli.py deployment validate deployments/examples/flood_local_d
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
 ```
 
+Initialize a runnable workspace from the built-in flood example:
+
+```bash
+python tools/airos_cli.py deployment init \
+  --from-example flood_local_demo \
+  --deployment-id demo_city_flood \
+  --deployment-name "Demo City Flood" \
+  --output-dir deployments/local/demo_city_flood
+
+python tools/airos_cli.py deployment validate deployments/local/demo_city_flood
+python tools/airos_cli.py deployment run deployments/local/demo_city_flood
+```
+
 ### Docker (optional)
 
 Run the same workflows in a container without a local venv: see [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md). Quick start: `docker build -t air-os:local .` then `docker run --rm air-os:local python tools/airos_cli.py doctor`.

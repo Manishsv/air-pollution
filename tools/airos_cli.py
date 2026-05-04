@@ -6,6 +6,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 
 import yaml
 
@@ -286,12 +287,13 @@ def _scaffold_network_adapter_registry(
 def _deployment_init(
     repo_root: Path,
     *,
+    from_example: str | None,
     deployment_id: str,
     deployment_name: str,
-    deployment_type: str,
-    owner_organization: str,
-    environment: str,
-    domains_csv: str,
+    deployment_type: str | None,
+    owner_organization: str | None,
+    environment: str | None,
+    domains_csv: str | None,
     output_dir: str,
     agency_id: str | None,
     agency_name: str | None,
@@ -305,7 +307,7 @@ def _deployment_init(
     force: bool,
 ) -> int:
     templates_dir = repo_root / "deployments" / "templates"
-    domains = _parse_csv(domains_csv)
+    domains = _parse_csv(domains_csv) if domains_csv is not None else []
     provider_ids = _parse_csv(providers_csv)
     application_ids = _parse_csv(applications_csv)
     adapter_ids = _parse_csv(network_adapters_csv)
@@ -322,6 +324,96 @@ def _deployment_init(
         if not out_path.is_dir():
             print(f"Output path exists and is not a directory: {out_path}")
             return 1
+
+    # ---------------------------------------------------------------------
+    # Mode 1: Initialize from an existing runnable example (copy + override)
+    # ---------------------------------------------------------------------
+    if from_example:
+        example_dir = (repo_root / "deployments" / "examples" / from_example).resolve()
+        if not example_dir.is_dir():
+            print(f"Example deployment not found: deployments/examples/{from_example}", file=sys.stderr)
+            return 1
+
+        if out_path.exists() and force:
+            shutil.rmtree(out_path)
+
+        # Copy example directory as-is to preserve runnable registries + fixtures.
+        shutil.copytree(example_dir, out_path)
+
+        # Update deployment_profile.yaml with safe identity overrides and local registry paths.
+        prof_path = out_path / "deployment_profile.yaml"
+        if not prof_path.is_file():
+            print(f"Copied example is missing deployment_profile.yaml: {example_dir}", file=sys.stderr)
+            return 1
+        prof = _read_yaml_template(prof_path)
+        prof["deployment_id"] = deployment_id
+        prof["deployment_name"] = deployment_name
+        if deployment_type:
+            prof["deployment_type"] = deployment_type
+        if owner_organization:
+            prof["owner_organization"] = owner_organization
+        if environment:
+            prof["environment"] = environment
+        if domains:
+            prof["enabled_domains"] = domains
+
+        # Ensure the copied workspace is self-contained (avoid hard-coded example paths).
+        prof["enabled_provider_registries"] = ["provider_registry.yaml"]
+        prof["enabled_application_registries"] = ["application_registry.yaml"]
+        _write_yaml(prof_path, prof)
+
+        # Keep registries valid; only override providers/applications if explicitly requested.
+        prov_path = out_path / "provider_registry.yaml"
+        if prov_path.is_file():
+            prov_doc = _read_yaml_template(prov_path)
+            prov_doc["deployment_id"] = deployment_id
+            if provider_ids:
+                prov_doc = _scaffold_provider_registry(
+                    prov_doc, deployment_id=deployment_id, domains=(domains or list(prof.get("enabled_domains") or [])), provider_ids=provider_ids
+                )
+                prov_doc["deployment_id"] = deployment_id
+            _write_yaml(prov_path, prov_doc)
+
+        app_path = out_path / "application_registry.yaml"
+        if app_path.is_file():
+            app_doc = _read_yaml_template(app_path)
+            app_doc["deployment_id"] = deployment_id
+            if application_ids:
+                app_doc = _scaffold_application_registry(app_doc, deployment_id=deployment_id, application_ids=application_ids)
+                app_doc["deployment_id"] = deployment_id
+            _write_yaml(app_path, app_doc)
+
+        print(f"Initialized runnable deployment from example '{from_example}' at: {out_path}")
+        rel = out_path
+        try:
+            rel = out_path.relative_to(repo_root)
+        except ValueError:
+            pass
+        print("Next steps:")
+        print(f"1) Validate config: {sys.executable} tools/airos_cli.py deployment validate {rel}")
+        print(f"2) Run deployment: {sys.executable} tools/airos_cli.py deployment run {rel}")
+        print(f"3) Inspect outputs under data/outputs/deployments/{deployment_id}/ after a successful run.")
+        print(f"4) Run governance checks: {sys.executable} tools/airos_cli.py review --run-conformance")
+        print("- Do not commit secrets, credentials, API keys, restricted datasets, or sensitive operational data.")
+        return 0
+
+    # ---------------------------------------------------------------------
+    # Mode 2: Scaffold from templates (existing behavior)
+    # ---------------------------------------------------------------------
+    missing: list[str] = []
+    if not deployment_type:
+        missing.append("--deployment-type")
+    if not owner_organization:
+        missing.append("--owner-organization")
+    if not environment:
+        missing.append("--environment")
+    if not domains_csv:
+        missing.append("--domains")
+    if missing:
+        print("Missing required arguments for scaffold mode: " + ", ".join(missing), file=sys.stderr)
+        print("Hint: use --from-example flood_local_demo to create a runnable workspace.", file=sys.stderr)
+        return 2
+
     out_path.mkdir(parents=True, exist_ok=True)
 
     # deployment_profile.yaml
@@ -329,9 +421,9 @@ def _deployment_init(
     dep_prof = dict(dep_template)
     dep_prof["deployment_id"] = deployment_id
     dep_prof["deployment_name"] = deployment_name
-    dep_prof["deployment_type"] = deployment_type
-    dep_prof["owner_organization"] = owner_organization
-    dep_prof["environment"] = environment
+    dep_prof["deployment_type"] = str(deployment_type)
+    dep_prof["owner_organization"] = str(owner_organization)
+    dep_prof["environment"] = str(environment)
     dep_prof["enabled_domains"] = domains or ["DOMAIN_PLACEHOLDER"]
     dep_prof["enabled_provider_registries"] = ["provider_registry.yaml"]
     dep_prof["enabled_application_registries"] = ["application_registry.yaml"]
@@ -523,11 +615,18 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_DEPLOYMENT_INIT_EPILOG,
     )
+    dep_init.add_argument(
+        "--from-example",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Initialize a runnable workspace by copying deployments/examples/<NAME> into --output-dir (overrides profile identity fields).",
+    )
     dep_init.add_argument("--deployment-id", required=True, type=str, metavar="ID", help="Stable deployment identifier.")
     dep_init.add_argument("--deployment-name", required=True, type=str, metavar="NAME", help="Human-readable deployment name.")
     dep_init.add_argument(
         "--deployment-type",
-        required=True,
+        required=False,
         type=str,
         metavar="TYPE",
         choices=[
@@ -540,10 +639,10 @@ def build_parser() -> argparse.ArgumentParser:
         ],
         help="Deployment topology / coordination mode.",
     )
-    dep_init.add_argument("--owner-organization", required=True, type=str, metavar="ORG", help="Owning organization label or placeholder.")
+    dep_init.add_argument("--owner-organization", required=False, type=str, metavar="ORG", help="Owning organization label or placeholder.")
     dep_init.add_argument(
         "--environment",
-        required=True,
+        required=False,
         type=str,
         metavar="ENV",
         choices=["local", "staging", "production"],
@@ -551,7 +650,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dep_init.add_argument(
         "--domains",
-        required=True,
+        required=False,
         type=str,
         metavar="LIST",
         help="Comma-separated enabled domain ids (e.g. air_quality,flood_risk).",
@@ -634,12 +733,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "deployment" and args.deployment_command == "init":
         return _deployment_init(
             repo_root,
+            from_example=args.from_example,
             deployment_id=str(args.deployment_id),
             deployment_name=str(args.deployment_name),
-            deployment_type=str(args.deployment_type),
-            owner_organization=str(args.owner_organization),
-            environment=str(args.environment),
-            domains_csv=str(args.domains),
+            deployment_type=(str(args.deployment_type) if args.deployment_type is not None else None),
+            owner_organization=(str(args.owner_organization) if args.owner_organization is not None else None),
+            environment=(str(args.environment) if args.environment is not None else None),
+            domains_csv=(str(args.domains) if args.domains is not None else None),
             output_dir=str(args.output_dir),
             agency_id=args.agency_id,
             agency_name=args.agency_name,
