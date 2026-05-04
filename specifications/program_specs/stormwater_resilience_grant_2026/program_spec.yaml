@@ -1,0 +1,40 @@
+# Stormwater Resilience Grant 2026 — Phase 1 program spec (demo)
+# Synthetic placeholders only. No bank accounts, vendors, citizens, or real locations.
+
+program_id: stormwater_resilience_grant_2026
+version: v1
+status: draft_demo
+issuing_department: state_urban_department_demo
+reporting_frequency: quarterly
+
+required_submission_contract: consumer_city_program_submission
+review_output_contract: consumer_fund_release_review_packet
+
+required_sections:
+  - program_progress
+  - financial_progress
+
+review_rules:
+  - rule_id: progress_delay
+    description: If overall_progress_pct is below program_threshold_progress_pct, flag progress_delay.
+    program_threshold_progress_pct: 40
+  - rule_id: low_fund_utilization
+    description: If utilization_pct is below program_threshold_utilization_pct, flag low_fund_utilization.
+    program_threshold_utilization_pct: 50
+  - rule_id: financial_inconsistency
+    description: If amount_spent is greater than amount_released, flag financial_inconsistency.
+
+blocked_uses:
+  - automatic_fund_release
+  - automatic_penalty_or_recovery
+  - blacklisting_without_authorized_review
+  - public_disclosure_without_authorization
+
+versioning_policy: >
+  Cities declare program_spec_version on submissions. Breaking changes require a new bundle version;
+  prior versions may remain valid for in-flight periods per state policy (outside this demo file).
+
+notes: >
+  Phase 1 is intentionally limited to self-reported progress and financial aggregates in the submission
+  contract. Photo evidence, field inspections, geo-tagged assets, utilization certificates, deficiency memos,
+  and aggregate dashboards are deferred to later phases.

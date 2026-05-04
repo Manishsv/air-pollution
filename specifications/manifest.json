@@ -240,7 +240,18 @@
       "schema_path": "consumer_contracts/property_building_review_packet.v1.schema.json",
       "stability": "documented"
     },
-
+    "consumer_city_program_submission": {
+      "description": "Program reporting: city submission packet for a reporting period (review-only; not fund release).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/city_program_submission.v1.schema.json",
+      "stability": "documented"
+    },
+    "consumer_fund_release_review_packet": {
+      "description": "Program reporting: state fund-release review packet (human finance authority required; no auto-release).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/fund_release_review_packet.v1.schema.json",
+      "stability": "documented"
+    },
     "network_message_envelope_v1": {
       "description": "AirOS Network Layer: domain-agnostic envelope for routing contract-shaped payloads between agency nodes (transports attach separately—email/API/queue—not embedded here).",
       "contract_type": "network_contract",
@@ -269,6 +280,12 @@
       "description": "Registry contract: network transport adapter plugins (email/webhook/file drop/event bus) that carry network contracts. Declarative only; no secrets or credentials inline.",
       "contract_type": "registry_contract",
       "schema_path": "registry_contracts/network_adapter_registry.v1.schema.json",
+      "stability": "documented"
+    },
+    "registry_program_spec_registry_v1": {
+      "description": "Registry contract: catalog of published program specification bundles (state-issued; declarative only).",
+      "contract_type": "registry_contract",
+      "schema_path": "registry_contracts/program_spec_registry.v1.schema.json",
       "stability": "documented"
     },
 
@@ -357,6 +374,18 @@
     "example_registry_network_adapter_registry_v1": {
       "schema_name": "registry_network_adapter_registry_v1",
       "path": "examples/registries/network_adapter_registry.sample.json"
+    },
+    "example_program_reporting_city_program_submission": {
+      "schema_name": "consumer_city_program_submission",
+      "path": "examples/program_reporting/city_program_submission.sample.json"
+    },
+    "example_program_reporting_fund_release_review_packet": {
+      "schema_name": "consumer_fund_release_review_packet",
+      "path": "examples/program_reporting/fund_release_review_packet.sample.json"
+    },
+    "example_program_reporting_program_spec_registry": {
+      "schema_name": "registry_program_spec_registry_v1",
+      "path": "examples/program_reporting/program_spec_registry.sample.json"
     }
   }
 }

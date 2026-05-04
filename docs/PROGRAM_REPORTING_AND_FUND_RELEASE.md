@@ -6,6 +6,12 @@ This document designs a **Program Reporting and Fund-Release Review** capability
 
 **Scope:** design and documentation only. **No schemas, code, or CLI commands described here are implemented** unless already present elsewhere in the repository under other names. Implementation must follow the repo’s **specs-first** rules when work begins.
 
+### Phase 1 in this repository (intentional narrow scope)
+
+The **first Program Reporting demo** in `specifications/` is deliberately minimal: **program progress** and **financial utilization** aggregates in a single **`city_program_submission`** consumer payload per period, and a state **`fund_release_review_packet`** that signals **review_ready**, **clarification_required**, **human_review_required**, or **rejected**—plus **fund_release_review_status** for authorized human review. **No automatic fund release** and no enforcement automation.
+
+**Explicitly deferred to later phases:** separate **provider** feeds (per-project progress, line-item expenditure, field inspection, geo-tagged assets, utilization certificates as structured inputs), **photographic / field / geo evidence** as required contract data, **deficiency_memo** and **program_progress_dashboard** consumer contracts, and detailed deficiency workflows. Those capabilities remain valid **design directions** below; they are **not** Phase 1 conformance artifacts.
+
 ---
 
 ## 2) Governance problem
@@ -28,7 +34,7 @@ AirOS does not solve organizational politics, but it can offer a **shared report
 - **City AirOS** instances **import or adopt** that specification into a **deployment-scoped** workspace (registries + deployment profile).  
 - Cities **map local data sources** to **provider contracts** that normalize into **platform objects** and program-specific **evidence** requirements.  
 - Cities **generate** **city program submission packets** (consumer-contract-shaped payloads) for each reporting period.  
-- **State AirOS** **validates** submissions (schema, manifest keys, completeness, evidence linkage), queues them for **human review**, and emits **fund-release review packets** and **deficiency memos** where gaps exist.  
+- **State AirOS** **validates** submissions (schema, manifest keys, completeness; **Phase 1:** no separate evidence-linkage requirement), queues them for **human review**, and emits **fund-release review packets**. **Deficiency memos** and multi-feed validation are **later** when those consumer/provider contracts exist.  
 - **Actual fund release** remains an **authorized human / government finance** process; AirOS supplies **review support**, not disbursement automation.
 
 Framing for agencies: **one reporting contract, many local backends**—comparability and audit without a single monolithic city ERP.
@@ -61,8 +67,8 @@ High-level flow (logical; physical deployment may be Level 1 or Level 2 multi-co
 │ State AirOS                                                      │
 │  • Submission validation                                        │
 │  • Review dashboard / queue                                      │
-│  • Fund-release review packet                                    │
-│  • Deficiency memo                                                │
+│  • Fund-release review packet (Phase 1)                          │
+│  • Deficiency memo (deferred)                                     │
 │  • (Human + finance authority → actual release)                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -79,7 +85,7 @@ A **program specification bundle** is a versioned, portable set of artifacts the
 |------|------|
 | `program_spec.yaml` | **Identity and lifecycle:** `program_id`, `version`, effective dates, status, title, owning jurisdiction, required provider roles, required outputs, references to contract files. |
 | `provider_contracts/` | **Inputs cities must be able to supply** (e.g. project progress, expenditure statements, field evidence)—each a provider contract artifact key + JSON Schema (or agreed schema mechanism). |
-| `consumer_contracts/` | **Outputs** cities produce (e.g. `city_program_submission`) and state produces (e.g. `fund_release_review_packet`, `deficiency_memo`, dashboard payloads). |
+| `consumer_contracts/` | **Outputs** cities produce (e.g. `city_program_submission`) and state produces (e.g. `fund_release_review_packet`). Phase 1 stops there; deficiency memos and dashboard payloads are **future** consumer contracts when specified. |
 | `rules/` | **Completeness and review rules** machine-readable or referenced (thresholds, required evidence types, cross-field checks)—must remain aligned with domain spec safety language. |
 | `examples/` | **Fixture JSON** for demos, conformance, and onboarding—no real city financial or PII data in public repos. |
 | `metadata/` | **Provenance:** checksums, signing hooks (future), publication notes, contact for program office (non-secret). |
@@ -113,56 +119,67 @@ These are **placeholders for product/CLI design**; today, use **manual file plac
 
 ## 7) City submission workflow
 
-1. **Local data sources** — project MIS, finance vouchers summaries, inspection apps, GIS layers, document stores (each authorized and scoped).  
-2. **Provider contracts** — each source maps to an allowed **provider contract**; ingestion **normalizes** to canonical **Observations / Events / Assets / Entities** as appropriate.  
-3. **Evidence mapping** — photos, PDFs, geo-tags linked with **provenance** (who, when, method—not anonymous scrapes).  
-4. **Officer certification** — designated role attests submission completeness **within city policy** (human step; may be recorded as structured fields in the submission packet metadata).  
-5. **`city_program_submission` packet** — single consumer-shaped payload (or bounded set) per period, conforming to `city_program_submission.v1` when specified.  
-6. **Transmission (future)** — submission travels via **AirOS message envelope** (reuse `network_message_envelope` concepts), **API**, **SFTP**, or **email adapter**—transport only; validation on receipt at state.
+**Phase 1 (fixtures today):** the city produces one **`city_program_submission`** per reporting period with **aggregated** `program_progress` and `financial_progress`, **role** (`reporting_officer_role`, not personal names), **warnings**, **blocked_uses**, and **`human_review_required`** (Phase 1 contract requires human review path).
+
+**Later phases (design):** local MIS, finance exports, inspection apps, and GIS may map to **provider contracts**; evidence linking and richer completeness scores then apply. That **multi-feed, evidence-backed** path is **not** required for Phase 1 schemas in `specifications/`.
+
+1. **Local context (future)** — project MIS, finance summaries, inspections, GIS (authorized and scoped).  
+2. **Provider contracts (future)** — normalize to platform objects where adopted.  
+3. **Evidence mapping (future)** — photos, PDFs, geo-tags with provenance.  
+4. **Officer / role attestation** — designated **role** and policy inside the ULB; Phase 1 carries **role** only on the submission.  
+5. **`city_program_submission` packet** — Phase 1: single consumer-shaped payload per period (`city_program_submission.v1`).  
+6. **Transmission (future)** — envelope / API / SFTP / email—transport only; validation at state on receipt.
 
 ---
 
 ## 8) State review workflow
 
-1. **Validation** — schema + manifest registration + cross-reference to program bundle version city declared.  
-2. **Completeness checks** — required sections, required evidence types, date ranges, project IDs.  
-3. **Evidence checks** — linkage integrity, allowed file types, duplicate detection flags (non-punitive).  
-4. **Review queue** — human reviewers see structured **review packets**, not raw dumps only.  
-5. **Deficiency memo** — consumer contract `deficiency_memo.v1` when gaps exist; cites **specific** missing or inconsistent items.  
-6. **Fund-release review packet** — `fund_release_review_packet.v1`: recommendation language, risk flags, **blocked uses** reminders, **no auto-release** statement.  
-7. **Authorized human approval** — finance / program authority acts **outside** AirOS or via integrated finance systems per government rules.
+**Phase 1:** validate the submission against the consumer schema; apply **program_spec** `review_rules` only as **demo flags** (e.g. progress_delay, low_fund_utilization, financial_inconsistency); emit **`fund_release_review_packet`** with **review_status**, **fund_release_review_status**, assessments, **flags**, **required_human_approvals**, **confidence**, **blocked_uses**, and **review_notes**. **No** automated fund release.
+
+**Future:** completeness against multiple provider feeds, evidence linkage checks, deficiency memos, and leadership dashboards—each as **additional** contracts when specified.
+
+1. **Validation** — schema + manifest + declared `program_spec_version`.  
+2. **Completeness (Phase 1)** — required sections `program_progress` and `financial_progress` on the submission object.  
+3. **Evidence checks** — **deferred** (not part of Phase 1 required inputs).  
+4. **Review queue** — humans consume structured **review packets**.  
+5. **Deficiency memo** — **deferred** consumer contract.  
+6. **Fund-release review packet** — `fund_release_review_packet.v1` (Phase 1 fields only).  
+7. **Authorized human approval** — finance / program authority remains **outside** automated AirOS disbursement.
 
 ---
 
-## 9) Contracts likely needed (future specs)
+## 9) Contracts and fixtures (Phase 1 demo pack in repo)
 
-All paths below are **proposed**; they must be added under `specifications/` with manifest registration and conformance **before** any implementation ships.
+The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` includes **domain spec**, **registry schema**, **program bundle YAML**, **two consumer schemas**, and **three JSON examples** (still **no runtime** program reporting pipeline in application code). Manifest keys:
 
 **Domain**
 
-- `specifications/domain_specs/program_reporting.v1.yaml` — variables, evidence types, review prompts, **safety gates**, **blocked uses**, human-review requirements.
+- `specifications/domain_specs/program_reporting.v1.yaml`
 
 **Registry**
 
-- `specifications/registry_contracts/program_spec_registry.v1.schema.json` — optional: how state lists and versions program bundles.
+- `specifications/registry_contracts/program_spec_registry.v1.schema.json` → manifest: `registry_program_spec_registry_v1`
 
-**Provider contracts (illustrative filenames)**
+**Program bundle**
 
-- `city_project_progress_feed.v1.schema.json`  
-- `city_expenditure_statement_feed.v1.schema.json`  
-- `city_field_evidence_feed.v1.schema.json`  
-- `geo_tagged_asset_progress_feed.v1.schema.json`  
+- `specifications/program_specs/stormwater_resilience_grant_2026/program_spec.yaml`
 
-**Consumer contracts**
+**Consumer contracts** (`specifications/consumer_contracts/`)
 
-- `city_program_submission.v1.schema.json`  
-- `fund_release_review_packet.v1.schema.json`  
-- `deficiency_memo.v1.schema.json`  
-- `program_progress_dashboard.v1.schema.json`  
+- `city_program_submission.v1.schema.json` → `consumer_city_program_submission`  
+- `fund_release_review_packet.v1.schema.json` → `consumer_fund_release_review_packet`  
+
+**Examples** (`specifications/examples/program_reporting/`)
+
+- `city_program_submission.sample.json` → `example_program_reporting_city_program_submission`  
+- `fund_release_review_packet.sample.json` → `example_program_reporting_fund_release_review_packet`  
+- `program_spec_registry.sample.json` → `example_program_reporting_program_spec_registry`  
+
+**Deferred (not in Phase 1 manifest):** separate program-reporting **provider** schemas (project progress feed, expenditure feed, field evidence, geo-tagged progress), `deficiency_memo`, `program_progress_dashboard`, and their samples—**future phases** when provider contracts and consumer surfaces are specified again.
 
 **Network**
 
-- Reuse **`network_message_envelope`** and **`network_delivery_receipt`** (or current v1 equivalents in `specifications/network_contracts/`) for submission transport—**no** fund semantics in envelopes.
+- Reuse **`network_message_envelope_v1`** and **`network_delivery_receipt_v1`** for future submission transport—**no** fund semantics in envelopes.
 
 ---
 
@@ -194,30 +211,19 @@ These belong in **`program_reporting.v1.yaml`** under blocked uses and in consum
 
 ---
 
-## 12) Demo scenario (first demo — design only)
+## 12) Demo scenario (fixtures in repo; processing still future)
 
 **Program:** Stormwater Resilience Grant 2026  
 
-**Actors:**  
-- State Urban Department (publisher / reviewer)  
-- City A ULB (stronger evidence maturity)  
-- City B ULB (gaps for deficiency path)  
+**Actors:** State Urban Department (publisher / reviewer); City ULB program cell (**synthetic** `city_demo_a`, roles not names).  
 
-**Inputs (fixtures only in public repo):**  
-- Project progress fixture  
-- Expenditure statement fixture  
-- Field inspection evidence fixture  
-- Geo-tagged asset evidence fixture  
+**Inputs (Phase 1 fixtures):** a single **`city_program_submission`** with aggregated progress and financial placeholders (no bank accounts, vendors, or real locations).  
 
-**Outputs:**  
-- City A: **`city_program_submission`** → state **`fund_release_review_packet`** marked **review-ready** (still human-approved for release).  
-- City B: **`city_program_submission`** incomplete → state **`deficiency_memo`** listing missing evidence / inconsistencies.  
-- State: **`program_progress_dashboard`** aggregate payload for leadership (non-enforcement, non-punitive framing).  
+**Outputs:** state **`fund_release_review_packet`** with `review_status` / `fund_release_review_status`, rule-driven **flags** (e.g. progress_delay in the sample), **blocked_uses** mirroring submission, and **required_human_approvals**.  
 
-**Demo behavior:**  
-- One city **sufficient evidence** → review packet ready for human sign-off.  
-- One city **missing evidence** → deficiency memo.  
-- **No fund release automated** in any path.
+**Deferred demo paths:** separate provider fixtures, deficiency memo, and dashboard—**future** once those contracts return to the manifest.  
+
+**Invariant:** **No fund release automated** in any path.
 
 ---
 
@@ -226,7 +232,7 @@ These belong in **`program_reporting.v1.yaml`** under blocked uses and in consum
 | Existing concept | Role in program reporting |
 |------------------|---------------------------|
 | **Provider registry** | Maps city local feeds to program-required **provider contracts**. |
-| **Application registry** | Selects builders that emit **city_program_submission**, state **review packet** / **deficiency memo** / **dashboard** consumers. |
+| **Application registry** | Selects builders that emit **city_program_submission** and state **fund_release_review_packet** (Phase 1); further consumers when specified. |
 | **Deployment profile** | Binds `program_id` + **adopted version**, enabled domains, paths to registries, environment. |
 | **Agency node profile** | City vs state **node identity** and jurisdiction context for federation-aware deployments. |
 | **Network contracts** | Future submission transport via **envelopes + receipts** only. |
@@ -242,12 +248,12 @@ See also [`specifications/ARCHITECTURE_NOTE.md`](../specifications/ARCHITECTURE_
 
 | Phase | Deliverable |
 |-------|----------------|
-| **1** | This **design doc** + alignment with domain/playbook docs. |
-| **2** | **Domain spec** + **registry/consumer/provider** schemas + **examples** + manifest registration. |
-| **3** | **Fixture-based builders** (city submission + state review packet + deficiency memo) with conformance. |
-| **4** | **Deployment demo** (e.g. `deployments/examples/program_reporting_demo`) + validator + optional runner allowlist. |
-| **5** | **CLI** `program list` / `pull` / `enable` **or** documented import scripts—only after contracts exist. |
-| **6** | **Network submission** path (envelope + receipt + policy) with agency authorization. |
+| **1a (repo)** | **Phase 1 contracts:** domain spec + registry + program bundle + **two** consumer schemas + **three** examples + manifest (progress + financial monitoring only; **no** evidence provider feeds). |
+| **1b (design)** | This **design doc** + alignment with domain/playbook docs for **full** evidence-backed trajectory. |
+| **2** | **Fixture-based builders** (submission + review packet) with conformance; optional **provider** feeds and deficiency/dashboard **when re-specified**. |
+| **3** | **Deployment demo** + validator + optional runner allowlist. |
+| **4** | **CLI** `program list` / `pull` / `enable` **or** documented import scripts—only after contracts exist. |
+| **5** | **Network submission** path (envelope + receipt + policy) with agency authorization. |
 
 Each phase should end with **`python main.py --step conformance`** and supervisor evidence per `AGENTS.md`.
 
@@ -255,12 +261,13 @@ Each phase should end with **`python main.py --step conformance`** and superviso
 
 ## 15) Agency pitch (one paragraph)
 
-**“The state defines the reporting contract once. Every city can pull it, validate against it, and submit evidence-backed progress packets. The state gets comparable, auditable, review-ready data for fund release without forcing every city to use the same internal system—and fund release stays where it belongs: with authorized people and finance processes.”**
+**“The state defines the reporting contract once. Every city can pull it, validate against it, and submit structured progress and utilization for review. The state gets comparable, auditable inputs for fund-release **review** without forcing every city to use the same internal system—and fund release stays where it belongs: with authorized people and finance processes.”** (Richer evidence-backed reporting is an explicit later phase.)
 
 ---
 
 ## Honesty checklist
 
-- **Schemas and CLI** in §6 and §9 are **future** unless separately implemented.  
+- **Phase 1 repo contracts** in §9 are **present** for conformance and demos; **CLI** samples in §6 remain **future** unless implemented elsewhere.  
 - **Fund release** is **never** automated by this design.  
+- **Evidence-heavy provider feeds and deficiency/dashboard contracts** are **deferred**—see §1 Phase 1 note and §9.  
 - **Public repositories** must use **fixtures and synthetic examples** only for demos; real utilization data belongs in **private deployment** workspaces per existing deployment guidance.

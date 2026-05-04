@@ -1,0 +1,17 @@
+{
+  "registry_id": "state_program_spec_catalog_demo",
+  "version": "v1",
+  "updated_at": "2026-05-04T10:00:00Z",
+  "issuer_node_id": "node:state_urban_department_demo",
+  "programs": [
+    {
+      "program_id": "stormwater_resilience_grant_2026",
+      "version": "v1",
+      "status": "draft_demo",
+      "bundle_relative_path": "program_specs/stormwater_resilience_grant_2026/",
+      "required_submission_contract": "consumer_city_program_submission",
+      "review_output_contract": "consumer_fund_release_review_packet",
+      "notes": "Phase 1: submission + review packet only; provider evidence feeds deferred."
+    }
+  ]
+}

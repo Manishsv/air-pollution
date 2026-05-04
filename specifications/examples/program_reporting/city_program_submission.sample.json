@@ -1,0 +1,45 @@
+{
+  "submission_id": "sub_city_demo_a_2026q1",
+  "city_id": "city_demo_a",
+  "program_id": "stormwater_resilience_grant_2026",
+  "program_spec_version": "v1",
+  "reporting_period": "2026-Q1",
+  "submitted_at": "2026-05-04T10:00:00Z",
+  "reporting_officer_role": "ulb_program_cell_officer",
+  "program_progress": {
+    "projects_total": 12,
+    "projects_completed": 5,
+    "projects_in_progress": 6,
+    "projects_delayed": 1,
+    "overall_progress_pct": 48.0
+  },
+  "financial_progress": {
+    "amount_approved": 10000000,
+    "amount_released": 4000000,
+    "amount_spent": 3600000,
+    "utilization_pct": 90.0
+  },
+  "self_reported_issues": [
+    {
+      "code": "WEATHER_DELAY",
+      "description": "Demo-only narrative: one work package delayed due to seasonal rain window (synthetic)."
+    }
+  ],
+  "provenance_summary": {
+    "submission_source": "demo_ulb_portal_stub",
+    "contains_real_pii": false,
+    "amounts_are_placeholders": true
+  },
+  "warnings": [
+    "self_reported_progress_and_financials_only",
+    "not_audited_against_bank_or_treasury_systems",
+    "no_photo_or_field_evidence_in_phase_1_contract"
+  ],
+  "blocked_uses": [
+    "automatic_fund_release",
+    "automatic_penalty_or_recovery",
+    "blacklisting_without_authorized_review",
+    "public_disclosure_without_authorization"
+  ],
+  "human_review_required": true
+}

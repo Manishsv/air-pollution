@@ -162,6 +162,81 @@ def _validate_domain_spec_yaml(path: Path) -> list[str]:
     return errs
 
 
+def _validate_program_spec_bundle_yaml(path: Path) -> list[str]:
+    """
+    Lightweight structure check for program specification bundle roots (program_spec.yaml).
+
+    Intentionally minimal: presence of required top-level keys for demo bundles under
+    specifications/program_specs/<bundle>/program_spec.yaml.
+    """
+    required_keys = [
+        "program_id",
+        "version",
+        "status",
+        "issuing_department",
+        "reporting_frequency",
+        "required_submission_contract",
+        "review_output_contract",
+        "required_sections",
+        "review_rules",
+        "blocked_uses",
+        "versioning_policy",
+    ]
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(doc, dict):
+        return ["Program spec bundle must be a YAML mapping/object at the top level"]
+    missing = [k for k in required_keys if k not in doc]
+    errs: list[str] = []
+    if missing:
+        errs.append(f"Missing required top-level keys: {missing}")
+    rs = doc.get("required_sections")
+    rr = doc.get("review_rules")
+    if not isinstance(rs, list) or not rs:
+        errs.append("required_sections must be a non-empty list")
+    if not isinstance(rr, list) or not rr:
+        errs.append("review_rules must be a non-empty list")
+    bu = doc.get("blocked_uses")
+    if not isinstance(bu, list) or not bu:
+        errs.append("blocked_uses must be a non-empty list")
+    return errs
+
+
+def audit_program_spec_bundles(*, validated_at: str) -> list[dict[str, Any]]:
+    """
+    Validate program_spec.yaml files under specifications/program_specs/*/program_spec.yaml.
+    """
+    rows: list[dict[str, Any]] = []
+    root = SPEC_ROOT / "program_specs"
+    if not root.exists():
+        return rows
+    for p in sorted(root.glob("*/program_spec.yaml")):
+        artifact_or_api = f"program_spec_bundle:{p.relative_to(SPEC_ROOT)}"
+        try:
+            problems = _validate_program_spec_bundle_yaml(p)
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(p.name),
+                    contract_type="program_spec_bundle",
+                    status="valid" if not problems else "invalid",
+                    errors=[{"path": "$", "message": msg, "schema": str(p.name)} for msg in problems],
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            rows.append(
+                _report_row(
+                    validated_at=validated_at,
+                    artifact_or_api=artifact_or_api,
+                    schema_name=str(p.name),
+                    contract_type="program_spec_bundle",
+                    status="invalid",
+                    errors=[{"path": "$", "message": str(exc), "schema": str(p.name)}],
+                )
+            )
+    return rows
+
+
 def audit_domain_specs(*, validated_at: str) -> list[dict[str, Any]]:
     """
     Validate that domain specs exist and follow the required top-level structure.

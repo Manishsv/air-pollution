@@ -1,0 +1,185 @@
+domain_id: program_reporting
+version: v1
+status: documented
+
+purpose: >
+  **Phase 1 (repository):** Governed state-to-city **program progress** and **financial utilization self-reporting**
+  for a reporting period, plus a state **review packet** that classifies review readiness (no disbursement, no
+  enforcement automation). Cities submit a single **consumer** `city_program_submission` shape; the state emits
+  **fund_release_review_packet** for human decision support only.
+  **Deferred to later phases:** separate provider feeds (project line items, expenditure vouchers, field inspections,
+  geo-tagged assets, utilization certificates), deficiency memos, aggregate dashboards, and photographic or
+  on-site evidence as **required** contract inputs. Phase 1 does **not** treat self-reported aggregates as bank- or
+  treasury-audited truth.
+
+target_actors:
+  - state_urban_department_program_officer
+  - state_finance_review_officer
+  - city_ulb_program_officer
+  - municipal_commissioner
+  - system_integrator
+
+supported_decisions:
+  - decision_id: classify_submission_review_readiness
+    description: >
+      Given a Phase 1 submission (progress + financial aggregates), produce a structured review packet with
+      review_status, fund_release_review_status, flags, and required_human_approvals. No automatic fund release.
+    decision_scope: city_program_period
+    operational_risk: medium
+  - decision_id: request_clarification_on_self_report
+    description: Mark clarification_required when aggregates or narratives are internally inconsistent or incomplete.
+    decision_scope: city_program_period
+    operational_risk: low
+
+canonical_entities:
+  - entity_type: program_grant
+    description: A state-defined grant or scheme cycle with versioned reporting rules.
+    examples: [stormwater_resilience_grant_2026]
+  - entity_type: city_program_submission
+    description: A city's Phase 1 submission for a reporting period (aggregated progress + financial fields).
+    examples: [sub_city_demo_a_2026q1]
+
+observations:
+  - observed_property: overall_program_progress_pct_reported
+    description: City-reported overall physical progress percentage for the program period (aggregate).
+    typical_sources: [ulb_program_cell_stub, manual_entry_demo]
+    required_provenance_fields: [source_id, source_type, collected_at, license, quality_flag]
+  - observed_property: fund_utilization_pct_reported
+    description: City-reported utilization against released/sanctioned amounts (demo placeholder math only).
+    typical_sources: [finance_summary_stub_demo]
+    required_provenance_fields: [source_id, source_type, collected_at, license, quality_flag]
+
+features:
+  - feature_id: submission_schema_conformance
+    description: Submission validates against consumer_city_program_submission.v1 (Phase 1 fields only).
+    inputs: [city_program_submission_payload]
+  - feature_id: demo_rule_flags_stub
+    description: >
+      Program bundle review_rules may flag progress_delay, low_fund_utilization, or financial_inconsistency
+      for human review; rules do not authorize release or penalties.
+    inputs: [program_progress_section, financial_progress_section]
+
+allowed_variables:
+  - variable: overall_program_progress_pct_reported
+    description: Reported overall completion percentage (0–100).
+    type: number
+    unit: percent
+    value_range: 0..100
+  - variable: fund_utilization_pct_reported
+    description: Reported utilization percentage (0–100; demo semantics).
+    type: number
+    unit: percent
+    value_range: 0..100
+
+units:
+  - unit: percent
+    symbol: "%"
+    description: Percent complete or utilization.
+  - unit: INR_major_units_demo
+    symbol: INR
+    description: Demo currency major units only; not a certified financial statement.
+  - unit: none
+    symbol: ""
+    description: Unitless scores and flags.
+
+thresholds_or_categories:
+  - id: demo_review_readiness_stub
+    variable: submission_internal_consistency
+    type: categories
+    definition: >
+      Demo-only bands for narrative documentation. Operational thresholds are set by program office policy outside
+      this stub.
+    levels:
+      - level: review_ready
+        criteria: aggregates pass program_spec review_rules and no financial_inconsistency flag
+        severity: low
+      - level: clarification_required
+        criteria: missing narrative clarity or borderline rule outcomes in demo scenarios
+        severity: medium
+      - level: human_review_required
+        criteria: default posture for Phase 1; human_review_required is const-true on submission contract
+        severity: medium
+
+safety_gates:
+  - gate_id: no_automatic_fund_release
+    description: AirOS must never trigger fund disbursement; outputs are review-only inputs to finance process.
+    when_to_block: fund_disbursement, payment_instruction_generation
+    required_evidence: [authorized_human_finance_approval_outside_airos]
+    override_policy: none
+  - gate_id: block_automatic_penalty_or_blacklisting
+    description: Block outputs that imply penalty, recovery, or blacklist from model-only or submission-only signals.
+    when_to_block: penalty_recommendation, contractor_blacklist, officer_personal_attribution
+    required_evidence: [explicit_statutory_process_reference]
+    override_policy: none
+  - gate_id: sensitive_financial_detail_scope
+    description: Phase 1 contracts must not carry bank accounts, vendor names, or citizen PII; scope expands only with future contracts and governance.
+    when_to_block: line_item_bank_detail_in_consumer_payload
+    required_evidence: [future_authorized_consumer_profile]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields: [source_id, source_type, license, collected_at, quality_flag]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status, source_reliability_issues]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.7
+    allowed_statuses: [healthy, degraded]
+
+decision_packet_profile:
+  profile_id: program_reporting_phase1_review_stub
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - provenance
+    - reliability
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+  notes: >
+    Phase 1 maps logically to fund_release_review_packet consumer fields; full decision_packet assembly is a later implementation concern.
+
+dashboard_consumer_requirements:
+  required_payload_sections:
+    - city_status_summary
+    - review_queue
+    - warnings
+    - provenance_summary
+  required_warnings:
+    - demo_data_banner_if_fixture
+    - no_automatic_fund_release_banner
+    - phase_1_no_mandatory_evidence_feeds
+  notes: >
+    Dedicated program_progress_dashboard consumer contract is **deferred**; when built, dashboards must remain non-enforcement.
+
+human_review_prompts:
+  - prompt: Has finance independently verified amounts outside AirOS where required by GFR or state rules?
+    applies_when: fund_release_review_packet.generated
+    required_response: yes_no_unknown
+  - prompt: Should this submission be treated as self-report only until evidence feeds exist in a later phase?
+    applies_when: city_program_submission.received
+    required_response: yes_no
+
+field_verification_requirements:
+  phase_1_posture: deferred_for_evidence_phases
+  required_before_operational_action: []
+  evidence_to_capture: []
+  notes: >
+    On-site inspection, photographic evidence, and geo-tagged asset confirmation are **not** Phase 1 contract
+    requirements. Future phases may add provider contracts and gates without weakening Phase 1 blocked_uses.
+
+blocked_uses:
+  - automatic_fund_release
+  - automatic_penalty_or_recovery
+  - blacklisting_without_authorized_review
+  - public_disclosure_without_authorization
+
+open_questions:
+  - Which state finance workflow will consume review packets (manual export vs integration)?
+  - What provider contracts and evidence types will be mandatory in Phase 2+ once cities have authorized feeds?
+  - How will deficiency memos and dashboards relate to the core submission packet in later consumer contracts?

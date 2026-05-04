@@ -1,0 +1,34 @@
+{
+  "packet_id": "fr_packet_demo_a_2026q1",
+  "state_node_id": "node:state_urban_department_demo",
+  "city_id": "city_demo_a",
+  "program_id": "stormwater_resilience_grant_2026",
+  "program_spec_version": "v1",
+  "reporting_period": "2026-Q1",
+  "submission_id": "sub_city_demo_a_2026q1",
+  "generated_at": "2026-05-04T11:00:00Z",
+  "review_status": "human_review_required",
+  "fund_release_review_status": "ready_for_authorized_review",
+  "progress_assessment": {
+    "summary": "Overall progress below demo threshold; one delayed project flagged (synthetic).",
+    "rules_triggered_demo": ["progress_delay"]
+  },
+  "financial_assessment": {
+    "summary": "Spent within released amount at demo placeholder levels; utilization above demo threshold.",
+    "rules_triggered_demo": []
+  },
+  "flags": ["progress_delay"],
+  "required_human_approvals": ["state_program_officer", "state_finance_officer"],
+  "confidence": 0.72,
+  "blocked_uses": [
+    "automatic_fund_release",
+    "automatic_penalty_or_recovery",
+    "blacklisting_without_authorized_review",
+    "public_disclosure_without_authorization"
+  ],
+  "review_notes": "Review packet supports human decision only; no disbursement or enforcement action implied.",
+  "provenance": {
+    "generated_by": "demo_state_review_stub",
+    "fixture_only": true
+  }
+}

@@ -32,7 +32,11 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
   - **`provider_registry.v1`** — declarative list of **provider plugins** a deployment may enable (core default or deployment-scoped).
   - **`application_registry.v1`** — declarative list of **application/consumer plugins** a deployment may enable (core default or deployment-scoped).
   - **`network_adapter_registry.v1`** — declarative list of **transport adapters** (email/webhook/file drop/event bus) that carry network contracts.
+  - **`program_spec_registry.v1`** — catalog of **published program specification bundles** (state-issued reporting packages; declarative only).
   - Registries must **not** contain secrets or credentials. Deployment registries may reference private/internal providers without exposing sensitive details in the public repo.
+
+- **Program specification bundles** (`program_specs/`)
+  - Versioned **`program_spec.yaml`** roots (e.g. `program_specs/stormwater_resilience_grant_2026/`) referenced by `registry_program_spec_registry_v1` and design doc [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](../docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md). **Phase 1** ties each program to **`city_program_submission`** + **`fund_release_review_packet`** consumer contracts only; separate evidence **provider** feeds and extra consumers are **future phases** (see the doc). **Not** JSON Schema artifacts in the manifest; conformance performs a **lightweight YAML key check** alongside domain specs.
 
 - **OpenAPI stubs** (`openapi/`)
   - Machine-readable API descriptions (not JSON Schema). These are versioned contracts for endpoint shapes and will be refined over time.

@@ -24,6 +24,7 @@ Domain specs answer questions like:
 - `flood_risk.v1.yaml`: flood risk + waterlogging + drainage assets (stub)
 - `property_buildings.v1.yaml`: phased built-environment change + field review; Phase 1 open-data MVP before optional municipal integrations; see `product_delivery_phases` and `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md` (documented)
 - `water_operations.v1.yaml`: water supply/network operations (stub)
+- `program_reporting.v1.yaml`: **Phase 1** state-to-city **program progress + financial self-report** and **review packet** (no mandatory photo/field/geo/provider feeds; evidence workflows **deferred**; fixtures under `specifications/examples/program_reporting/`; see `docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`)
 
 ## Non-negotiable principle
 
