@@ -1,5 +1,7 @@
 # AirOS developer guide
 
+**New to AirOS? Start with [`docs/BEGINNER_DEVELOPER_GUIDE.md`](BEGINNER_DEVELOPER_GUIDE.md).**
+
 This guide is for developers extending the AirOS repository safely and consistently.
 
 ## What AirOS is (and what it is not)

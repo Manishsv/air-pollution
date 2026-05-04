@@ -1,0 +1,24 @@
+{
+  "_air_os_template_placeholder_about": "Copy to specifications/provider_contracts/. Replace ALL angle-bracket placeholders. Remove this and other _air_os_template_* keys before publishing a real contract.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/air-os/templates/provider_<provider_name>.v1.schema.json",
+  "title": "<provider_name> feed (template)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provider_id", "observed_at", "payload"],
+  "properties": {
+    "provider_id": {
+      "type": "string",
+      "const": "<provider_name>"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Domain-specific fields after you define them in specs."
+    }
+  }
+}

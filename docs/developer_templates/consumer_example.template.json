@@ -1,0 +1,17 @@
+{
+  "_air_os_template_placeholder_about": "Rename and move to specifications/examples/<domain_name>/. Must validate against your consumer schema.",
+  "payload_id": "demo_payload_<consumer_name>_001",
+  "generated_at": "2026-01-01T00:05:00Z",
+  "warnings": [
+    "fixture_demo_only",
+    "human_review_required"
+  ],
+  "blocked_uses": [
+    "automatic_enforcement",
+    "automatic_disbursement"
+  ],
+  "summary": {
+    "headline": "Demo summary for <domain_name>",
+    "detail": "Replace with real fields from your consumer contract."
+  }
+}

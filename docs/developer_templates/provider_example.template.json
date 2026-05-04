@@ -1,0 +1,9 @@
+{
+  "_air_os_template_placeholder_about": "Rename and move to specifications/examples/<domain_name>/. Use synthetic data only.",
+  "provider_id": "<provider_name>",
+  "observed_at": "2026-01-01T00:00:00Z",
+  "payload": {
+    "example_metric": 42,
+    "example_label": "demo_value"
+  }
+}

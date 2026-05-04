@@ -1,0 +1,36 @@
+{
+  "_air_os_template_placeholder_about": "Copy to specifications/consumer_contracts/. Replace placeholders. Remove _air_os_template_* keys before publishing.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/air-os/templates/consumer_<consumer_name>.v1.schema.json",
+  "title": "<consumer_name> payload (template)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["payload_id", "generated_at", "warnings", "blocked_uses"],
+  "properties": {
+    "payload_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocked_uses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Use domain spec language; list actions this output must never trigger automatically."
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Business-facing fields for dashboards — define explicitly in your real contract."
+    }
+  }
+}
