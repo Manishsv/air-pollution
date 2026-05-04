@@ -20,6 +20,7 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 from urban_platform.applications.flood.dashboard_payload import build_flood_risk_dashboard_payload
 from urban_platform.applications.flood.decision_packets import build_flood_decision_packets
 from urban_platform.applications.flood.field_tasks import build_flood_field_verification_tasks
+from urban_platform.applications.program_reporting.review_packets import build_fund_release_review_packet
 from urban_platform.connectors.flood.ingest_file import (
     ingest_drainage_asset_feed_json,
     ingest_flood_incident_feed_json,
@@ -78,6 +79,51 @@ APPLICATION_ALLOWLIST: dict[str, Callable[..., Any]] = {
 }
 
 
+def _run_program_reporting_state_demo(
+    *,
+    deployment_dir: Path,
+    repo_root: Path,
+    output_root: Path | None = None,
+) -> DeploymentRunSummary:
+    """Allowlisted Phase 1 path: fixture submission → review packet (no providers)."""
+    fixture = _ensure_exists(
+        repo_root, "specifications/examples/program_reporting/city_program_submission.sample.json"
+    )
+    city_submission = json.loads(fixture.read_text(encoding="utf-8"))
+    assert_conforms(city_submission, schema_name="consumer_city_program_submission")
+    packet = build_fund_release_review_packet(city_submission)
+    assert_conforms(packet, schema_name="consumer_fund_release_review_packet")
+
+    dep_id = "program_reporting_state_demo"
+    out_dir = (output_root or (repo_root / "data" / "outputs" / "deployments")).resolve() / dep_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    (out_dir / "fund_release_review_packet.json").write_text(
+        json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    warnings = [
+        "fixture/demo data only",
+        "review support only",
+        "no automatic fund release",
+        "authorized finance process required",
+    ]
+
+    summary = DeploymentRunSummary(
+        deployment_id=dep_id,
+        deployment_dir=str(deployment_dir),
+        output_dir=str(out_dir),
+        providers_enabled=[],
+        applications_enabled=["program_reporting_review_packet"],
+        warnings=warnings,
+        validated_outputs={"consumer_fund_release_review_packet": True},
+    )
+    (out_dir / "deployment_run_summary.json").write_text(
+        json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return summary
+
+
 def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path | None = None) -> DeploymentRunSummary:
     manifest = load_manifest()
 
@@ -85,6 +131,11 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
     dep_id = str(prof.get("deployment_id") or "").strip()
     if not dep_id:
         raise ValueError("deployment_profile.yaml missing deployment_id")
+
+    if dep_id == "program_reporting_state_demo":
+        return _run_program_reporting_state_demo(
+            deployment_dir=deployment_dir, repo_root=repo_root, output_root=output_root
+        )
 
     provider_reg = _read_yaml(deployment_dir / "provider_registry.yaml")
     app_reg = _read_yaml(deployment_dir / "application_registry.yaml")

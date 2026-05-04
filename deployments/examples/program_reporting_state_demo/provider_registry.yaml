@@ -1,0 +1,11 @@
+# =============================================================================
+# EXAMPLE PROVIDER REGISTRY — Program Reporting demo (no provider feeds in Phase 1).
+# =============================================================================
+
+registry_id: program-reporting-state-demo-provider-registry
+version: v1
+updated_at: "2026-05-04T00:00:00Z"
+scope: deployment
+deployment_id: program_reporting_state_demo
+
+providers: []

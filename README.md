@@ -231,6 +231,9 @@ python tools/airos_cli.py deployment validate --help
 python tools/airos_cli.py deployment run --help
 python tools/airos_cli.py deployment validate deployments/examples/flood_local_demo
 python tools/airos_cli.py deployment run deployments/examples/flood_local_demo
+# Program Reporting Phase 1 (fixture submission → review packet; no auto fund release):
+python tools/airos_cli.py deployment validate deployments/examples/program_reporting_state_demo
+python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo
 ```
 
 Initialize a runnable workspace from the built-in flood example:

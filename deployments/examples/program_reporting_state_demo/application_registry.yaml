@@ -1,0 +1,28 @@
+# =============================================================================
+# EXAMPLE APPLICATION REGISTRY — Program Reporting Phase 1 (declarative).
+# =============================================================================
+
+registry_id: program-reporting-state-demo-application-registry
+version: v1
+updated_at: "2026-05-04T00:00:00Z"
+scope: deployment
+deployment_id: program_reporting_state_demo
+
+applications:
+  - application_id: program_reporting_review_packet
+    label: Fund release review packet (Phase 1 fixture builder)
+    domain_id: program_reporting
+    consumer_contracts: [consumer_fund_release_review_packet]
+    payload_builders:
+      - urban_platform.applications.program_reporting.review_packets.build_fund_release_review_packet
+    sdk_api_outputs_consumed: [fund_release_review_packet]
+    packet_types: []
+    field_task_types: []
+    safety_gates_and_blocked_uses:
+      - specifications/domain_specs/program_reporting.v1.yaml#safety_gates
+      - specifications/domain_specs/program_reporting.v1.yaml#blocked_uses
+    examples:
+      - examples/program_reporting/fund_release_review_packet.sample.json
+    conformance_requirements: [schema_valid, manifest_registered, example_valid]
+    enabled_by_default: true
+    status: reference

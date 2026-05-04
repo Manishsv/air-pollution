@@ -4,7 +4,7 @@
 
 This document designs a **Program Reporting and Fund-Release Review** capability for AirOS: **state-to-city** (or state-to-agency) **programmatic progress** reporting and **evidence-backed** submissions that support **comparable, auditable** review for **fund release**—without replacing cities’ internal systems and **without** automating finance or legal outcomes.
 
-**Scope:** design and documentation only. **No schemas, code, or CLI commands described here are implemented** unless already present elsewhere in the repository under other names. Implementation must follow the repo’s **specs-first** rules when work begins.
+**Scope:** design and documentation, plus a **minimal Phase 1 fixture demo** (review packet builder + example deployment run) described under *Phase 1 fixture demo implementation* below. Broader product features remain future work; implementation must follow the repo’s **specs-first** rules when expanding beyond this demo.
 
 ### Phase 1 in this repository (intentional narrow scope)
 
@@ -19,6 +19,13 @@ The **first Program Reporting demo** in `specifications/` is deliberately minima
 - Each **`city_program_submission`** and **`fund_release_review_packet`** carries **`reference_data_versions`** (e.g. `v1` per catalog family) so reviewers know which catalog revision the payload assumed.
 - The **program spec** lists **`required_reference_catalogs`** and states that **`city_id`**, **`program_id`**, and **`reporting_period`** on submissions should match **`code`** values from the administrative-units, program, and reporting-period catalogs respectively.
 - **Distribution, pull/cache, TTL, and cryptographic signing** of catalogs are **out of scope** for this specs step; they remain **future implementation** work.
+
+#### Phase 1 fixture demo implementation
+
+- **City submission sample:** `specifications/examples/program_reporting/city_program_submission.sample.json` (synthetic).
+- **Review packet builder:** `urban_platform.applications.program_reporting.review_packets.build_fund_release_review_packet` reads a submission-shaped `dict` and emits a **`fund_release_review_packet`**-shaped `dict` with deterministic flags (`progress_delay` if `overall_progress_pct < 50`, `low_fund_utilization` if `utilization_pct < 50`, `financial_inconsistency` if `amount_spent > amount_released`), fixed **`blocked_uses`**, and role-based **`required_human_approvals`**. **No automatic fund release** or finance integration.
+- **Deployment example:** `deployments/examples/program_reporting_state_demo/` — after `deployment validate`, run `python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo` to write `data/outputs/deployments/program_reporting_state_demo/fund_release_review_packet.json` and `deployment_run_summary.json`, with output validated against the consumer schema.
+- **Future:** catalog pull/cache, dashboards, signed envelopes / network submission flows, and evidence-heavy workflows.
 
 ---
 
@@ -158,7 +165,7 @@ These are **placeholders for product/CLI design**; today, use **manual file plac
 
 ## 9) Contracts and fixtures (Phase 1 demo pack in repo)
 
-The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` includes **domain spec**, **registry schema**, **program bundle YAML**, **two consumer schemas**, one **reference catalog** platform schema, **six** registered JSON examples under program reporting + reference data (still **no runtime** program reporting pipeline in application code). Manifest keys:
+The **Stormwater Resilience Grant 2026** Phase 1 pack under `specifications/` includes **domain spec**, **registry schema**, **program bundle YAML**, **two consumer schemas**, one **reference catalog** platform schema, **six** registered JSON examples under program reporting + reference data, plus a **fixture review-packet builder** and **deployment demo run** (no city ingestion network, no catalog pull/cache, no automated fund release). Manifest keys:
 
 **Domain**
 
@@ -285,7 +292,7 @@ Each phase should end with **`python main.py --step conformance`** and superviso
 
 ## Honesty checklist
 
-- **Phase 1 repo contracts** in §9 are **present** for conformance and demos; **CLI** samples in §6 remain **future** unless implemented elsewhere.  
+- **Phase 1 repo contracts** in §9 are **present** for conformance and demos; a **fixture review-packet builder** and **`deployment run`** for `program_reporting_state_demo` exist (see §1 fixture demo); generic **`program list` / `pull` / `enable`** samples in §6 remain **future** unless implemented elsewhere.  
 - **Fund release** is **never** automated by this design.  
 - **Evidence-heavy provider feeds and deficiency/dashboard contracts** are **deferred**—see §1 Phase 1 note and §9.  
 - **Public repositories** must use **fixtures and synthetic examples** only for demos; real utilization data belongs in **private deployment** workspaces per existing deployment guidance.

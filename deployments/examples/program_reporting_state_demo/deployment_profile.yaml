@@ -1,0 +1,28 @@
+# =============================================================================
+# EXAMPLE DEPLOYMENT — Program Reporting Phase 1 (fixture/demo only). No secrets.
+# =============================================================================
+
+deployment_id: program_reporting_state_demo
+deployment_name: Program Reporting state demo (fixtures only)
+deployment_type: single_agency
+owner_organization: EXAMPLE_ORG_PLACEHOLDER
+environment: local
+
+jurisdiction_refs:
+  - jurisdiction:demo_state
+
+enabled_domains:
+  - program_reporting
+
+enabled_provider_registries:
+  - deployments/examples/program_reporting_state_demo/provider_registry.yaml
+enabled_application_registries:
+  - deployments/examples/program_reporting_state_demo/application_registry.yaml
+
+notes: >-
+  Declarative example for Phase 1 program reporting: city submission fixture and
+  fund-release review packet builder. No automated fund release.
+
+no_secrets_notice: >-
+  No secrets, credentials, API keys, or restricted personal data are stored in this
+  example deployment. It uses repository fixtures only.
