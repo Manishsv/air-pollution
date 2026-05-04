@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 import json
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
-import yaml
+_THIS_FILE = Path(__file__).resolve()
+_REPO_ROOT = _THIS_FILE.parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from urban_platform.deployments.config_loader import load_deployment_config
 
 
 @dataclass(frozen=True)
@@ -53,17 +59,6 @@ def _read_json(path: Path) -> tuple[Optional[Any], Optional[str]]:
         return None, f"Failed to parse JSON at {path}: {exc}"
 
 
-def _read_yaml(path: Path) -> tuple[Optional[Any], Optional[str]]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except Exception as exc:  # noqa: BLE001
-        return None, f"Failed to read YAML at {path}: {exc}"
-    try:
-        return yaml.safe_load(text), None
-    except Exception as exc:  # noqa: BLE001
-        return None, f"Failed to parse YAML at {path}: {exc}"
-
-
 def probe_deployment_examples(repo_root: Path) -> DeploymentExamplesProbeResult:
     """
     Lightweight structural probe over deployments/examples/*.
@@ -106,67 +101,44 @@ def probe_deployment_examples(repo_root: Path) -> DeploymentExamplesProbeResult:
         app_reg = d / "application_registry.yaml"
         readme = d / "README.md"
 
-        dep_id = deployment_key
-        dep_profile_doc: Any = None
-        dep_profile_errs: list[str] = []
-        if dep_profile.exists():
-            dep_profile_doc, yerr = _read_yaml(dep_profile)
-            if yerr:
-                dep_profile_errs.append(yerr)
-            if isinstance(dep_profile_doc, dict) and dep_profile_doc.get("deployment_id"):
-                dep_id = str(dep_profile_doc.get("deployment_id"))
+        cfg = load_deployment_config(d)
+        dep_id = str(cfg.deployment_id).strip() or deployment_key
 
         missing_fixture_paths: list[str] = []
         missing_manifest_refs: list[str] = []
         local_risks: list[str] = []
-        local_errors: list[str] = dep_profile_errs[:]
+        local_errors: list[str] = list(cfg.errors)
 
         provider_count: Optional[int] = None
-        if prov_reg.exists():
-            doc, yerr = _read_yaml(prov_reg)
-            if yerr:
-                local_errors.append(yerr)
-                doc = None
-            providers = (doc or {}).get("providers") if isinstance(doc, dict) else None
-            if isinstance(providers, list):
-                provider_count = len(providers)
-                for pmeta in providers:
-                    if not isinstance(pmeta, dict):
-                        continue
-                    pid = str(pmeta.get("provider_id") or "?")
-                    pc = pmeta.get("provider_contract")
-                    if isinstance(pc, str) and pc and pc not in artifacts:
-                        missing_manifest_refs.append(f"{deployment_key} provider:{pid} provider_contract:{pc}")
-                    fx = pmeta.get("fixture_path")
-                    if isinstance(fx, str) and fx.strip():
-                        fx_path = (repo_root / fx.strip()).resolve()
-                        if not fx_path.exists():
-                            missing_fixture_paths.append(f"{deployment_key} provider:{pid} fixture_missing:{fx.strip()}")
-            else:
+        if prov_reg.is_file():
+            provider_count = cfg.provider_count
+            prov_doc = cfg.provider_registry_document
+            raw_providers = prov_doc.get("providers") if isinstance(prov_doc, dict) else None
+            if raw_providers is not None and not isinstance(raw_providers, list):
                 local_risks.append(f"{deployment_key}: provider_registry.yaml missing providers array")
+            for pr in cfg.providers:
+                pid = str(pr.provider_id or "?")
+                pc = pr.provider_contract
+                if isinstance(pc, str) and pc and pc not in artifacts:
+                    missing_manifest_refs.append(f"{deployment_key} provider:{pid} provider_contract:{pc}")
+                fx = pr.fixture_path
+                if isinstance(fx, str) and fx.strip():
+                    fx_path = (repo_root / fx.strip()).resolve()
+                    if not fx_path.exists():
+                        missing_fixture_paths.append(f"{deployment_key} provider:{pid} fixture_missing:{fx.strip()}")
 
         application_count: Optional[int] = None
-        if app_reg.exists():
-            doc, yerr = _read_yaml(app_reg)
-            if yerr:
-                local_errors.append(yerr)
-                doc = None
-            apps = (doc or {}).get("applications") if isinstance(doc, dict) else None
-            if isinstance(apps, list):
-                application_count = len(apps)
-                for ameta in apps:
-                    if not isinstance(ameta, dict):
-                        continue
-                    aid = str(ameta.get("application_id") or "?")
-                    ccs = ameta.get("consumer_contracts") or []
-                    if isinstance(ccs, list):
-                        for ck in ccs:
-                            if isinstance(ck, str) and ck and ck not in artifacts:
-                                missing_manifest_refs.append(f"{deployment_key} application:{aid} consumer_contract:{ck}")
-                    else:
-                        local_risks.append(f"{deployment_key} application:{aid} consumer_contracts not an array")
-            else:
+        if app_reg.is_file():
+            application_count = cfg.application_count
+            app_doc = cfg.application_registry_document
+            raw_apps = app_doc.get("applications") if isinstance(app_doc, dict) else None
+            if raw_apps is not None and not isinstance(raw_apps, list):
                 local_risks.append(f"{deployment_key}: application_registry.yaml missing applications array")
+            for am in cfg.applications:
+                aid = str(am.application_id or "?")
+                for ck in am.consumer_contracts:
+                    if ck and ck not in artifacts:
+                        missing_manifest_refs.append(f"{deployment_key} application:{aid} consumer_contract:{ck}")
 
         # Required file presence checks
         if not dep_profile.exists():

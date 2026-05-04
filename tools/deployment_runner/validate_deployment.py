@@ -17,6 +17,7 @@ _REPO_ROOT_FOR_IMPORTS = _THIS_FILE.parents[2]
 if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
+from urban_platform.deployments.config_loader import load_deployment_config  # noqa: E402
 from urban_platform.specifications.conformance import load_manifest  # noqa: E402
 
 
@@ -323,47 +324,69 @@ def validate_deployment(*, deployment_dir: Path, repo_root: Path) -> ValidationS
 
     manifest = load_manifest()
 
-    # 1) Required files
+    cfg = load_deployment_config(deployment_dir)
+    warnings.extend(list(cfg.warnings))
+
+    # 1) Required files (gate: legacy behavior runs all validators below only if none are missing)
     prof_path = deployment_dir / "deployment_profile.yaml"
     prov_path = deployment_dir / "provider_registry.yaml"
     app_path = deployment_dir / "application_registry.yaml"
-    _ensure_file_exists(prof_path, label="deployment_profile.yaml", errors=errors)
-    _ensure_file_exists(prov_path, label="provider_registry.yaml", errors=errors)
-    _ensure_file_exists(app_path, label="application_registry.yaml", errors=errors)
+    file_errors: list[str] = []
+    _ensure_file_exists(prof_path, label="deployment_profile.yaml", errors=file_errors)
+    _ensure_file_exists(prov_path, label="provider_registry.yaml", errors=file_errors)
+    _ensure_file_exists(app_path, label="application_registry.yaml", errors=file_errors)
 
     if "deployments/examples/" in str(deployment_dir).replace("\\", "/"):
         if not (deployment_dir / "README.md").is_file():
             warnings.append("example deployment: README.md is missing (recommended)")
 
-    # If required files are missing, stop early but still report.
     deployment_id: str | None = None
     enabled_domains: list[str] = []
     provider_count = 0
     application_count = 0
     adapter_count = 0
 
-    if not errors:
-        profile = _read_yaml(prof_path)
-        _check_no_secrets(profile, context="deployment_profile", warnings=warnings, errors=errors)
-        deployment_id, enabled_domains = _validate_deployment_profile(profile, warnings=warnings, errors=errors)
+    if not file_errors:
+        errors.extend(list(cfg.errors))
 
-        provider_reg = _read_yaml(prov_path)
-        provider_count = _validate_provider_registry(
-            provider_reg,
-            deployment_dir=deployment_dir,
-            repo_root=repo_root,
-            manifest=manifest,
-            warnings=warnings,
-            errors=errors,
-        )
+        if cfg.profile_document is None:
+            errors.append("deployment_profile.yaml could not be loaded")
+        else:
+            _check_no_secrets(cfg.profile_document, context="deployment_profile", warnings=warnings, errors=errors)
+            deployment_id, enabled_domains = _validate_deployment_profile(
+                cfg.profile_document, warnings=warnings, errors=errors
+            )
 
-        app_reg = _read_yaml(app_path)
-        application_count = _validate_application_registry(app_reg, manifest=manifest, warnings=warnings, errors=errors)
+        if cfg.provider_registry_document is None:
+            errors.append("provider_registry.yaml could not be loaded")
+        else:
+            provider_count = _validate_provider_registry(
+                cfg.provider_registry_document,
+                deployment_dir=deployment_dir,
+                repo_root=repo_root,
+                manifest=manifest,
+                warnings=warnings,
+                errors=errors,
+            )
+
+        if cfg.application_registry_document is None:
+            errors.append("application_registry.yaml could not be loaded")
+        else:
+            application_count = _validate_application_registry(
+                cfg.application_registry_document, manifest=manifest, warnings=warnings, errors=errors
+            )
 
         net_path = deployment_dir / "network_adapter_registry.yaml"
         if net_path.exists():
-            net_reg = _read_yaml(net_path)
-            adapter_count = _validate_network_adapter_registry(net_reg, manifest=manifest, warnings=warnings, errors=errors)
+            if cfg.network_adapter_registry_document is None:
+                errors.append("network_adapter_registry.yaml could not be loaded")
+            else:
+                adapter_count = _validate_network_adapter_registry(
+                    cfg.network_adapter_registry_document,
+                    manifest=manifest,
+                    warnings=warnings,
+                    errors=errors,
+                )
 
         # 6) Optional profiles
         _validate_optional_profile(
@@ -395,6 +418,8 @@ def validate_deployment(*, deployment_dir: Path, repo_root: Path) -> ValidationS
             warnings=warnings,
             errors=errors,
         )
+
+    errors.extend(file_errors)
 
     if errors:
         rec = (

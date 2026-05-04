@@ -8,7 +8,6 @@ import sys
 from typing import Any, Callable
 
 import pandas as pd
-import yaml
 
 # Allow running as a standalone script from repo root:
 # `python tools/deployment_runner/run_deployment.py --deployment ...`
@@ -30,6 +29,7 @@ from urban_platform.connectors.flood.ingest_file import (
     ingest_rainfall_observation_feed_json,
 )
 from urban_platform.processing.flood.features import build_flood_feature_rows
+from urban_platform.deployments.config_loader import load_deployment_config
 from urban_platform.specifications.conformance import assert_conforms, load_manifest
 
 
@@ -49,13 +49,6 @@ class DeploymentRunSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-
-def _read_yaml(path: Path) -> dict[str, Any]:
-    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(doc, dict):
-        raise ValueError(f"YAML root must be an object: {path}")
-    return doc
 
 
 def _ensure_exists(repo_root: Path, rel_path: str) -> Path:
@@ -168,8 +161,8 @@ def _run_program_reporting_state_demo(
 def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path | None = None) -> DeploymentRunSummary:
     manifest = load_manifest()
 
-    prof = _read_yaml(deployment_dir / "deployment_profile.yaml")
-    dep_id = str(prof.get("deployment_id") or "").strip()
+    cfg = load_deployment_config(deployment_dir)
+    dep_id = str(cfg.deployment_id or "").strip()
     if not dep_id:
         raise ValueError("deployment_profile.yaml missing deployment_id")
 
@@ -178,8 +171,10 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
             deployment_dir=deployment_dir, repo_root=repo_root, output_root=output_root
         )
 
-    provider_reg = _read_yaml(deployment_dir / "provider_registry.yaml")
-    app_reg = _read_yaml(deployment_dir / "application_registry.yaml")
+    provider_reg = cfg.provider_registry_document
+    app_reg = cfg.application_registry_document
+    if provider_reg is None or app_reg is None:
+        raise ValueError("provider_registry.yaml or application_registry.yaml could not be loaded")
 
     # Validate manifest references (contracts) where practical.
     provider_artifacts: list[str] = []
