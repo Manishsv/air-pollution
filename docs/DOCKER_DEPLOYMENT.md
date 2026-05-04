@@ -2,6 +2,8 @@
 
 This document describes a **Docker-based alternative** to installing Python and dependencies on the host. It is **packaging only**: the same CLI, conformance, supervisor, and registry-driven flood demo you would run from a git clone.
 
+**Agency / leadership demo:** for a scripted 10–15 minute walkthrough with talking points, see [`docs/AGENCY_DEMO_SCRIPT.md`](AGENCY_DEMO_SCRIPT.md).
+
 **Maturity note:** this path corresponds to **Level 1** in [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)—a **single image** carrying Core plus reference stacks for quickstart. Agency-grade deployments target **Level 2+** (Core, providers, applications, and adapters as **separate services**); that document explains the target topology without requiring any change to how you build or run this image today.
 
 If you want a minimal multi-container demonstration of the Level 2 topology (Core service + app service + shared deployment/data volumes), see [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md).
