@@ -6,6 +6,8 @@ This is a **practical, demo-ready** walkthrough of **AirOS** as a **governed, re
 
 **Related:** technical Docker details and troubleshooting live in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
 
+**Future state-level demo:** programmatic **program reporting** and **fund-release review** (evidence-backed submissions; **no** automated disbursement)—see the design doc [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](PROGRAM_REPORTING_AND_FUND_RELEASE.md). That flow is **not** part of today’s Docker script; the script below uses the existing **flood** fixture demo.
+
 ---
 
 ## 2) Audience

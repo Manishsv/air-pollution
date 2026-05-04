@@ -18,6 +18,7 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Deployment quickstart (clean-machine test)**: [`docs/DEPLOYMENT_QUICKSTART.md`](docs/DEPLOYMENT_QUICKSTART.md)
 - **Docker (optional)**: [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md)
 - **Agency pitch demo (Docker, 10–15 min)**: [`docs/AGENCY_DEMO_SCRIPT.md`](docs/AGENCY_DEMO_SCRIPT.md)
+- **Program reporting & fund-release review (design)**: [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md)
 - **Docker Compose POC (Level 2 topology)**: [`docs/DOCKER_COMPOSE_POC.md`](docs/DOCKER_COMPOSE_POC.md)
 - **Multi-container deployment (target architecture)**: [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
 - **Forward deployment templates**: [`deployments/templates/`](deployments/templates/)
