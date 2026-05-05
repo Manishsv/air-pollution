@@ -1,6 +1,8 @@
-"""Minimal platform SDK (local client; no server required)."""
+"""
+AirOS SDK namespace.
 
-from .client import UrbanPlatformClient
+This namespace is reserved for developer-facing helpers and client surfaces.
 
-__all__ = ["UrbanPlatformClient"]
+This file intentionally avoids importing implementation modules.
+"""
 

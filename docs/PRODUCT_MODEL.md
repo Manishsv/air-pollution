@@ -231,6 +231,8 @@ Future reorganization may separate:
 
 This document does not imply immediate movement of folders.
 
+For a safe, phased approach (without breaking imports or introducing dynamic plugin loading), see [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md).
+
 ## Safety posture
 
 AirOS may produce **review outputs** and **proposed actions**, but final decisions remain with authorized human and institutional processes.

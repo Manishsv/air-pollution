@@ -13,7 +13,7 @@ PROJECT_ROOT = APP_DIR.parent  # repo root
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from urban_platform.sdk import UrbanPlatformClient
+from urban_platform.sdk.client import UrbanPlatformClient
 from urban_platform.common.provenance_summary import build_provenance_summary
 
 from review_dashboard.components.audit_panel import render_audit_panel

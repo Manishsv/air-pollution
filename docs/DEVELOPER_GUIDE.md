@@ -6,6 +6,8 @@ For how contracts, deployments, catalogs, and future federation fit together, se
 
 For the conceptual product boundaries (Core vs Apps vs Adapters vs SDK/Studio/Catalog/Identity/Network), see [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md).
 
+For the safe, phased repository restructuring plan (namespaces first, no breaking moves), see [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md).
+
 This guide is for developers extending the AirOS repository safely and consistently.
 
 ## What AirOS is (and what it is not)
