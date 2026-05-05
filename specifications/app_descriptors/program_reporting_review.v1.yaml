@@ -1,0 +1,46 @@
+app_id: program_reporting_review
+name: Program Reporting Review
+version: v1
+status: draft_demo
+domain_id: program_reporting
+description: >
+  Review-support app for program reporting submissions. Produces a structured
+  review packet and state summary for authorized human review. It does not
+  authorize fund release.
+app_type: review_support
+input_contracts:
+  - consumer_city_program_submission
+output_contracts:
+  - consumer_fund_release_review_packet
+  - consumer_program_reporting_state_summary
+decision_logic:
+  builder_ids:
+    - program_reporting_review_packet
+  description: >
+    Converts validated submissions into review packets and summaries, applying
+    contract-aware checks and review prompts for human decision-making.
+  execution_model: allowlisted_python_builder
+deployment_examples:
+  - deployment_id: program_reporting_state_demo
+    path: deployments/examples/program_reporting_state_demo
+dashboard:
+  panels:
+    - Program Reporting panel
+  supports_file_mode: true
+  supports_api_mode: true
+safety:
+  review_support_only: true
+  human_review_required: true
+  blocked_uses:
+    - automatic_fund_release
+    - automatic_penalty_or_recovery
+    - blacklisting_without_authorized_review
+    - public_disclosure_without_authorization
+  notes:
+    - Outputs are review support only; they do not authorize fund release.
+    - Any proposed actions must be reviewed through authorized institutional processes.
+provenance:
+  publisher: AirOS repository
+  updated_at: "2026-05-05T00:00:00Z"
+  source: specifications/app_descriptors/program_reporting_review.v1.yaml
+

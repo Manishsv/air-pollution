@@ -31,6 +31,25 @@ def _read_json(path: Path) -> tuple[Any | None, str | None]:
         return None, str(exc)
 
 
+def _read_json_or_yaml(path: Path) -> tuple[Any | None, str | None]:
+    """
+    Read either JSON or YAML into a Python object.
+
+    This is used for governed spec examples that are expressed as YAML (e.g. app descriptors),
+    while preserving existing JSON example support.
+    """
+    if not path.exists():
+        return None, None
+    suf = path.suffix.lower()
+    if suf in {".yaml", ".yml"}:
+        try:
+            with open(path, encoding="utf-8") as f:
+                return yaml.safe_load(f), None
+        except Exception as exc:  # noqa: BLE001
+            return None, str(exc)
+    return _read_json(path)
+
+
 def _contract_type_for(schema_name: str) -> str | None:
     m = load_manifest()
     meta = (m.get("artifacts") or {}).get(schema_name) or {}
@@ -339,7 +358,7 @@ def audit_examples(*, validated_at: str) -> list[dict[str, Any]]:
             )
             continue
 
-        data, load_err = _read_json(ex_path)
+        data, load_err = _read_json_or_yaml(ex_path)
         if load_err is not None:
             rows.append(
                 _report_row(

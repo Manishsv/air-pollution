@@ -173,6 +173,12 @@
       "schema_path": "platform_objects/reference_catalog.v1.schema.json",
       "stability": "documented"
     },
+    "platform_air_os_app_descriptor": {
+      "description": "Platform object: AirOS App Descriptor (packaging metadata for apps; validated as a governed spec, not a dynamic plugin loader).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/air_os_app_descriptor.v1.schema.json",
+      "stability": "documented"
+    },
 
     "consumer_urban_decision_packet_core": {
       "description": "Consumer contract: core decision packet shell (copy of current core schema).",
@@ -315,6 +321,14 @@
     }
   },
   "examples": {
+    "app_descriptor_program_reporting_review": {
+      "schema_name": "platform_air_os_app_descriptor",
+      "path": "app_descriptors/program_reporting_review.v1.yaml"
+    },
+    "app_descriptor_flood_risk_review": {
+      "schema_name": "platform_air_os_app_descriptor",
+      "path": "app_descriptors/flood_risk_review.v1.yaml"
+    },
     "example_flood_rainfall_observation": {
       "schema_name": "provider_rainfall_observation_feed",
       "path": "examples/flood/rainfall_observation.sample.json"

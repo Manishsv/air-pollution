@@ -4,6 +4,8 @@
 
 For how contracts, deployments, catalogs, and future federation fit together, see [`docs/INTEROPERABILITY_MODEL.md`](INTEROPERABILITY_MODEL.md).
 
+For the conceptual product boundaries (Core vs Apps vs Adapters vs SDK/Studio/Catalog/Identity/Network), see [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md).
+
 This guide is for developers extending the AirOS repository safely and consistently.
 
 ## What AirOS is (and what it is not)
@@ -11,8 +13,14 @@ This guide is for developers extending the AirOS repository safely and consisten
 **AirOS is specs-first.** New capabilities start with contracts under `specifications/`, then conformance, then implementation.
 
 - **AirOS Core**: the governance and validation layer (specs, conformance, review console, CLI helpers).
-- **Providers**: connectors and ingest adapters that normalize external inputs into canonical platform objects (future and/or fixture-based in demos).
-- **Applications**: domain/application builders that turn normalized data into contract-shaped outputs (dashboards, decision packets, review packets, tasks).
+- **Provider Adapters**: connectors and ingest adapters that normalize external inputs into canonical platform objects (future and/or fixture-based in demos).
+- **AirOS Apps**: domain/application builders that turn normalized data into contract-shaped outputs (dashboards, decision packets, review packets, tasks).
+- **App descriptors**: governed metadata describing an app’s decision logic, contracts, dashboards, deployment examples, and safety posture (see `specifications/app_descriptors/`).
+- **SDK**: developer framework for building apps/adapters (early-stage in this repo; direction captured in `docs/PRODUCT_MODEL.md`).
+- **Studio/CLI**: developer/operator tooling (today: `tools/`).
+- **App Catalog**: discovery/installation surface (future-facing; direction captured in `docs/PRODUCT_MODEL.md`).
+- **Identity & Trust**: participants/users/roles/keys/policies (production hardening work).
+- **Network Layer**: cross-node communication, envelopes, routing, receipts (future-facing).
 - **Deployments**: runnable, declarative workspaces that enable specific providers/applications with a profile + registries.
 
 AirOS demo outputs are **review support only**. The platform must not imply automated enforcement, disbursement, penalties, or public disclosure.
@@ -29,7 +37,6 @@ AirOS demo outputs are **review support only**. The platform must not imply auto
   - Examples (fixtures): `specifications/examples/`
 - **Canonical implementation**: `urban_platform/`
   - Connectors, processing, applications, conformance utilities.
-- **Legacy AQ MVP** (do not add new domains here): `src/`
 - **Review console (Streamlit UI)**: `review_dashboard/`
 - **Deployment examples**: `deployments/examples/`
 - **Tools/CLI**: `tools/`

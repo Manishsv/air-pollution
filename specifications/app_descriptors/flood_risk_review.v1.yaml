@@ -1,0 +1,50 @@
+app_id: flood_risk_review
+name: Flood Risk Review
+version: v1
+status: draft_demo
+domain_id: flood_risk
+description: >
+  Review-support app for flood risk situational awareness and triage. Produces
+  dashboard payloads, decision packets, and field-verification task candidates
+  for authorized human review.
+app_type: review_support
+input_contracts:
+  - provider_rainfall_observation_feed
+  - provider_flood_incident_feed
+  - provider_drainage_asset_feed
+output_contracts:
+  - consumer_flood_risk_dashboard
+  - consumer_flood_decision_packet
+  - consumer_field_verification_task
+decision_logic:
+  builder_ids:
+    - flood_risk_dashboard_payload
+    - flood_decision_packets
+    - flood_field_verification_tasks
+  description: >
+    Combines validated feeds into situational summaries, review packets, and
+    verification candidates. Final decisions remain with authorized reviewers.
+  execution_model: allowlisted_python_builder
+deployment_examples:
+  - deployment_id: flood_local_demo
+    path: deployments/examples/flood_local_demo
+dashboard:
+  panels:
+    - Flood panel
+  supports_file_mode: true
+  supports_api_mode: false
+safety:
+  review_support_only: true
+  human_review_required: true
+  blocked_uses:
+    - emergency_orders
+    - automatic_dispatch
+    - public_disclosure_without_authorization
+  notes:
+    - Decision support only; no emergency orders or automated response.
+    - Field verification required before operational action.
+provenance:
+  publisher: AirOS repository
+  updated_at: "2026-05-05T00:00:00Z"
+  source: specifications/app_descriptors/flood_risk_review.v1.yaml
+
