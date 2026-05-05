@@ -6,6 +6,8 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 
 - **For junior developers / first-time contributors**: [`docs/BEGINNER_DEVELOPER_GUIDE.md`](docs/BEGINNER_DEVELOPER_GUIDE.md) (web-friendly mental model + copy-paste templates in [`docs/developer_templates/`](docs/developer_templates/))
 - **Interoperability (contracts, registries, catalogs, deployments, federation)**: [`docs/INTEROPERABILITY_MODEL.md`](docs/INTEROPERABILITY_MODEL.md)
+- **Production-like implementation plan** (phased roadmap from demo execution to service-oriented AirOS): [`docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md`](docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md)
+- **Core API (pilot-runtime, Program Reporting slice)**: [`docs/CORE_API_PILOT.md`](docs/CORE_API_PILOT.md)
 - **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
 - **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
 - **Specifications**: [`specifications/README.md`](specifications/README.md)
