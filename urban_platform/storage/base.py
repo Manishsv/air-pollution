@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord
+
+
+class AirOsStore(Protocol):
+    # Records (ingested inputs)
+    def put_record(self, record: StoredRecord) -> StoredRecord: ...
+
+    def get_record(self, record_id: str) -> StoredRecord | None: ...
+
+    def list_records(
+        self, *, deployment_id: str | None = None, contract_key: str | None = None
+    ) -> list[StoredRecord]: ...
+
+    # Outputs (generated payloads)
+    def put_output(self, output: StoredOutput) -> StoredOutput: ...
+
+    def get_output(self, output_id: str) -> StoredOutput | None: ...
+
+    def list_outputs(
+        self, *, deployment_id: str | None = None, contract_key: str | None = None
+    ) -> list[StoredOutput]: ...
+
+    # Audit
+    def append_audit_event(self, event: AuditEvent) -> AuditEvent: ...
+
+    def list_audit_events(self, *, deployment_id: str | None = None) -> list[AuditEvent]: ...
+

@@ -71,6 +71,16 @@ For state-to-city reporting, AirOS uses **reference catalogs** (Phase 1 demo):
 
 Phase 1 is **declarative** only: no pull/cache/TTL/signing in this repository demo.
 
+## Storage abstraction (pilot building block)
+
+AirOS demos write review outputs under `data/outputs/…`. For pilot-oriented runtime hardening, the repository also includes a small **file-backed JSONL store** under `urban_platform/storage/` (`FileAirOsStore`) to persist:
+
+- ingested records (`StoredRecord`)
+- generated outputs (`StoredOutput`)
+- audit events (`AuditEvent`)
+
+This is **additive** scaffolding for future APIs/audit; it does not replace the current demo output path.
+
 ## How to add a provider (connector)
 
 1. **Add a provider contract** under `specifications/provider_contracts/` describing what a provider can send.
