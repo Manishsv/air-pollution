@@ -39,6 +39,8 @@ Interactive schema browser: `http://127.0.0.1:8000/docs`
 |--------|------|------|
 | `GET` | `/health` | Liveness |
 | `GET` | `/manifest` | Lightweight manifest summary (`artifact_count`, sorted `contract_keys`) |
+| `GET` | `/contracts` | Contract keys grouped by `contract_type` (developer discovery) |
+| `GET` | `/contracts/{contract_key}` | Manifest-backed contract discovery: returns schema metadata + JSON schema |
 | `POST` | `/records/{contract_key}` | Validate against manifest schema, persist `StoredRecord`; audits `record_ingested` / `record_rejected` |
 | `GET` | `/records` | List stored records (optional `deployment_id`, `contract_key`) |
 | `POST` | `/applications/{application_id}/runs` | Run an **allowlisted** builder with optional Core adapters (today: `program_reporting_review_packet`) |
@@ -60,6 +62,13 @@ curl http://127.0.0.1:8000/health
 
 ```bash
 curl http://127.0.0.1:8000/manifest
+```
+
+**Contract discovery (schema)**
+
+```bash
+curl http://127.0.0.1:8000/contracts/consumer_city_program_submission
+curl http://127.0.0.1:8000/contracts/consumer_fund_release_review_packet
 ```
 
 **Ingest Program Reporting submissions** (requires manifest key `consumer_city_program_submission`; optional query `deployment_id`, default aligns with demos)

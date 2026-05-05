@@ -64,6 +64,15 @@ Expected:
 {"status":"ok","service":"airos-core","mode":"pilot-runtime"}
 ```
 
+## 3b) (Optional) Contract discovery (what shape to POST)
+
+Use this if you want to inspect the JSON schema before posting data:
+
+```bash
+curl http://127.0.0.1:8000/contracts/consumer_city_program_submission
+curl http://127.0.0.1:8000/contracts/consumer_fund_release_review_packet
+```
+
 ## 4) Submit Program Reporting records (generic records endpoint)
 
 Run these from the **repo root** (so `--data @specifications/...` paths resolve).

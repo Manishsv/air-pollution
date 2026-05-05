@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Query
 from urban_platform.api.core_applications import router as applications_router
 from urban_platform.api.core_outputs import router as outputs_router
 from urban_platform.api.core_records import router as records_router
+from urban_platform.api.contracts import router as contracts_router
 from urban_platform.api.deps import get_store
 from urban_platform.specifications.conformance import load_manifest
 from urban_platform.storage import FileAirOsStore
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(records_router)
     app.include_router(applications_router)
     app.include_router(outputs_router)
+    app.include_router(contracts_router)
 
     return app
 
