@@ -61,6 +61,9 @@ docker run --rm \
 
 Then open **http://localhost:8501** in a browser.
 
+- **Optional — Program Reporting tab via generic Core API instead of baked-in `data/outputs/deployments/program_reporting_state_demo/` files:** expose the API (separate terminal or Compose service), then launch Streamlit with  
+  `-e AIROS_DASHBOARD_DATA_MODE=api -e AIROS_API_BASE_URL=http://host.docker.internal:8000` (or another reachable Core API URL). Prerequisites and curl flow are documented in [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md).
+
 - **Keep the terminal running** while you use the dashboard; stopping the container stops the UI.
 - Use **`docker ps`** to confirm the container is up and that port **8501** is published (`0.0.0.0:8501->8501/tcp`).
 - **`--entrypoint streamlit` is required** with the default image; without it, Docker would pass `run review_dashboard/...` to the CLI instead of to Streamlit.

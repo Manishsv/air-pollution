@@ -103,6 +103,36 @@ Workflow through **generic endpoints** only:
 
 Builders and summaries come from **`urban_platform/applications/program_reporting/`**; the Core API wires storage and conformance only.
 
+## Review dashboard (optional API mode)
+
+By default the **Program Reporting** Streamlit panel reads **`data/outputs/deployments/program_reporting_state_demo/`**. To bind it to Core API payloads instead (**additive**):
+
+**File mode (default)**
+
+```bash
+streamlit run review_dashboard/app.py
+```
+
+**API mode**
+
+```bash
+AIROS_DASHBOARD_DATA_MODE=api \
+AIROS_API_BASE_URL=http://127.0.0.1:8000 \
+streamlit run review_dashboard/app.py
+```
+
+**Required sequence** before opening the dashboard in API mode:
+
+1. Start Core API:  
+   `AIROS_STORE_DIR=data/store/api uvicorn urban_platform.api.app:app --reload --host 127.0.0.1 --port 8000`
+2. POST both city fixtures to `{base}/records/consumer_city_program_submission`
+3. POST `{base}/applications/program_reporting_review_packet/runs` with `deployment_id` / `program_id` / `reporting_period` JSON
+4. Start Streamlit as above (`AIROS_API_BASE_URL` must match where uvicorn listens)
+
+The dashboard uses generic **`GET /outputs?contract_key=...`** responses only; failures surface as **guided empty/error states**, not crashes.
+
+Docker users can pass the same environment variables through `docker run -e`.
+
 ## Safety note
 
 All responses that include service-level `warnings` reiterate **pilot posture** and that **disbursement and enforcement are not automated** by this service. Contract payloads may still enumerate **blocked uses** (e.g. `automatic_fund_release`)—that is schema-level caution, **not** an authorization to automate the opposite.

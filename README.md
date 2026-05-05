@@ -306,6 +306,8 @@ Run the dashboard UI:
 streamlit run review_dashboard/app.py
 ```
 
+Optional: **Program Reporting** tab can read from the pilot **generic Core API** (`GET /outputs`) when `AIROS_DASHBOARD_DATA_MODE=api` and `AIROS_API_BASE_URL` are set—see [`docs/CORE_API_PILOT.md`](docs/CORE_API_PILOT.md). Default remains local files under `data/outputs/deployments/program_reporting_state_demo/`.
+
 The dashboard uses the **SDK** (`UrbanPlatformClient`) to read persisted artifacts and supports tabs for multiple use cases (e.g., Air Pollution + Crowd).
 
 Outputs land in:

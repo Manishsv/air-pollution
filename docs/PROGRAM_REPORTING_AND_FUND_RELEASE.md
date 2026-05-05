@@ -33,7 +33,7 @@ The **first Program Reporting demo** in `specifications/` is deliberately minima
   - `fund_release_review_packets.json` (two cities, schema-validated)
   - `state_program_summary.json` (multi-city monitoring summary)
   - `deployment_run_summary.json` (counts + warnings)
-- **Review dashboard tab:** run `streamlit run review_dashboard/app.py` and open the **Program Reporting** tab to render these generated JSON outputs (presentation-only; no additional decision logic in the UI).
+- **Review dashboard tab:** default **file mode** reads deployment JSON under `data/outputs/deployments/program_reporting_state_demo/`; run `streamlit run review_dashboard/app.py` and open the **Program Reporting** tab (presentation-only). **Optional API mode** (`AIROS_DASHBOARD_DATA_MODE=api` + running Core API) reads the same shapes from generic `GET /outputs` instead—see [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md).
 - **Future:** catalog pull/cache, dashboards, signed envelopes / network submission flows, and evidence-heavy workflows.
 
 ---
