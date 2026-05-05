@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airos.local/specifications/consumer_contracts/program_reporting_state_summary.v1.schema.json",
+  "title": "Program Reporting State Summary (consumer)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "state_node_id",
+    "program_id",
+    "reporting_period",
+    "generated_at",
+    "city_count",
+    "cities_ready_for_authorized_review",
+    "cities_needing_clarification",
+    "review_status_counts",
+    "fund_release_review_status_counts",
+    "financial_totals",
+    "city_financial_rows",
+    "city_progress_rows",
+    "flagged_cities",
+    "action_items",
+    "blocked_uses",
+    "warnings",
+    "provenance"
+  ],
+  "properties": {
+    "state_node_id": { "type": "string", "minLength": 1 },
+    "program_id": { "type": "string", "minLength": 1 },
+    "reporting_period": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "city_count": { "type": "integer", "minimum": 0 },
+    "cities_ready_for_authorized_review": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "cities_needing_clarification": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "review_status_counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "fund_release_review_status_counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "financial_totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount_approved_total",
+        "amount_released_total",
+        "amount_spent_total",
+        "utilization_pct"
+      ],
+      "properties": {
+        "amount_approved_total": { "type": "number" },
+        "amount_released_total": { "type": "number" },
+        "amount_spent_total": { "type": "number" },
+        "utilization_pct": { "type": "number" }
+      }
+    },
+    "city_financial_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "city_id",
+          "amount_approved",
+          "amount_released",
+          "amount_spent",
+          "utilization_pct",
+          "fund_release_review_status"
+        ],
+        "properties": {
+          "city_id": { "type": "string", "minLength": 1 },
+          "amount_approved": { "type": "number" },
+          "amount_released": { "type": "number" },
+          "amount_spent": { "type": "number" },
+          "utilization_pct": { "type": "number" },
+          "fund_release_review_status": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "city_progress_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "city_id",
+          "projects_total",
+          "projects_completed",
+          "projects_in_progress",
+          "projects_delayed",
+          "overall_progress_pct",
+          "review_status",
+          "flags"
+        ],
+        "properties": {
+          "city_id": { "type": "string", "minLength": 1 },
+          "projects_total": { "type": "integer", "minimum": 0 },
+          "projects_completed": { "type": "integer", "minimum": 0 },
+          "projects_in_progress": { "type": "integer", "minimum": 0 },
+          "projects_delayed": { "type": "integer", "minimum": 0 },
+          "overall_progress_pct": { "type": "number" },
+          "review_status": { "type": "string", "minLength": 1 },
+          "flags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "flagged_cities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["city_id", "flags", "review_status", "fund_release_review_status"],
+        "properties": {
+          "city_id": { "type": "string", "minLength": 1 },
+          "flags": { "type": "array", "items": { "type": "string" } },
+          "review_status": { "type": "string", "minLength": 1 },
+          "fund_release_review_status": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action_id",
+          "action_label",
+          "responsible_role",
+          "city_id",
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "action_id": { "type": "string", "minLength": 1 },
+          "action_label": { "type": "string", "minLength": 1 },
+          "responsible_role": { "type": "string", "minLength": 1 },
+          "city_id": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "blocked_uses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "allOf": [
+        { "contains": { "const": "automatic_fund_release" } },
+        { "contains": { "const": "automatic_penalty_or_recovery" } },
+        { "contains": { "const": "blacklisting_without_authorized_review" } },
+        { "contains": { "const": "public_disclosure_without_authorization" } }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["generated_by", "fixture_demo"],
+      "properties": {
+        "generated_by": { "type": "string", "minLength": 1 },
+        "fixture_demo": { "type": "boolean" }
+      }
+    }
+  }
+}
+

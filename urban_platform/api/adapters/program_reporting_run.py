@@ -22,7 +22,7 @@ from urban_platform.storage import (
 
 CONTRACT_SUBMISSION = "consumer_city_program_submission"
 CONTRACT_REVIEW_PACKET = "consumer_fund_release_review_packet"
-STATE_SUMMARY_CONTRACT = "internal_program_reporting_state_summary_demo"
+STATE_SUMMARY_CONTRACT = "consumer_program_reporting_state_summary"
 DEFAULT_STATE_NODE = "state_urban_department_demo"
 
 

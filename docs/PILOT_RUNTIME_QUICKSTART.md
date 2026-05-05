@@ -176,7 +176,7 @@ curl http://127.0.0.1:8000/validation-receipts/<receipt_id>
 State summary:
 
 ```bash
-curl "http://127.0.0.1:8000/outputs?contract_key=internal_program_reporting_state_summary_demo"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_program_reporting_state_summary"
 ```
 
 Review packets:

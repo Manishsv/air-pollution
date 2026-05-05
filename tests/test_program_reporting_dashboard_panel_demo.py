@@ -62,6 +62,8 @@ def _sample_state_summary() -> Dict[str, Any]:
             "blacklisting_without_authorized_review",
             "public_disclosure_without_authorization",
         ],
+        "fund_release_review_status_counts": {"ready_for_authorized_review": 1, "clarification_needed": 1},
+        "provenance": {"generated_by": "demo_test", "fixture_demo": True},
     }
 
 
@@ -193,8 +195,10 @@ def test_api_mode_stored_output_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
     def _fetch(base: str, ck: str) -> Tuple[Optional[list], Optional[int], Optional[str]]:
-        if ck == "internal_program_reporting_state_summary_demo":
+        if ck == "consumer_program_reporting_state_summary":
             return summaries, 200, None
+        if ck == "internal_program_reporting_state_summary_demo":
+            return [], 200, None
         return pkts, 200, None
 
     from review_dashboard.components.program_reporting_panel import (
@@ -221,8 +225,10 @@ def test_api_mode_direct_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     pkts = _sample_packets_direct()
 
     def _fetch(base: str, ck: str) -> Tuple[Optional[list], Optional[int], Optional[str]]:
-        if ck == "internal_program_reporting_state_summary_demo":
+        if ck == "consumer_program_reporting_state_summary":
             return summaries, 200, None
+        if ck == "internal_program_reporting_state_summary_demo":
+            return [], 200, None
         return pkts, 200, None
 
     from review_dashboard.components.program_reporting_panel import (

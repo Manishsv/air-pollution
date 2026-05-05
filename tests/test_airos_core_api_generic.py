@@ -134,7 +134,7 @@ def test_program_reporting_application_run_completed(api_client: TestClient) -> 
     pkts = store.list_outputs(deployment_id="program_reporting_state_demo", contract_key="consumer_fund_release_review_packet")
     assert len(pkts) >= 2
     sums = store.list_outputs(
-        deployment_id="program_reporting_state_demo", contract_key="internal_program_reporting_state_summary_demo"
+        deployment_id="program_reporting_state_demo", contract_key="consumer_program_reporting_state_summary"
     )
     assert len(sums) >= 1
 
@@ -158,7 +158,7 @@ def test_get_outputs_review_packets(api_client: TestClient) -> None:
 def test_get_outputs_state_summary(api_client: TestClient) -> None:
     _ingest_both_sample_cities(api_client)
     _run_program_reporting_app(api_client)
-    r = api_client.get("/outputs", params={"contract_key": "internal_program_reporting_state_summary_demo"})
+    r = api_client.get("/outputs", params={"contract_key": "consumer_program_reporting_state_summary"})
     assert r.status_code == 200
     rows = r.json()
     assert len(rows) >= 1

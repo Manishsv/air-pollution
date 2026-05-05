@@ -34,7 +34,7 @@ def test_program_reporting_with_store_dir_writes_jsonl_and_counts(tmp_path: Path
     assert len(packets_out) == 2
 
     summaries = store.list_outputs(
-        deployment_id="program_reporting_state_demo", contract_key="internal_program_reporting_state_summary_demo"
+        deployment_id="program_reporting_state_demo", contract_key="consumer_program_reporting_state_summary"
     )
     assert len(summaries) == 1
 

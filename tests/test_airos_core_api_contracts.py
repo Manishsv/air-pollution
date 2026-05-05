@@ -30,6 +30,7 @@ def _assert_no_abs_paths(obj) -> None:
     [
         "consumer_city_program_submission",
         "consumer_fund_release_review_packet",
+        "consumer_program_reporting_state_summary",
         "provider_rainfall_observation_feed",
     ],
 )

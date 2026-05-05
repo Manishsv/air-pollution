@@ -25,7 +25,8 @@ The **first Program Reporting demo** in `specifications/` is deliberately minima
 - **City submission sample:** `specifications/examples/program_reporting/city_program_submission.sample.json` (synthetic).
 - **Second city submission:** `specifications/examples/program_reporting/city_program_submission_city_b.sample.json` (synthetic; intentionally triggers multiple flags).
 - **Review packet builder:** `urban_platform.applications.program_reporting.review_packets.build_fund_release_review_packet` reads a submission-shaped `dict` and emits a **`fund_release_review_packet`**-shaped `dict` with deterministic flags (`progress_delay` if `overall_progress_pct < 50`, `low_fund_utilization` if `utilization_pct < 50`, `financial_inconsistency` if `amount_spent > amount_released`), fixed **`blocked_uses`**, and role-based **`required_human_approvals`**. **No automatic fund release** or finance integration.
-- **State summary builder:** `urban_platform.applications.program_reporting.review_packets.build_program_reporting_state_summary` aggregates multiple review packets into a small multi-city monitoring payload (demo-only; no schema yet). It includes:
+- **State summary builder:** `urban_platform.applications.program_reporting.review_packets.build_program_reporting_state_summary` aggregates multiple review packets into a small multi-city monitoring payload. It includes:
+  - a first-class consumer contract: `consumer_program_reporting_state_summary` (discoverable via `GET /contracts/consumer_program_reporting_state_summary`)
   - **Financial totals** (approved/released/spent + overall utilization)
   - **City financial rows** and **city progress rows** for state-level review
   - **Action items** for state reviewers (queue for authorized review vs request clarification) — **no** automatic disbursement or enforcement actions

@@ -237,7 +237,12 @@ def load_program_reporting_dashboard_data(
 
     base = _api_base_url()
     fetch = fetch_outputs or FETCH_OUTPUTS
-    summaries_raw, stat_s, err_s = fetch(base, "internal_program_reporting_state_summary_demo")
+    summaries_raw, stat_s, err_s = fetch(base, "consumer_program_reporting_state_summary")
+    # Backward compatibility: older stores may have used the internal demo key.
+    if (err_s is None) and isinstance(stat_s, int) and stat_s < 400 and not (summaries_raw or []):
+        fallback_raw, fb_stat, fb_err = fetch(base, "internal_program_reporting_state_summary_demo")
+        if fb_err is None and isinstance(fb_stat, int) and fb_stat < 400 and isinstance(fallback_raw, list) and fallback_raw:
+            summaries_raw, stat_s, err_s = fallback_raw, fb_stat, fb_err
     packets_raw, stat_p, err_p = fetch(base, "consumer_fund_release_review_packet")
 
     warns: List[str] = []

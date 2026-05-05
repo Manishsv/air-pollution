@@ -142,7 +142,7 @@ curl http://127.0.0.1:8000/validation-receipts/<receipt_id>
 
 ```bash
 curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_packet"
-curl "http://127.0.0.1:8000/outputs?contract_key=internal_program_reporting_state_summary_demo"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_program_reporting_state_summary"
 ```
 
 **Audit trail**

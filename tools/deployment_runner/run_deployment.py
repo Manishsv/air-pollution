@@ -230,7 +230,7 @@ def _run_program_reporting_state_demo(
             StoredOutput(
                 output_id="out_state_program_summary",
                 deployment_id=dep_id,
-                contract_key="internal_program_reporting_state_summary_demo",
+                contract_key="consumer_program_reporting_state_summary",
                 payload=state_summary,
                 generated_at=now_utc_iso(),
                 generated_by="application:build_program_reporting_state_summary",
@@ -244,7 +244,7 @@ def _run_program_reporting_state_demo(
             action="output_generated",
             resource_type="stored_output",
             resource_id="out_state_program_summary",
-            metadata={"contract_key": "internal_program_reporting_state_summary_demo"},
+            metadata={"contract_key": "consumer_program_reporting_state_summary"},
         )
         _emit_audit(
             store,
@@ -252,7 +252,7 @@ def _run_program_reporting_state_demo(
             action="output_validated",
             resource_type="stored_output",
             resource_id="out_state_program_summary",
-            metadata={"note": "internal demo summary (no formal consumer contract yet)"},
+            metadata={"schema": "consumer_program_reporting_state_summary"},
         )
 
     warnings = [

@@ -1,0 +1,106 @@
+{
+  "state_node_id": "node:state_urban_department_demo",
+  "program_id": "stormwater_resilience_grant_2026",
+  "reporting_period": "2026_Q1",
+  "generated_at": "2026-05-05T00:00:00Z",
+  "city_count": 2,
+  "review_status_counts": {
+    "review_ready": 1,
+    "needs_clarification": 1
+  },
+  "fund_release_review_status_counts": {
+    "ready_for_authorized_review": 1,
+    "clarification_needed": 1
+  },
+  "financial_totals": {
+    "amount_approved_total": 2000000.0,
+    "amount_released_total": 1500000.0,
+    "amount_spent_total": 1200000.0,
+    "utilization_pct": 80.0
+  },
+  "city_financial_rows": [
+    {
+      "city_id": "city_demo_a",
+      "amount_approved": 1000000.0,
+      "amount_released": 900000.0,
+      "amount_spent": 800000.0,
+      "utilization_pct": 88.9,
+      "fund_release_review_status": "ready_for_authorized_review"
+    },
+    {
+      "city_id": "city_demo_b",
+      "amount_approved": 1000000.0,
+      "amount_released": 600000.0,
+      "amount_spent": 400000.0,
+      "utilization_pct": 66.7,
+      "fund_release_review_status": "clarification_needed"
+    }
+  ],
+  "city_progress_rows": [
+    {
+      "city_id": "city_demo_a",
+      "projects_total": 10,
+      "projects_completed": 6,
+      "projects_in_progress": 3,
+      "projects_delayed": 1,
+      "overall_progress_pct": 75.0,
+      "flags": [],
+      "review_status": "review_ready"
+    },
+    {
+      "city_id": "city_demo_b",
+      "projects_total": 12,
+      "projects_completed": 3,
+      "projects_in_progress": 5,
+      "projects_delayed": 4,
+      "overall_progress_pct": 35.0,
+      "flags": ["progress_delay", "low_utilization"],
+      "review_status": "needs_clarification"
+    }
+  ],
+  "flagged_cities": [
+    {
+      "city_id": "city_demo_b",
+      "flags": ["progress_delay", "low_utilization"],
+      "review_status": "needs_clarification",
+      "fund_release_review_status": "clarification_needed"
+    }
+  ],
+  "cities_ready_for_authorized_review": ["city_demo_a"],
+  "cities_needing_clarification": ["city_demo_b"],
+  "action_items": [
+    {
+      "action_id": "action_authorized_review_city_demo_a",
+      "action_label": "Queue for authorized review",
+      "responsible_role": "state_program_reviewer",
+      "city_id": "city_demo_a",
+      "status": "open",
+      "reason": "City submission is review-ready; proceed with authorized review workflow outside AirOS."
+    },
+    {
+      "action_id": "action_request_clarification_city_demo_b",
+      "action_label": "Request clarification from city",
+      "responsible_role": "state_program_reviewer",
+      "city_id": "city_demo_b",
+      "status": "open",
+      "reason": "Submission needs clarification based on demo rules and/or flags; request supporting clarification (no fund release automation)."
+    }
+  ],
+  "warnings": [
+    "fixture/demo data only",
+    "review support only",
+    "no automatic fund release",
+    "authorized finance process required"
+  ],
+  "blocked_uses": [
+    "automatic_fund_release",
+    "automatic_penalty_or_recovery",
+    "blacklisting_without_authorized_review",
+    "public_disclosure_without_authorization"
+  ],
+  "provenance": {
+    "generated_by": "urban_platform.applications.program_reporting.review_packets.build_program_reporting_state_summary",
+    "fixture_demo": true
+  }
+}
+

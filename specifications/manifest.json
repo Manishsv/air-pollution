@@ -258,6 +258,12 @@
       "schema_path": "consumer_contracts/fund_release_review_packet.v1.schema.json",
       "stability": "documented"
     },
+    "consumer_program_reporting_state_summary": {
+      "description": "Program reporting: state monitoring summary aggregated across city review packets (review support only; no auto-fund-release).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/program_reporting_state_summary.v1.schema.json",
+      "stability": "documented"
+    },
     "network_message_envelope_v1": {
       "description": "AirOS Network Layer: domain-agnostic envelope for routing contract-shaped payloads between agency nodes (transports attach separately—email/API/queue—not embedded here).",
       "contract_type": "network_contract",
@@ -392,6 +398,10 @@
     "example_program_reporting_fund_release_review_packet": {
       "schema_name": "consumer_fund_release_review_packet",
       "path": "examples/program_reporting/fund_release_review_packet.sample.json"
+    },
+    "example_program_reporting_state_summary": {
+      "schema_name": "consumer_program_reporting_state_summary",
+      "path": "examples/program_reporting/program_reporting_state_summary.sample.json"
     },
     "example_program_reporting_program_spec_registry": {
       "schema_name": "registry_program_spec_registry_v1",
