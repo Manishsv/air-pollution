@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord
+from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
 
 
 class AirOsStore(Protocol):
@@ -28,4 +28,17 @@ class AirOsStore(Protocol):
     def append_audit_event(self, event: AuditEvent) -> AuditEvent: ...
 
     def list_audit_events(self, *, deployment_id: str | None = None) -> list[AuditEvent]: ...
+
+    # Runs (application execution metadata)
+    def put_run(self, run: StoredRun) -> StoredRun: ...
+
+    def get_run(self, run_id: str) -> StoredRun | None: ...
+
+    def list_runs(
+        self,
+        *,
+        deployment_id: str | None = None,
+        application_id: str | None = None,
+        status: str | None = None,
+    ) -> list[StoredRun]: ...
 

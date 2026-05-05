@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from urban_platform.storage.file_store import FileAirOsStore, compute_payload_hash
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord
+from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
 
 
 def test_put_get_list_record(tmp_path: Path) -> None:
@@ -67,12 +67,64 @@ def test_append_list_audit_events(tmp_path: Path) -> None:
     assert len(store.list_audit_events(deployment_id="dep_b")) == 0
 
 
+def test_put_get_list_run_and_latest_wins(tmp_path: Path) -> None:
+    store = FileAirOsStore(tmp_path)
+    running = StoredRun(
+        run_id="run_1",
+        deployment_id="dep_a",
+        application_id="app_x",
+        status="running",
+        started_at="2026-01-01T00:00:00Z",
+        completed_at=None,
+        input_refs=["rec_1", "rec_2"],
+        output_refs=[],
+        records_processed=0,
+        outputs_generated=0,
+        warnings=["pilot"],
+        metadata={"k": "v"},
+    )
+    store.put_run(running)
+
+    completed = StoredRun(
+        run_id="run_1",
+        deployment_id="dep_a",
+        application_id="app_x",
+        status="completed",
+        started_at="2026-01-01T00:00:00Z",
+        completed_at="2026-01-01T00:01:00Z",
+        input_refs=["rec_1", "rec_2"],
+        output_refs=["out_1"],
+        records_processed=2,
+        outputs_generated=1,
+        warnings=["pilot"],
+        metadata={"k": "v2"},
+    )
+    store.put_run(completed)
+
+    got = store.get_run("run_1")
+    assert got is not None
+    assert got.status == "completed"
+    assert got.metadata.get("k") == "v2"
+
+    all_runs = store.list_runs()
+    assert len(all_runs) == 1
+    assert all_runs[0].run_id == "run_1"
+
+    assert len(store.list_runs(deployment_id="dep_a")) == 1
+    assert store.list_runs(deployment_id="dep_b") == []
+    assert len(store.list_runs(application_id="app_x")) == 1
+    assert store.list_runs(application_id="other") == []
+    assert len(store.list_runs(status="completed")) == 1
+    assert store.list_runs(status="failed") == []
+
+
 def test_missing_files_return_empty_lists(tmp_path: Path) -> None:
     store = FileAirOsStore(tmp_path)
     # root dir exists, but JSONL files may not.
     assert store.list_records() == []
     assert store.list_outputs() == []
     assert store.list_audit_events() == []
+    assert store.list_runs() == []
 
 
 def test_payload_hash_deterministic_for_key_order() -> None:

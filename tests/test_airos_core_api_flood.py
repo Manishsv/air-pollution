@@ -37,6 +37,20 @@ def test_flood_end_to_end_generic_api(api_client: TestClient) -> None:
     assert body["records_processed"] >= 3
     assert body["outputs_generated"] >= 3
 
+    run_id = body["run_id"]
+    runs = api_client.get("/runs", params={"deployment_id": "flood_local_demo", "application_id": "flood_risk_dashboard_payload"})
+    assert runs.status_code == 200
+    assert any(x.get("run_id") == run_id and x.get("status") == "completed" for x in runs.json())
+
+    one = api_client.get(f"/runs/{run_id}")
+    assert one.status_code == 200
+    got = one.json()
+    assert got["deployment_id"] == "flood_local_demo"
+    assert got["application_id"] == "flood_risk_dashboard_payload"
+    assert got["status"] == "completed"
+    assert len(got.get("input_refs") or []) >= 3
+    assert len(got.get("output_refs") or []) >= 1
+
     dash = api_client.get("/outputs", params={"contract_key": "consumer_flood_risk_dashboard"})
     assert dash.status_code == 200
     assert len(dash.json()) >= 1
@@ -71,4 +85,8 @@ def test_flood_missing_required_records_returns_400(api_client: TestClient) -> N
     assert "missing_contract_keys" in detail
     assert "provider_flood_incident_feed" in detail["missing_contract_keys"]
     assert "provider_drainage_asset_feed" in detail["missing_contract_keys"]
+
+    lst = api_client.get("/runs")
+    assert lst.status_code == 200
+    assert lst.json() == []
 

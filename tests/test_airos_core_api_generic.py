@@ -93,6 +93,35 @@ def test_program_reporting_application_run_completed(api_client: TestClient) -> 
     assert body["outputs_generated"] == 3
     assert body["application_id"] == "program_reporting_review_packet"
 
+    # Runs are first-class metadata.
+    run_id = body["run_id"]
+    r0 = api_client.get("/runs")
+    assert r0.status_code == 200
+    assert any(x.get("run_id") == run_id and x.get("status") == "completed" for x in r0.json())
+
+    r1 = api_client.get(f"/runs/{run_id}")
+    assert r1.status_code == 200
+    run = r1.json()
+    assert run["run_id"] == run_id
+    assert run["deployment_id"] == "program_reporting_state_demo"
+    assert run["application_id"] == "program_reporting_review_packet"
+    assert run["status"] == "completed"
+    assert run["records_processed"] == 2
+    assert run["outputs_generated"] == 3
+    assert len(run.get("input_refs") or []) == 2
+    assert len(run.get("output_refs") or []) >= 1
+
+    # Filters.
+    rf_dep = api_client.get("/runs", params={"deployment_id": "program_reporting_state_demo"})
+    assert rf_dep.status_code == 200
+    assert any(x.get("run_id") == run_id for x in rf_dep.json())
+    rf_app = api_client.get("/runs", params={"application_id": "program_reporting_review_packet"})
+    assert rf_app.status_code == 200
+    assert any(x.get("run_id") == run_id for x in rf_app.json())
+    rf_status = api_client.get("/runs", params={"status": "completed"})
+    assert rf_status.status_code == 200
+    assert any(x.get("run_id") == run_id for x in rf_status.json())
+
     from urban_platform.storage import FileAirOsStore
 
     store = FileAirOsStore(Path(os.environ["AIROS_STORE_DIR"]))
@@ -168,6 +197,11 @@ def test_known_builder_without_required_records_returns_400(api_client: TestClie
     r = api_client.post("/applications/flood_risk_dashboard_payload/runs", json={})
     assert r.status_code == 400
     assert r.json()["detail"]["message"] == "No stored records found for this application run."
+
+    # Missing-input failures should not create misleading run entries.
+    lst = api_client.get("/runs")
+    assert lst.status_code == 200
+    assert lst.json() == []
 
 
 def test_no_response_implies_automatic_fund_release(api_client: TestClient) -> None:

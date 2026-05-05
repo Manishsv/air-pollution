@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord
+from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
 
 
 def now_utc_iso() -> str:
@@ -55,6 +55,7 @@ class FileAirOsStore:
     - records.jsonl
     - outputs.jsonl
     - audit_events.jsonl
+    - runs.jsonl
     """
 
     def __init__(self, root_dir: Path):
@@ -72,6 +73,10 @@ class FileAirOsStore:
     @property
     def audit_events_path(self) -> Path:
         return self.root_dir / "audit_events.jsonl"
+
+    @property
+    def runs_path(self) -> Path:
+        return self.root_dir / "runs.jsonl"
 
     def _append_jsonl(self, path: Path, obj: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,5 +160,50 @@ class FileAirOsStore:
                 out.append(AuditEvent(**obj))  # type: ignore[arg-type]
             except TypeError:
                 continue
+        return out
+
+    # Runs
+    def put_run(self, run: StoredRun) -> StoredRun:
+        self._append_jsonl(self.runs_path, asdict(run))
+        return run
+
+    def get_run(self, run_id: str) -> StoredRun | None:
+        rid = str(run_id)
+        latest: StoredRun | None = None
+        for obj in _iter_jsonl(self.runs_path):
+            if str(obj.get("run_id") or "") != rid:
+                continue
+            try:
+                latest = StoredRun(**obj)  # type: ignore[arg-type]
+            except TypeError:
+                continue
+        return latest
+
+    def list_runs(
+        self,
+        *,
+        deployment_id: str | None = None,
+        application_id: str | None = None,
+        status: str | None = None,
+    ) -> list[StoredRun]:
+        by_id: dict[str, StoredRun] = {}
+        for obj in _iter_jsonl(self.runs_path):
+            try:
+                r = StoredRun(**obj)  # type: ignore[arg-type]
+            except TypeError:
+                continue
+            by_id[str(r.run_id)] = r  # append-only; last write wins
+
+        out: list[StoredRun] = []
+        for r in by_id.values():
+            if deployment_id and r.deployment_id != deployment_id:
+                continue
+            if application_id and r.application_id != application_id:
+                continue
+            if status and r.status != status:
+                continue
+            out.append(r)
+
+        out.sort(key=lambda x: (x.started_at or ""), reverse=True)
         return out
 

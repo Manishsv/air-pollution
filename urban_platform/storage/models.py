@@ -40,3 +40,19 @@ class AuditEvent:
     occurred_at: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
+@dataclass(frozen=True)
+class StoredRun:
+    run_id: str
+    deployment_id: str
+    application_id: str
+    status: str
+    started_at: str
+    completed_at: str | None = None
+    input_refs: list[str] = field(default_factory=list)
+    output_refs: list[str] = field(default_factory=list)
+    records_processed: int = 0
+    outputs_generated: int = 0
+    warnings: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+

@@ -118,7 +118,31 @@ Expected:
 - `outputs_generated`: 3
 - `warnings` reiterate pilot posture and no disbursement automation
 
-## 6) Inspect outputs (generic outputs endpoint)
+## 6) Inspect run metadata (generic runs endpoint)
+
+List:
+
+```bash
+curl http://127.0.0.1:8000/runs
+```
+
+Filter:
+
+```bash
+curl "http://127.0.0.1:8000/runs?deployment_id=program_reporting_state_demo"
+curl "http://127.0.0.1:8000/runs?application_id=program_reporting_review_packet"
+curl "http://127.0.0.1:8000/runs?status=completed"
+```
+
+Inspect one (use `run_id` from the application response or from the list):
+
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>
+```
+
+Runs are **pilot-runtime metadata**: they summarize what ran, when, counts, inputs/outputs, and warnings. For the detailed trail, use `GET /audit-events`.
+
+## 7) Inspect outputs (generic outputs endpoint)
 
 State summary:
 
@@ -132,7 +156,7 @@ Review packets:
 curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_packet"
 ```
 
-## 7) Inspect audit events
+## 8) Inspect audit events
 
 ```bash
 curl http://127.0.0.1:8000/audit-events
@@ -145,7 +169,7 @@ You should see actions such as:
 - `output_generated`
 - `application_run_completed`
 
-## 8) Start the dashboard in API mode
+## 9) Start the dashboard in API mode
 
 In a new terminal (repo root):
 

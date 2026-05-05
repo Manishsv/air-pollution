@@ -57,6 +57,8 @@ Then:
 | `POST` | `/records/{contract_key}` | Validate against manifest schema, persist `StoredRecord`; audits `record_ingested` / `record_rejected` |
 | `GET` | `/records` | List stored records (optional `deployment_id`, `contract_key`) |
 | `POST` | `/applications/{application_id}/runs` | Run an **allowlisted** builder with optional Core adapters (today: `program_reporting_review_packet`) |
+| `GET` | `/runs` | List run metadata (filters: `deployment_id`, `application_id`, `status`) |
+| `GET` | `/runs/{run_id}` | One run metadata record |
 | `GET` | `/outputs` | List outputs (filters: `deployment_id`, `contract_key`, optional metadata: `application_id`, `program_id`, `reporting_period`) |
 | `GET` | `/outputs/{output_id}` | One `StoredOutput` |
 | `GET` | `/audit-events` | List audit events (`deployment_id` optional) |
@@ -104,6 +106,21 @@ curl -X POST http://127.0.0.1:8000/applications/program_reporting_review_packet/
   -d '{"deployment_id":"program_reporting_state_demo","program_id":"stormwater_resilience_grant_2026","reporting_period":"2026_Q1"}'
 ```
 
+**List runs**
+
+```bash
+curl http://127.0.0.1:8000/runs
+curl "http://127.0.0.1:8000/runs?deployment_id=program_reporting_state_demo"
+curl "http://127.0.0.1:8000/runs?application_id=program_reporting_review_packet"
+curl "http://127.0.0.1:8000/runs?status=completed"
+```
+
+**Get one run**
+
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>
+```
+
 **List outputs**
 
 ```bash
@@ -123,7 +140,7 @@ Workflow through **generic endpoints** only:
 
 1. `POST /records/consumer_city_program_submission` (one or many cities).
 2. `POST /applications/program_reporting_review_packet/runs` with matching `deployment_id` / `program_id` / `reporting_period`.
-3. Inspect `GET /outputs?...` and `GET /audit-events`.
+3. Inspect `GET /runs` (summary), plus `GET /outputs?...` and `GET /audit-events` (details).
 
 Builders and summaries come from **`urban_platform/applications/program_reporting/`**; the Core API wires storage and conformance only.
 

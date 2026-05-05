@@ -78,10 +78,11 @@ AirOS demos write review outputs under `data/outputs/…`. For pilot-oriented ru
 - ingested records (`StoredRecord`)
 - generated outputs (`StoredOutput`)
 - audit events (`AuditEvent`)
+- run metadata (`StoredRun`)
 
 This is **additive** scaffolding for future APIs/audit; it does not replace the current demo output path.
 
-For the optional **generic pilot Core API** (`/records`, `/applications/{id}/runs`, `/outputs`, …), see [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md). For the full pilot-runtime flow into the dashboard, see [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md).
+For the optional **generic pilot Core API** (`/records`, `/applications/{id}/runs`, `/runs`, `/outputs`, …), see [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md). For the full pilot-runtime flow into the dashboard, see [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md).
 
 For contract discovery (schema inspection) before POSTing records, use:
 
