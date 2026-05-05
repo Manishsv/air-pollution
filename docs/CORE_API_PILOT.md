@@ -10,6 +10,8 @@ The **generic Core API** is a thin, local-first HTTP surface over:
 
 It is intentionally **domain-agnostic at the route level**. New pilots add **validators + store usage + small application adapters** behind the same `/records`, `/applications/...`, and `/outputs` paths instead of carving new URLs per vertical.
 
+For a copy-pasteable end-to-end walkthrough (API → outputs → dashboard API mode), see [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md).
+
 ## What this is not
 
 - **Not production-secure:** no authentication, no RBAC, no hardening for the public Internet.

@@ -8,6 +8,7 @@ Air pollution management, heat risk assessment, flood preparedness, mobility pla
 - **Interoperability (contracts, registries, catalogs, deployments, federation)**: [`docs/INTEROPERABILITY_MODEL.md`](docs/INTEROPERABILITY_MODEL.md)
 - **Production-like implementation plan** (phased roadmap from demo execution to service-oriented AirOS): [`docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md`](docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md)
 - **Core API (pilot-runtime, generic `/records` + `/applications` + `/outputs`)**: [`docs/CORE_API_PILOT.md`](docs/CORE_API_PILOT.md)
+- **Pilot runtime quickstart** (Core API → Program Reporting dashboard in API mode): [`docs/PILOT_RUNTIME_QUICKSTART.md`](docs/PILOT_RUNTIME_QUICKSTART.md)
 - **Getting started**: [`GETTING_STARTED.md`](GETTING_STARTED.md)
 - **Contract architecture**: [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md)
 - **Specifications**: [`specifications/README.md`](specifications/README.md)
@@ -306,7 +307,7 @@ Run the dashboard UI:
 streamlit run review_dashboard/app.py
 ```
 
-Optional: **Program Reporting** tab can read from the pilot **generic Core API** (`GET /outputs`) when `AIROS_DASHBOARD_DATA_MODE=api` and `AIROS_API_BASE_URL` are set—see [`docs/CORE_API_PILOT.md`](docs/CORE_API_PILOT.md). Default remains local files under `data/outputs/deployments/program_reporting_state_demo/`.
+Optional: **Program Reporting** tab can read from the pilot **generic Core API** (`GET /outputs`) when `AIROS_DASHBOARD_DATA_MODE=api` and `AIROS_API_BASE_URL` are set—see [`docs/PILOT_RUNTIME_QUICKSTART.md`](docs/PILOT_RUNTIME_QUICKSTART.md) (end-to-end) and [`docs/CORE_API_PILOT.md`](docs/CORE_API_PILOT.md) (API reference). Default remains local files under `data/outputs/deployments/program_reporting_state_demo/`.
 
 The dashboard uses the **SDK** (`UrbanPlatformClient`) to read persisted artifacts and supports tabs for multiple use cases (e.g., Air Pollution + Crowd).
 
