@@ -37,6 +37,16 @@ python main.py --step conformance
 python tools/ai_dev_supervisor/run_review.py --run-conformance
 ```
 
+## Docker Compose option (recommended for pilot-runtime DX)
+
+If you want the Core API and the dashboard together in one command (shared `./data` volume):
+
+```bash
+docker compose --profile pilot-runtime up --build
+```
+
+Then use the same `curl` commands below, but you can skip the “start Core API” / “start dashboard” steps.
+
 ## 1) Start with a clean store
 
 ```bash

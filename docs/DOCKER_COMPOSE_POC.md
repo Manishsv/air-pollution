@@ -37,12 +37,20 @@ Defined in `docker-compose.yml`:
 - **`airos-core`**
   - **Purpose**: Core health/conformance/supervisor layer (represented as short-running CLI commands in this POC).
   - **Default command**: `doctor` (image `ENTRYPOINT` is the AirOS CLI)
+- **`airos-core-api`** (pilot-runtime profile)
+  - **Purpose**: Long-running **generic Core API** (pilot-runtime only).
+  - **Enabled**: only when using the `pilot-runtime` profile.
+  - **Port**: `8000:8000`
 - **`flood-demo-app`**
   - **Purpose**: A domain/application workload consuming AirOS-compatible deployment configuration.
   - **Default command**: `deployment run deployments/examples/flood_local_demo` (via CLI `ENTRYPOINT`)
 - **`review-dashboard`** (optional)
   - **Purpose**: Streamlit review UI reading the shared outputs.
   - **Enabled**: only when using the `dashboard` profile.
+  - **Port**: `8501:8501`
+- **`review-dashboard-api`** (pilot-runtime profile)
+  - **Purpose**: Streamlit review UI in **API data mode** (reads outputs from `airos-core-api`).
+  - **Enabled**: only when using the `pilot-runtime` profile.
   - **Port**: `8501:8501`
 
 ---
@@ -104,6 +112,27 @@ The `review-dashboard` service runs **Streamlit as the container command** (not 
 docker compose --profile dashboard up --build review-dashboard
 ```
 
+### Pilot runtime (Core API + dashboard in API mode)
+
+This profile runs:
+
+- `airos-core-api` (FastAPI via Uvicorn) on **port 8000**
+- `review-dashboard-api` (Streamlit in API mode) on **port 8501**
+
+Start:
+
+```bash
+docker compose --profile pilot-runtime up --build
+```
+
+Health:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+For the end-to-end record ingestion + application run + dashboard flow (Program Reporting + Flood), see [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md).
+
 ---
 
 ## 5) Expected outputs
@@ -145,7 +174,6 @@ docker compose down
 ## 8) What this does not prove yet
 
 - independent provider service runtime
-- long-running AirOS Core API
 - dynamic plugin loading
 - cross-node federation
 - email/network adapter runtime

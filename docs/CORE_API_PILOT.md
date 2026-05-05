@@ -33,6 +33,19 @@ AIROS_STORE_DIR=data/store/api uvicorn urban_platform.api.app:app --reload --hos
 
 Interactive schema browser: `http://127.0.0.1:8000/docs`
 
+## Run with Docker Compose (pilot-runtime profile)
+
+If you want to run the Core API and dashboard together with a shared `./data` volume:
+
+```bash
+docker compose --profile pilot-runtime up --build
+```
+
+Then:
+
+- Core API: `http://127.0.0.1:8000`
+- Dashboard: `http://127.0.0.1:8501`
+
 ## Endpoints (summary)
 
 | Method | Path | Role |

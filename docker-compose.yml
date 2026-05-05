@@ -17,6 +17,32 @@ services:
       - ./data:/app/data
     command: ["doctor"]
 
+  airos-core-api:
+    profiles: ["pilot-runtime"]
+    build: .
+    image: air-os:local
+    working_dir: /app
+    entrypoint: ["uvicorn"]
+    command: ["urban_platform.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      AIROS_STORE_DIR: /app/data/store/api
+    volumes:
+      - ./deployments:/app/deployments
+      - ./data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
   flood-demo-app:
     build: .
     image: air-os:local
@@ -51,3 +77,28 @@ services:
         "--server.address=0.0.0.0",
         "--server.port=8501",
       ]
+
+  review-dashboard-api:
+    profiles: ["pilot-runtime"]
+    build: .
+    image: air-os:local
+    working_dir: /app
+    depends_on:
+      airos-core-api:
+        condition: service_healthy
+    entrypoint: ["streamlit"]
+    command:
+      [
+        "run",
+        "review_dashboard/app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+      ]
+    ports:
+      - "8501:8501"
+    environment:
+      AIROS_DASHBOARD_DATA_MODE: api
+      AIROS_API_BASE_URL: http://airos-core-api:8000
+    volumes:
+      - ./deployments:/app/deployments
+      - ./data:/app/data
