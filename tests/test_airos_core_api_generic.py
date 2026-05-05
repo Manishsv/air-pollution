@@ -164,10 +164,10 @@ def test_run_without_records_returns_400(api_client: TestClient) -> None:
     assert r.json()["detail"]["message"] == "No stored records found for this application run."
 
 
-def test_known_builder_without_core_executor_returns_400(api_client: TestClient) -> None:
+def test_known_builder_without_required_records_returns_400(api_client: TestClient) -> None:
     r = api_client.post("/applications/flood_risk_dashboard_payload/runs", json={})
     assert r.status_code == 400
-    assert "no core api executor" in r.json()["detail"]["message"].lower()
+    assert r.json()["detail"]["message"] == "No stored records found for this application run."
 
 
 def test_no_response_implies_automatic_fund_release(api_client: TestClient) -> None:

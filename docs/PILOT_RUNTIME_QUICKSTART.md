@@ -173,3 +173,41 @@ Open the Streamlit UI and navigate to the **Program Reporting** tab.
 - **Docker CLI demos** still exist for packaging/orchestration demos.
 - **Pilot runtime** is the **API + store** path: ingest records → run allowlisted application → read outputs/audit → optionally render the dashboard in API mode.
 
+## Optional: Flood through the generic Core API
+
+Flood is the second vertical slice for the generic API and demonstrates **multi-input** runs.
+
+1) POST the three flood provider fixtures (use `?deployment_id=flood_local_demo` if you want to keep the scope separate from Program Reporting):
+
+```bash
+curl -X POST "http://127.0.0.1:8000/records/provider_rainfall_observation_feed?deployment_id=flood_local_demo" \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/rainfall_observation.sample.json
+
+curl -X POST "http://127.0.0.1:8000/records/provider_flood_incident_feed?deployment_id=flood_local_demo" \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/flood_incident.sample.json
+
+curl -X POST "http://127.0.0.1:8000/records/provider_drainage_asset_feed?deployment_id=flood_local_demo" \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/drainage_asset.sample.json
+```
+
+2) Run:
+
+```bash
+curl -X POST http://127.0.0.1:8000/applications/flood_risk_dashboard_payload/runs \
+  -H "Content-Type: application/json" \
+  -d '{"deployment_id":"flood_local_demo"}'
+```
+
+3) Fetch:
+
+```bash
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_flood_risk_dashboard"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_flood_decision_packet"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_field_verification_task"
+```
+
+Safety note: **review support only**; **no emergency or evacuation orders** are issued; **field verification remains required**.
+

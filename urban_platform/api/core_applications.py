@@ -5,6 +5,11 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from urban_platform.api.adapters.flood_run import (
+    FLOOD_PILOT_WARNINGS,
+    execute_flood_demo_run,
+    missing_flood_inputs,
+)
 from urban_platform.api.adapters.program_reporting_run import (
     execute_program_reporting_review_run,
     load_program_reporting_submissions,
@@ -42,6 +47,59 @@ def run_application(
     deployment_id = str(b.get("deployment_id") or DEFAULT_DEPLOYMENT_ID).strip()
     program_id = str(b.get("program_id") or DEFAULT_PROGRAM_ID).strip()
     reporting_period = str(b.get("reporting_period") or DEFAULT_REPORTING_PERIOD).strip()
+
+    if aid in ("flood_risk_dashboard_payload", "flood_decision_packets", "flood_field_verification_tasks"):
+        missing = missing_flood_inputs(store, deployment_id=deployment_id)
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "No stored records found for this application run.",
+                    "missing_contract_keys": missing,
+                },
+            )
+
+        run_id = uuid.uuid4().hex[:16]
+        append_audit(
+            store,
+            deployment_id=deployment_id,
+            action="application_run_started",
+            resource_type="application_run",
+            resource_id=run_id,
+            metadata={"application_id": aid},
+        )
+
+        try:
+            rec_processed, outs_generated = execute_flood_demo_run(
+                store,
+                deployment_id=deployment_id,
+                run_id=run_id,
+                requested_application_id=aid,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail={"message": str(e)}) from e
+
+        append_audit(
+            store,
+            deployment_id=deployment_id,
+            action="application_run_completed",
+            resource_type="application_run",
+            resource_id=run_id,
+            metadata={
+                "application_id": aid,
+                "records_processed": rec_processed,
+                "outputs_generated": outs_generated,
+            },
+        )
+
+        return {
+            "status": "completed",
+            "run_id": run_id,
+            "application_id": aid,
+            "records_processed": rec_processed,
+            "outputs_generated": outs_generated,
+            "warnings": [*FLOOD_PILOT_WARNINGS, *list(API_PILOT_SAFE_WARNINGS)],
+        }
 
     if aid != "program_reporting_review_packet":
         raise HTTPException(

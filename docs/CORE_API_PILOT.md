@@ -114,6 +114,50 @@ Workflow through **generic endpoints** only:
 
 Builders and summaries come from **`urban_platform/applications/program_reporting/`**; the Core API wires storage and conformance only.
 
+## Optional: Flood through the generic Core API
+
+This demonstrates a multi-input vertical (three provider feeds → three consumer surfaces) through the **same generic endpoints**.
+
+Start Core API:
+
+```bash
+AIROS_STORE_DIR=data/store/api uvicorn urban_platform.api.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+Submit records (from repo root):
+
+```bash
+curl -X POST http://127.0.0.1:8000/records/provider_rainfall_observation_feed \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/rainfall_observation.sample.json
+
+curl -X POST http://127.0.0.1:8000/records/provider_flood_incident_feed \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/flood_incident.sample.json
+
+curl -X POST http://127.0.0.1:8000/records/provider_drainage_asset_feed \
+  -H "Content-Type: application/json" \
+  --data @specifications/examples/flood/drainage_asset.sample.json
+```
+
+Run (allowlisted):
+
+```bash
+curl -X POST http://127.0.0.1:8000/applications/flood_risk_dashboard_payload/runs \
+  -H "Content-Type: application/json" \
+  -d '{"deployment_id":"flood_local_demo"}'
+```
+
+Fetch:
+
+```bash
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_flood_risk_dashboard"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_flood_decision_packet"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_field_verification_task"
+```
+
+Safety posture: **review support only**; **no emergency orders**; **field verification remains required**.
+
 ## Review dashboard (optional API mode)
 
 By default the **Program Reporting** Streamlit panel reads **`data/outputs/deployments/program_reporting_state_demo/`**. To bind it to Core API payloads instead (**additive**):
