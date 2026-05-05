@@ -5,7 +5,7 @@ from typing import Any, Dict
 import geopandas as gpd
 import pandas as pd
 
-from src.data_audit import audit_data_coverage as _legacy_audit
+from urban_platform.common.data_audit import audit_data_coverage as _legacy_audit
 
 
 def run_quality_gates(

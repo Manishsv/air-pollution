@@ -1,6 +1,6 @@
 import unittest
 
-from src.recommendations import pm25_category_india
+from urban_platform.decision_support.pm25_recommendation_rules import pm25_category_india
 
 
 class TestPM25Categories(unittest.TestCase):

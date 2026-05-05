@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.sensor_siting import _normalize_01
+from urban_platform.applications.air_pollution.sensor_siting import _normalize_01
 
 
 def test_normalize_01_handles_constant_series() -> None:

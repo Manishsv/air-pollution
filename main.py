@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.config import load_config
+from urban_platform.common.config import load_config
 from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
 from urban_platform.specifications.audit import run_conformance_audit
 from urban_platform.specifications.engine import list_conformance_result_violations

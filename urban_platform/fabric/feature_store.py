@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, Optional
 import numpy as np
 import pandas as pd
 
-from src.provenance import compute_data_quality_score
+from urban_platform.common.provenance import compute_data_quality_score
 
 
 FEATURE_STORE_COLUMNS = [

@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 
-from src.pipeline import run_pipeline as _legacy_run
 from urban_platform.common.config import AppConfig
+from urban_platform.applications.air_pollution.legacy_pipeline import run_pipeline as _legacy_run
 
 
 def run_air_pollution_pipeline(
@@ -19,8 +19,8 @@ def run_air_pollution_pipeline(
     """
     Reference application entrypoint.
 
-    Migration note: currently delegates to legacy `src.pipeline.run_pipeline` while
-    layers are introduced incrementally.
+    Migration note: delegates to `urban_platform.applications.air_pollution.legacy_pipeline.run_pipeline`
+    (historical AQ orchestration consolidated here incrementally).
     """
     return _legacy_run(
         config,

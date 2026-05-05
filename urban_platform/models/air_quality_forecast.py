@@ -6,11 +6,11 @@ from typing import Dict, Tuple
 
 import pandas as pd
 
-from src.model import predict_latest as _legacy_predict_latest
-from src.model import train_models as _legacy_train_models
+from urban_platform.models.sklearn_pm25 import predict_latest as _legacy_predict_latest
+from urban_platform.models.sklearn_pm25 import train_models as _legacy_train_models
 import numpy as np
 
-from src.aq_data import spatial_station_holdout_validation as _station_holdout
+from urban_platform.applications.air_pollution.aq_data import spatial_station_holdout_validation as _station_holdout
 
 
 @dataclass(frozen=True)

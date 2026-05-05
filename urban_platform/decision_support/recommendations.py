@@ -4,7 +4,7 @@ from typing import Dict, Tuple
 
 import pandas as pd
 
-from src.recommendations import attach_recommendations as _legacy_attach
+from urban_platform.decision_support.pm25_recommendation_rules import attach_recommendations as _legacy_attach
 
 
 def generate_recommendations(

@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import geopandas as gpd
 
-from src.osm_features import download_osm_features as _legacy_download
+from urban_platform.connectors.geospatial.osmnx_layers import download_osm_features as _legacy_download
 
 
 def fetch_osm(config: Any, *, boundary_bundle: Any, sample_mode: bool) -> Dict[str, gpd.GeoDataFrame]:

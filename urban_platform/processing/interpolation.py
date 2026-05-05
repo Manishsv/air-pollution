@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.aq_data import build_aq_panel as _legacy_build_aq_panel
+from urban_platform.applications.air_pollution.aq_data import build_aq_panel as _legacy_build_aq_panel
 
 
 def interpolate_pm25(*, observations: pd.DataFrame, grid: pd.DataFrame, lookback_days: int, h3_resolution: int, idw_power: float, min_stations: int) -> pd.DataFrame:

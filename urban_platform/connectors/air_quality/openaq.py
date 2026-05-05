@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from src import aq_data as _legacy_aq
+from urban_platform.applications.air_pollution import aq_data as _legacy_aq
 from urban_platform.common.cache import with_source_metadata
 from urban_platform.standards.converters import stations_pm25_to_observations
 from urban_platform.standards.validators import validate_observations

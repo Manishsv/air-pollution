@@ -18,7 +18,7 @@ from urban_platform.specifications.conformance import (
     schema_dir,
     validator_for_schema_file,
 )
-from src.scale_analysis import analyze_h3_resolution
+from urban_platform.applications.air_pollution.scale_analysis import analyze_h3_resolution
 
 
 def test_manifest_paths_exist():

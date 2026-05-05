@@ -4,7 +4,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
 
-from src.scale_analysis import analyze_h3_resolution
+from urban_platform.applications.air_pollution.scale_analysis import analyze_h3_resolution
 
 
 def _grid(n: int, area_sqkm: float = 1.0, h3_resolution: int = 8) -> gpd.GeoDataFrame:
