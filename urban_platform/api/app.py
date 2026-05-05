@@ -4,7 +4,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Query
 
-from urban_platform.api.program_reporting import get_store, router as program_reporting_router
+from urban_platform.api.core_applications import router as applications_router
+from urban_platform.api.core_outputs import router as outputs_router
+from urban_platform.api.core_records import router as records_router
+from urban_platform.api.deps import get_store
+from urban_platform.specifications.conformance import load_manifest
 from urban_platform.storage import FileAirOsStore
 
 
@@ -12,7 +16,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AirOS Core API",
         version="0.1.0",
-        description="Pilot-runtime HTTP surface (Program Reporting slice). Not production-secured.",
+        description="Generic pilot-runtime HTTP surface over FileAirOsStore + allowlisted applications. Not production-secured.",
     )
 
     @app.get("/health")
@@ -21,6 +25,15 @@ def create_app() -> FastAPI:
             "status": "ok",
             "service": "airos-core",
             "mode": "pilot-runtime",
+        }
+
+    @app.get("/manifest")
+    def manifest_summary() -> Dict[str, Any]:
+        m = load_manifest()
+        arts = m.get("artifacts") or {}
+        return {
+            "artifact_count": len(arts),
+            "contract_keys": sorted(arts.keys()),
         }
 
     @app.get("/audit-events")
@@ -43,7 +56,10 @@ def create_app() -> FastAPI:
             for e in events
         ]
 
-    app.include_router(program_reporting_router)
+    app.include_router(records_router)
+    app.include_router(applications_router)
+    app.include_router(outputs_router)
+
     return app
 
 

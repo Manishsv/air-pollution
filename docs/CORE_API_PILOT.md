@@ -1,100 +1,108 @@
-# AirOS Core API — Program Reporting (pilot-runtime)
+# AirOS Core API — generic pilot-runtime
 
 ## Purpose
 
-This is a **narrow, local-only** HTTP surface for the **Program Reporting** Phase 1 slice: ingest city program submissions, run the **existing** builders (`build_fund_release_review_packet`, `build_program_reporting_state_summary`), persist results in **`FileAirOsStore`**, and expose read paths for packets, state summary, and audit events.
+The **generic Core API** is a thin, local-first HTTP surface over:
 
-It exists to exercise **pilot-runtime** patterns (store + API) without claiming production readiness.
+- `specifications/manifest.json` (contract keys ↔ schemas),
+- **`FileAirOsStore`** (`StoredRecord`, `StoredOutput`, `AuditEvent`),
+- **`urban_platform/deployments/builder_registry.py`** (allowlisted builders only).
 
-## Warnings (read first)
+It is intentionally **domain-agnostic at the route level**. New pilots add **validators + store usage + small application adapters** behind the same `/records`, `/applications/...`, and `/outputs` paths instead of carving new URLs per vertical.
 
-- **Not production-secure:** there is **no authentication**, **no RBAC**, and **no hardening** for public internet exposure.
-- **No fund release automation:** this service does **not** disburse funds, connect to treasury or finance systems, or authorize releases. Outputs are **review support** only; **authorized human and finance processes outside AirOS** remain required for any financial action.
-- **No reference catalog pull/cache** and no participant directory or signed envelopes.
+## What this is not
+
+- **Not production-secure:** no authentication, no RBAC, no hardening for the public Internet.
+- **Not domain-exclusive:** routes are generic; Program Reporting is the **first exercised vertical**.
+- **Not fund-release automation:** no disbursement, treasury, finance integration, or enforcement. Outputs are **review support** only; appropriately authorized humans and finance processes remain **outside** AirOS.
+- No reference-catalog pull/cache, participant directory, or signed envelopes.
 
 ## Configuration
 
 | Variable | Meaning |
 |----------|---------|
-| `AIROS_STORE_DIR` | Root directory for `FileAirOsStore` (`records.jsonl`, `outputs.jsonl`, `audit_events.jsonl`). Default: `data/store/api` (relative to repo root). |
+| `AIROS_STORE_DIR` | Root for `records.jsonl`, `outputs.jsonl`, `audit_events.jsonl`. Default: `data/store/api` under the repo root. |
 
-Paths are created on demand.
-
-## How to run locally
-
-From the repository root (after installing dependencies, including `fastapi`, `httpx`, `uvicorn`):
+## Run locally
 
 ```bash
 AIROS_STORE_DIR=data/store/api uvicorn urban_platform.api.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open interactive docs at `http://127.0.0.1:8000/docs` if needed.
+Interactive schema browser: `http://127.0.0.1:8000/docs`
 
-## Endpoints
+## Endpoints (summary)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Liveness / build identity. |
-| `POST` | `/program-reporting/submissions` | Validate and store one city program submission (`consumer_city_program_submission`). Optional query: `deployment_id` (default `program_reporting_state_demo`). |
-| `POST` | `/program-reporting/run` | Build review packets + state summary from **stored** submissions for a deployment/program/period. Body fields optional (defaults below). |
-| `GET` | `/program-reporting/review-packets` | List stored review packet payloads; optional filters: `deployment_id`, `program_id`, `reporting_period`. |
-| `GET` | `/program-reporting/state-summary` | Latest stored state summary for optional filters; **404** if none. |
-| `GET` | `/audit-events` | List audit events; optional `deployment_id`. |
+| Method | Path | Role |
+|--------|------|------|
+| `GET` | `/health` | Liveness |
+| `GET` | `/manifest` | Lightweight manifest summary (`artifact_count`, sorted `contract_keys`) |
+| `POST` | `/records/{contract_key}` | Validate against manifest schema, persist `StoredRecord`; audits `record_ingested` / `record_rejected` |
+| `GET` | `/records` | List stored records (optional `deployment_id`, `contract_key`) |
+| `POST` | `/applications/{application_id}/runs` | Run an **allowlisted** builder with optional Core adapters (today: `program_reporting_review_packet`) |
+| `GET` | `/outputs` | List outputs (filters: `deployment_id`, `contract_key`, optional metadata: `application_id`, `program_id`, `reporting_period`) |
+| `GET` | `/outputs/{output_id}` | One `StoredOutput` |
+| `GET` | `/audit-events` | List audit events (`deployment_id` optional) |
 
-**`POST /program-reporting/run` default body values** (when omitted):
+Unknown `application_id` (not in the builder registry) → **404** fail-closed. Known builder without a Core executor → **400** fail-closed.
 
-- `deployment_id`: `program_reporting_state_demo`
-- `program_id`: `stormwater_resilience_grant_2026`
-- `reporting_period`: `2026_Q1`
-
-Validation uses the same manifest-backed validators as the rest of AirOS (`jsonschema` via `validator_for_schema_file`).
-
-## Example `curl` commands
-
-Assume the server is on `http://127.0.0.1:8000` and `REPO` is your clone root.
+## Curl examples (`REPO_ROOT` / port 8000)
 
 **Health**
 
 ```bash
-curl -sS http://127.0.0.1:8000/health | jq .
+curl http://127.0.0.1:8000/health
 ```
 
-**Post a city submission** (sample fixture)
+**Manifest summary**
 
 ```bash
-curl -sS -X POST "http://127.0.0.1:8000/program-reporting/submissions" \
+curl http://127.0.0.1:8000/manifest
+```
+
+**Ingest Program Reporting submissions** (requires manifest key `consumer_city_program_submission`; optional query `deployment_id`, default aligns with demos)
+
+```bash
+curl -X POST http://127.0.0.1:8000/records/consumer_city_program_submission \
   -H "Content-Type: application/json" \
-  -d @"$REPO/specifications/examples/program_reporting/city_program_submission.sample.json" | jq .
-```
+  --data @specifications/examples/program_reporting/city_program_submission.sample.json
 
-Repeat with `city_program_submission_city_b.sample.json` for a second city.
-
-**Run Program Reporting** (after at least one stored submission for the default program/period)
-
-```bash
-curl -sS -X POST "http://127.0.0.1:8000/program-reporting/run" \
+curl -X POST http://127.0.0.1:8000/records/consumer_city_program_submission \
   -H "Content-Type: application/json" \
-  -d '{}' | jq .
+  --data @specifications/examples/program_reporting/city_program_submission_city_b.sample.json
 ```
 
-**Get review packets**
+**Run allowlisted application** (`program_reporting_review_packet`)
 
 ```bash
-curl -sS "http://127.0.0.1:8000/program-reporting/review-packets" | jq .
+curl -X POST http://127.0.0.1:8000/applications/program_reporting_review_packet/runs \
+  -H "Content-Type: application/json" \
+  -d '{"deployment_id":"program_reporting_state_demo","program_id":"stormwater_resilience_grant_2026","reporting_period":"2026_Q1"}'
 ```
 
-**Get state summary**
+**List outputs**
 
 ```bash
-curl -sS "http://127.0.0.1:8000/program-reporting/state-summary" | jq .
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_packet"
+curl "http://127.0.0.1:8000/outputs?contract_key=internal_program_reporting_state_summary_demo"
 ```
 
-**Get audit events**
+**Audit trail**
 
 ```bash
-curl -sS "http://127.0.0.1:8000/audit-events?deployment_id=program_reporting_state_demo" | jq .
+curl http://127.0.0.1:8000/audit-events
 ```
+
+## Program Reporting slice (today)
+
+Workflow through **generic endpoints** only:
+
+1. `POST /records/consumer_city_program_submission` (one or many cities).
+2. `POST /applications/program_reporting_review_packet/runs` with matching `deployment_id` / `program_id` / `reporting_period`.
+3. Inspect `GET /outputs?...` and `GET /audit-events`.
+
+Builders and summaries come from **`urban_platform/applications/program_reporting/`**; the Core API wires storage and conformance only.
 
 ## Safety note
 
-Program Reporting outputs describe **review readiness** and **blocked uses** (including **no automatic fund release** in contract-shaped payloads). The API adds explicit **pilot-runtime** warnings on ingestion and run completion. **Nothing in this path executes disbursement or replaces authorized finance workflows.**
+All responses that include service-level `warnings` reiterate **pilot posture** and that **disbursement and enforcement are not automated** by this service. Contract payloads may still enumerate **blocked uses** (e.g. `automatic_fund_release`)—that is schema-level caution, **not** an authorization to automate the opposite.

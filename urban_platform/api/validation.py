@@ -9,6 +9,13 @@ from urban_platform.specifications.conformance import (
 )
 
 
+def manifest_has_artifact(schema_name: str) -> bool:
+    """True if ``schema_name`` is a key in ``specifications/manifest.json`` artifacts."""
+    m = load_manifest()
+    artifacts = m.get("artifacts") or {}
+    return str(schema_name or "").strip() in artifacts
+
+
 def collect_validation_errors(instance: Any, *, schema_name: str, version: str = "v1") -> List[Dict[str, Any]]:
     """
     Validate ``instance`` against the manifest-registered schema for ``schema_name``.

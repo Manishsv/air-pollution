@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Dict, Optional
 
 from urban_platform.storage import AuditEvent, FileAirOsStore, now_utc_iso
 
@@ -13,7 +13,7 @@ def append_audit(
     action: str,
     resource_type: str,
     resource_id: str,
-    metadata: dict[str, Any] | None = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
     store.append_audit_event(
         AuditEvent(

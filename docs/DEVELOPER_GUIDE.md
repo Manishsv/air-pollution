@@ -81,9 +81,9 @@ AirOS demos write review outputs under `data/outputs/…`. For pilot-oriented ru
 
 This is **additive** scaffolding for future APIs/audit; it does not replace the current demo output path.
 
-For the optional **pilot Core API** that reads/writes the same store pattern for Program Reporting, see [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md).
+For the optional **generic pilot Core API** (`/records`, `/applications/{id}/runs`, `/outputs`, …), see [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md).
 
-Example (program reporting demo, optional store alongside normal `data/outputs/` JSON):
+Example deployment runner store (fixture JSON unchanged; separate from Core API unless you point `AIROS_STORE_DIR` similarly):
 
 ```bash
 python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo --store-dir data/store/program_reporting_state_demo

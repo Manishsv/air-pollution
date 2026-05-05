@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from urban_platform.api.validation import collect_validation_errors
+from urban_platform.api.validation import collect_validation_errors, manifest_has_artifact
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,6 +15,11 @@ def test_collect_validation_errors_empty_for_valid_submission() -> None:
         )
     )
     assert collect_validation_errors(doc, schema_name="consumer_city_program_submission") == []
+
+
+def test_manifest_has_artifact_known_key() -> None:
+    assert manifest_has_artifact("consumer_city_program_submission") is True
+    assert manifest_has_artifact("not_a_real_artifact_xx") is False
 
 
 def test_collect_validation_errors_non_empty_for_invalid() -> None:
