@@ -37,3 +37,5 @@ def test_program_reporting_state_demo_runner_produces_multi_city_outputs(tmp_pat
     run_summary = json.loads(run_summary_path.read_text(encoding="utf-8"))
     assert run_summary["submissions_processed"] == 2
     assert run_summary["review_packets_generated"] == 2
+    assert "store_dir" not in run_summary
+    assert not any(p.suffix == ".jsonl" for p in out_dir.iterdir())

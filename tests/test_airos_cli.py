@@ -94,6 +94,30 @@ def test_deployment_run_command_construction(monkeypatch) -> None:
     assert "--deployment" in calls[0]
 
 
+def test_deployment_run_passes_store_dir_when_provided(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(argv, cwd=None, **_kwargs):
+        calls.append(list(argv))
+        return _DummyProc(0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    rc = cli.main(
+        [
+            "deployment",
+            "run",
+            "deployments/examples/program_reporting_state_demo",
+            "--store-dir",
+            "data/store/program_reporting_state_demo",
+        ]
+    )
+    assert rc == 0
+    assert "--store-dir" in calls[0]
+    i = calls[0].index("--store-dir")
+    assert calls[0][i + 1] == "data/store/program_reporting_state_demo"
+
+
 def test_parse_csv() -> None:
     assert cli._parse_csv("a,b, c,,") == ["a", "b", "c"]
 

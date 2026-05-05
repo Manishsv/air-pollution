@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import sys
@@ -28,6 +29,14 @@ from urban_platform.processing.flood.features import build_flood_feature_rows
 from urban_platform.deployments.config_loader import load_deployment_config
 from urban_platform.deployments.builder_registry import get_builder, has_builder
 from urban_platform.specifications.conformance import assert_conforms, load_manifest
+from urban_platform.storage import (
+    AuditEvent,
+    FileAirOsStore,
+    StoredOutput,
+    StoredRecord,
+    compute_payload_hash,
+    now_utc_iso,
+)
 
 
 @dataclass(frozen=True)
@@ -43,9 +52,13 @@ class DeploymentRunSummary:
     review_packets_generated: int = 0
     cities_ready_for_authorized_review: list[str] | None = None
     cities_needing_clarification: list[str] | None = None
+    store_dir: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        if d.get("store_dir") is None:
+            d.pop("store_dir", None)
+        return d
 
 
 def _ensure_exists(repo_root: Path, rel_path: str) -> Path:
@@ -60,6 +73,31 @@ def _validate_manifest_refs(manifest: dict[str, Any], *, artifact_keys: list[str
     for k in artifact_keys:
         if k not in arts:
             raise KeyError(f"Unknown manifest artifact key: {k}")
+
+
+def _emit_audit(
+    store: FileAirOsStore | None,
+    *,
+    deployment_id: str,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    if store is None:
+        return
+    store.append_audit_event(
+        AuditEvent(
+            event_id=f"evt_{uuid.uuid4().hex}",
+            deployment_id=deployment_id,
+            actor="deployment_runner",
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            occurred_at=now_utc_iso(),
+            metadata=metadata or {},
+        )
+    )
 
 
 # Allowlisted safe callables for this minimal POC.
@@ -80,8 +118,21 @@ def _run_program_reporting_state_demo(
     deployment_dir: Path,
     repo_root: Path,
     output_root: Path | None = None,
+    store: FileAirOsStore | None = None,
+    store_dir: str | None = None,
 ) -> DeploymentRunSummary:
     """Allowlisted Phase 1 path: fixture submission → review packet (no providers)."""
+    dep_id = "program_reporting_state_demo"
+    if store is not None:
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="deployment_run_started",
+            resource_type="deployment",
+            resource_id=dep_id,
+            metadata={"deployment_dir": str(deployment_dir)},
+        )
+
     fixture_paths = [
         "specifications/examples/program_reporting/city_program_submission.sample.json",
         "specifications/examples/program_reporting/city_program_submission_city_b.sample.json",
@@ -92,6 +143,27 @@ def _run_program_reporting_state_demo(
         doc = json.loads(p.read_text(encoding="utf-8"))
         assert_conforms(doc, schema_name="consumer_city_program_submission")
         submissions.append(doc)
+        if store is not None:
+            rid = str(doc.get("submission_id") or rel.replace("/", "_"))
+            store.put_record(
+                StoredRecord(
+                    record_id=f"rec_{rid}",
+                    deployment_id=dep_id,
+                    contract_key="consumer_city_program_submission",
+                    payload=doc,
+                    received_at=now_utc_iso(),
+                    source_ref=rel,
+                    metadata={"kind": "fixture"},
+                )
+            )
+            _emit_audit(
+                store,
+                deployment_id=dep_id,
+                action="fixture_record_loaded",
+                resource_type="stored_record",
+                resource_id=rid,
+                metadata={"fixture_path": rel, "contract_key": "consumer_city_program_submission"},
+            )
 
     packets: list[dict[str, Any]] = []
     for sub in submissions:
@@ -100,8 +172,37 @@ def _run_program_reporting_state_demo(
         pkt = pkt_builder(sub)
         assert_conforms(pkt, schema_name="consumer_fund_release_review_packet")
         packets.append(pkt)
+        if store is not None:
+            oid = str(pkt.get("packet_id") or "fund_release_review_packet")
+            store.put_output(
+                StoredOutput(
+                    output_id=f"out_{oid}",
+                    deployment_id=dep_id,
+                    contract_key="consumer_fund_release_review_packet",
+                    payload=pkt,
+                    generated_at=now_utc_iso(),
+                    generated_by="application:program_reporting_review_packet",
+                    input_refs=[str(sub.get("submission_id") or "")],
+                    metadata={"artifact": "fund_release_review_packet"},
+                )
+            )
+            _emit_audit(
+                store,
+                deployment_id=dep_id,
+                action="output_generated",
+                resource_type="stored_output",
+                resource_id=f"out_{oid}",
+                metadata={"contract_key": "consumer_fund_release_review_packet"},
+            )
+            _emit_audit(
+                store,
+                deployment_id=dep_id,
+                action="output_validated",
+                resource_type="stored_output",
+                resource_id=f"out_{oid}",
+                metadata={"schema": "consumer_fund_release_review_packet"},
+            )
 
-    dep_id = "program_reporting_state_demo"
     out_dir = (output_root or (repo_root / "data" / "outputs" / "deployments")).resolve() / dep_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -123,6 +224,36 @@ def _run_program_reporting_state_demo(
     (out_dir / "state_program_summary.json").write_text(
         json.dumps(state_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+    if store is not None:
+        store.put_output(
+            StoredOutput(
+                output_id="out_state_program_summary",
+                deployment_id=dep_id,
+                contract_key="internal_program_reporting_state_summary_demo",
+                payload=state_summary,
+                generated_at=now_utc_iso(),
+                generated_by="application:build_program_reporting_state_summary",
+                input_refs=[str(p.get("packet_id") or "") for p in packets],
+                metadata={"artifact": "state_program_summary"},
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id="out_state_program_summary",
+            metadata={"contract_key": "internal_program_reporting_state_summary_demo"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id="out_state_program_summary",
+            metadata={"note": "internal demo summary (no formal consumer contract yet)"},
+        )
 
     warnings = [
         "fixture/demo data only",
@@ -149,14 +280,67 @@ def _run_program_reporting_state_demo(
         review_packets_generated=len(packets),
         cities_ready_for_authorized_review=cities_ready,
         cities_needing_clarification=cities_clarify,
+        store_dir=store_dir,
     )
     (out_dir / "deployment_run_summary.json").write_text(
         json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+    if store is not None:
+        summary_payload = dict(summary.to_dict())
+        store.put_output(
+            StoredOutput(
+                output_id=f"out_{dep_id}_deployment_run_summary",
+                deployment_id=dep_id,
+                contract_key="internal_deployment_run_summary_demo",
+                payload=summary_payload,
+                generated_at=now_utc_iso(),
+                generated_by="tool:deployment_runner",
+                input_refs=[str(p.get("packet_id") or "") for p in packets],
+                metadata={
+                    "artifact": "deployment_run_summary",
+                    "payload_sha256": compute_payload_hash(summary_payload),
+                },
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_deployment_run_summary",
+            metadata={"contract_key": "internal_deployment_run_summary_demo"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_deployment_run_summary",
+            metadata={
+                "note": "runner summary self-check",
+                "payload_sha256": compute_payload_hash(summary_payload),
+            },
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="deployment_run_completed",
+            resource_type="deployment",
+            resource_id=dep_id,
+            metadata={"output_dir": str(out_dir), "payload_sha256": compute_payload_hash(summary_payload)},
+        )
+
     return summary
 
 
-def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path | None = None) -> DeploymentRunSummary:
+def run_deployment(
+    *,
+    deployment_dir: Path,
+    repo_root: Path,
+    output_root: Path | None = None,
+    store_dir: Path | None = None,
+) -> DeploymentRunSummary:
     manifest = load_manifest()
 
     cfg = load_deployment_config(deployment_dir)
@@ -164,9 +348,19 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
     if not dep_id:
         raise ValueError("deployment_profile.yaml missing deployment_id")
 
+    store: FileAirOsStore | None = None
+    store_dir_str: str | None = None
+    if store_dir is not None:
+        store_dir_str = str(store_dir.resolve())
+        store = FileAirOsStore(store_dir.resolve())
+
     if dep_id == "program_reporting_state_demo":
         return _run_program_reporting_state_demo(
-            deployment_dir=deployment_dir, repo_root=repo_root, output_root=output_root
+            deployment_dir=deployment_dir,
+            repo_root=repo_root,
+            output_root=output_root,
+            store=store,
+            store_dir=store_dir_str,
         )
 
     provider_reg = cfg.provider_registry_document
@@ -191,6 +385,16 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
     out_dir = (output_root or (repo_root / "data" / "outputs" / "deployments")).resolve() / dep_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    if store is not None:
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="deployment_run_started",
+            resource_type="deployment",
+            resource_id=dep_id,
+            metadata={"deployment_dir": str(deployment_dir)},
+        )
+
     # Ingest fixtures (explicit allowlist; no dynamic imports).
     rainfall_obs = None
     incident_events = None
@@ -207,6 +411,38 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
         if not fixture_path:
             raise ValueError(f"provider:{pid} missing fixture_path")
         fixture_file = _ensure_exists(repo_root, fixture_path)
+        if store is not None:
+            try:
+                raw_fixture = json.loads(fixture_file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                raw_fixture = None
+            if isinstance(raw_fixture, dict):
+                rec_payload: dict[str, Any] = raw_fixture
+            elif raw_fixture is not None:
+                rec_payload = {"fixture_root": raw_fixture}
+            else:
+                rec_payload = {"parse_error": True, "fixture_path": fixture_path}
+            contract_key = str(p.get("provider_contract") or "provider_unknown")
+            rec_id = f"rec_{pid}_{Path(fixture_path).name}"
+            store.put_record(
+                StoredRecord(
+                    record_id=rec_id,
+                    deployment_id=dep_id,
+                    contract_key=contract_key,
+                    payload=rec_payload,
+                    received_at=now_utc_iso(),
+                    source_ref=fixture_path,
+                    metadata={"provider_id": pid},
+                )
+            )
+            _emit_audit(
+                store,
+                deployment_id=dep_id,
+                action="fixture_record_loaded",
+                resource_type="stored_record",
+                resource_id=rec_id,
+                metadata={"fixture_path": fixture_path, "contract_key": contract_key},
+            )
         if pid not in PROVIDER_INGEST_ALLOWLIST:
             raise ValueError(f"provider_id not allowlisted for this POC: {pid}")
         df = PROVIDER_INGEST_ALLOWLIST[pid](fixture_file)
@@ -258,6 +494,92 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
     for t in field_tasks:
         assert_conforms(t, schema_name="consumer_field_verification_task")
 
+    if store is not None:
+        store.put_output(
+            StoredOutput(
+                output_id=f"out_{dep_id}_flood_risk_dashboard_payload",
+                deployment_id=dep_id,
+                contract_key="consumer_flood_risk_dashboard",
+                payload=dashboard_payload,
+                generated_at=now_utc_iso(),
+                generated_by="application:flood_risk_dashboard_payload",
+                input_refs=providers_enabled.copy(),
+                metadata={"artifact": "flood_risk_dashboard_payload.json"},
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_risk_dashboard_payload",
+            metadata={"contract_key": "consumer_flood_risk_dashboard"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_risk_dashboard_payload",
+            metadata={"schema": "consumer_flood_risk_dashboard"},
+        )
+        store.put_output(
+            StoredOutput(
+                output_id=f"out_{dep_id}_flood_decision_packets",
+                deployment_id=dep_id,
+                contract_key="consumer_flood_decision_packet",
+                payload={"flood_decision_packets": decision_packets},
+                generated_at=now_utc_iso(),
+                generated_by="application:flood_decision_packets",
+                input_refs=providers_enabled.copy(),
+                metadata={"artifact": "flood_decision_packets.json", "packet_count": len(decision_packets)},
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_decision_packets",
+            metadata={"contract_key": "consumer_flood_decision_packet"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_decision_packets",
+            metadata={"schema": "consumer_flood_decision_packet"},
+        )
+        store.put_output(
+            StoredOutput(
+                output_id=f"out_{dep_id}_flood_field_verification_tasks",
+                deployment_id=dep_id,
+                contract_key="consumer_field_verification_task",
+                payload={"flood_field_verification_tasks": field_tasks},
+                generated_at=now_utc_iso(),
+                generated_by="application:flood_field_verification_tasks",
+                input_refs=[str(i) for i in range(len(decision_packets))],
+                metadata={"artifact": "flood_field_verification_tasks.json", "task_count": len(field_tasks)},
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_field_verification_tasks",
+            metadata={"contract_key": "consumer_field_verification_task"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_flood_field_verification_tasks",
+            metadata={"schema": "consumer_field_verification_task"},
+        )
+
     # Write outputs.
     (out_dir / "flood_risk_dashboard_payload.json").write_text(
         json.dumps(dashboard_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -288,10 +610,57 @@ def run_deployment(*, deployment_dir: Path, repo_root: Path, output_root: Path |
             "consumer_flood_decision_packet": True,
             "consumer_field_verification_task": True,
         },
+        store_dir=store_dir_str,
     )
     (out_dir / "deployment_run_summary.json").write_text(
         json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+    if store is not None:
+        summary_payload = dict(summary.to_dict())
+        store.put_output(
+            StoredOutput(
+                output_id=f"out_{dep_id}_deployment_run_summary",
+                deployment_id=dep_id,
+                contract_key="internal_deployment_run_summary_demo",
+                payload=summary_payload,
+                generated_at=now_utc_iso(),
+                generated_by="tool:deployment_runner",
+                input_refs=applications_enabled.copy(),
+                metadata={
+                    "artifact": "deployment_run_summary.json",
+                    "payload_sha256": compute_payload_hash(summary_payload),
+                },
+            )
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_generated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_deployment_run_summary",
+            metadata={"contract_key": "internal_deployment_run_summary_demo"},
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="output_validated",
+            resource_type="stored_output",
+            resource_id=f"out_{dep_id}_deployment_run_summary",
+            metadata={
+                "note": "runner summary self-check",
+                "payload_sha256": compute_payload_hash(summary_payload),
+            },
+        )
+        _emit_audit(
+            store,
+            deployment_id=dep_id,
+            action="deployment_run_completed",
+            resource_type="deployment",
+            resource_id=dep_id,
+            metadata={"output_dir": str(out_dir), "payload_sha256": compute_payload_hash(summary_payload)},
+        )
+
     return summary
 
 
@@ -314,6 +683,13 @@ def main() -> int:
         type=str,
         help="Deployment directory (e.g. deployments/examples/flood_local_demo).",
     )
+    parser.add_argument(
+        "--store-dir",
+        default=None,
+        type=str,
+        metavar="PATH",
+        help="Optional FileAirOsStore root (records.jsonl, outputs.jsonl, audit_events.jsonl). Additive; data/outputs unchanged.",
+    )
     args = parser.parse_args()
 
     repo_root = _find_repo_root(Path(__file__).resolve())
@@ -321,7 +697,8 @@ def main() -> int:
     if not deployment_dir.exists():
         raise SystemExit(f"Deployment directory not found: {args.deployment}")
 
-    run_deployment(deployment_dir=deployment_dir, repo_root=repo_root)
+    sdir = Path(args.store_dir).resolve() if args.store_dir else None
+    run_deployment(deployment_dir=deployment_dir, repo_root=repo_root, store_dir=sdir)
     return 0
 
 

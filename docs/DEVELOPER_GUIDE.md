@@ -81,6 +81,12 @@ AirOS demos write review outputs under `data/outputs/…`. For pilot-oriented ru
 
 This is **additive** scaffolding for future APIs/audit; it does not replace the current demo output path.
 
+Example (program reporting demo, optional store alongside normal `data/outputs/` JSON):
+
+```bash
+python tools/airos_cli.py deployment run deployments/examples/program_reporting_state_demo --store-dir data/store/program_reporting_state_demo
+```
+
 ## How to add a provider (connector)
 
 1. **Add a provider contract** under `specifications/provider_contracts/` describing what a provider can send.

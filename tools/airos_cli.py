@@ -60,16 +60,16 @@ def _plan_conformance(repo_root: Path) -> ExecPlan:
     return ExecPlan(argv=[sys.executable, "main.py", "--step", "conformance"], cwd=repo_root)
 
 
-def _plan_deployment_run(repo_root: Path, deployment: str) -> ExecPlan:
-    return ExecPlan(
-        argv=[
-            sys.executable,
-            "tools/deployment_runner/run_deployment.py",
-            "--deployment",
-            deployment,
-        ],
-        cwd=repo_root,
-    )
+def _plan_deployment_run(repo_root: Path, deployment: str, *, store_dir: str | None = None) -> ExecPlan:
+    argv: list[str] = [
+        sys.executable,
+        "tools/deployment_runner/run_deployment.py",
+        "--deployment",
+        deployment,
+    ]
+    if store_dir:
+        argv += ["--store-dir", store_dir]
+    return ExecPlan(argv=argv, cwd=repo_root)
 
 
 def _doctor(repo_root: Path, *, run_conformance: bool) -> int:
@@ -739,6 +739,13 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     dep_run.add_argument("deployment_path", type=str, help=_DEPLOYMENT_PATH_HELP)
+    dep_run.add_argument(
+        "--store-dir",
+        default=None,
+        type=str,
+        metavar="PATH",
+        help="Optional FileAirOsStore root passed through to tools/deployment_runner/run_deployment.py (additive JSONL store).",
+    )
     dep_init = dep_sub.add_parser(
         "init",
         help="Create a deployment workspace from templates (scaffolding).",
@@ -898,7 +905,10 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.command == "deployment" and args.deployment_command == "run":
-        return _run(_plan_deployment_run(repo_root, str(args.deployment_path)))
+        sdir = getattr(args, "store_dir", None)
+        return _run(
+            _plan_deployment_run(repo_root, str(args.deployment_path), store_dir=str(sdir) if sdir else None)
+        )
 
     if args.command == "registry" and args.registry_command == "check":
         # Keep this simple: supervisor already includes registry hygiene probes.
