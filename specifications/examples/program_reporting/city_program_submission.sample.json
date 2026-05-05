@@ -8,10 +8,10 @@
   "reporting_officer_role": "ulb_program_cell_officer",
   "program_progress": {
     "projects_total": 12,
-    "projects_completed": 5,
-    "projects_in_progress": 6,
-    "projects_delayed": 1,
-    "overall_progress_pct": 48.0
+    "projects_completed": 8,
+    "projects_in_progress": 4,
+    "projects_delayed": 0,
+    "overall_progress_pct": 72.0
   },
   "financial_progress": {
     "amount_approved": 10000000,

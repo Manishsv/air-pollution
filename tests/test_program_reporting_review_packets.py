@@ -37,9 +37,10 @@ def test_sample_submission_builds_valid_review_packet() -> None:
     assert_conforms(sub, schema_name="consumer_city_program_submission")
     packet = build_fund_release_review_packet(sub, generated_at="2026-05-04T12:00:00Z")
     assert_conforms(packet, schema_name="consumer_fund_release_review_packet")
-    # City A sample has overall_progress_pct < 50, so it should be flagged for progress_delay.
-    assert "progress_delay" in packet["flags"]
-    assert packet["review_status"] in ("human_review_required", "clarification_required")
+    # City A fixture is healthy (progress >= 50%, utilization >= 50%, spend <= released): no demo flags.
+    assert packet["flags"] == []
+    assert packet["review_status"] == "review_ready"
+    assert packet["fund_release_review_status"] == "ready_for_authorized_review"
 
 
 def test_preserves_reference_data_versions() -> None:
