@@ -1,0 +1,11 @@
+Before beta / production readiness:
+- Participant / AirOS node directory
+- Agency/node identity model
+- Public key or certificate references
+- Signed envelopes and payload hashes
+- Data-sharing policy enforcement
+- API authentication / authorization
+- Reference catalog pull/cache/expiry
+- Program spec pull/adoption/versioning
+- Audit log persistence
+- Secrets management
