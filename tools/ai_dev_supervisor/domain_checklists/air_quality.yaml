@@ -1,5 +1,5 @@
 # Declarative maturity checklist for AI dev supervisor (file-existence gates).
-# Air quality is the reference application; implementation is partly legacy (`src/`) via delegation.
+# Air quality is the reference application; AQ code is now consolidated under `urban_platform/`.
 
 domain_id: air_quality
 label: Air quality (reference app)
@@ -8,8 +8,8 @@ open_data_first_sequence: []
 
 recommended_next_by_stage:
   complete_read_only_vertical_slice: >-
-    Continue incremental migration from `src/` → `urban_platform/` while keeping tests + conformance green.
-    Do not add new domain logic under `src/`. Keep `specifications/domain_specs/air_quality.v1.yaml` aligned
+    Continue consolidating AQ behavior under `urban_platform/` while keeping tests + conformance green.
+    Keep `specifications/domain_specs/air_quality.v1.yaml` aligned
     when thresholds, safety gates, or PM2.5/AQI framing changes.
 
 checklist_groups:
@@ -89,47 +89,47 @@ checklist_groups:
         required: true
         category: application
       - id: platform_aq_pipeline
-        label: Platform AQ pipeline entry (delegates to legacy src/)
+        label: Platform AQ pipeline entry
         path: urban_platform/applications/air_pollution/pipeline.py
         required: true
         category: application
 
-  - id: legacy_aq_reference
-    label: Legacy AQ implementation (currently used via delegation)
+  - id: aq_reference_implementation
+    label: AQ reference implementation
     items:
-      - id: legacy_pipeline
-        label: Legacy AQ pipeline
-        path: src/pipeline.py
+      - id: aq_pipeline
+        label: AQ pipeline orchestration
+        path: urban_platform/applications/air_pollution/legacy_pipeline.py
         required: true
         category: processing
-      - id: legacy_config
-        label: Legacy AQ config
-        path: src/config.py
+      - id: aq_config
+        label: AQ runtime config
+        path: urban_platform/common/runtime_config.py
         required: true
         category: processing
-      - id: legacy_aq_data
-        label: Legacy AQ data helpers
-        path: src/aq_data.py
+      - id: aq_data_helpers
+        label: AQ data helpers
+        path: urban_platform/applications/air_pollution/aq_data.py
         required: true
         category: ingestion
-      - id: legacy_feature_engineering
-        label: Legacy feature engineering
-        path: src/feature_engineering.py
+      - id: aq_feature_engineering
+        label: Feature engineering
+        path: urban_platform/applications/air_pollution/feature_engineering.py
         required: true
         category: processing
-      - id: legacy_model
-        label: Legacy model
-        path: src/model.py
+      - id: aq_model
+        label: Model (sklearn baseline)
+        path: urban_platform/models/sklearn_pm25.py
         required: true
         category: processing
-      - id: legacy_recommendations
-        label: Legacy recommendations
-        path: src/recommendations.py
+      - id: aq_recommendations
+        label: Recommendation rules
+        path: urban_platform/decision_support/pm25_recommendation_rules.py
         required: true
         category: application
-      - id: legacy_visualization
-        label: Legacy visualization
-        path: src/visualization.py
+      - id: aq_visualization
+        label: Visualization (Folium helpers)
+        path: urban_platform/applications/air_pollution/folium_maps.py
         required: true
         category: dashboard
 

@@ -92,22 +92,20 @@ This repo supports a privacy-first crowd signal: **people_count**.
   - `data/outputs/conformance_report.json`
 - The dashboard reads conformance output via the SDK in “Technical: Data Contracts”.
 
-## Repository code layout: `src/` vs `urban_platform/` (current state and migration)
+## Repository code layout: `urban_platform/` (current state)
 
 This section clarifies **where code lives today** and **where new work should go**, so contributors and agents do not split logic across the wrong layers.
 
 ### Current state
 
-- **`main.py`** loads config from `src.config` and, for the air-quality reference path, calls **`urban_platform.applications.air_pollution.pipeline.run_air_pollution_pipeline`**.
-- That pipeline module **delegates orchestration to the legacy** **`src.pipeline.run_pipeline`** implementation (documented in code as incremental migration).
-- **`src/`** holds the **original MVP air-quality reference**: orchestration, boundary/grid/OSM helpers, AQ and weather ingestion (where not yet moved), feature engineering, baseline models, recommendations, visualization helpers, sensor siting, and related utilities. It remains **in use** and **backward compatible** until deliberately migrated.
+- **`main.py`** loads config from **`urban_platform.common.config`** and, for the air-quality reference path, calls **`urban_platform.applications.air_pollution.pipeline.run_air_pollution_pipeline`**.
+- The AQ reference pipeline orchestration lives under **`urban_platform.applications.air_pollution.legacy_pipeline`**.
 - **`urban_platform/`** is the **target platform package** for reusable **connectors**, **fabric** (stores), **processing** (features), **models**, **decision_support** (quality gates, packets), **applications** (contract-shaped payloads per domain), **SDK/API**, and **conformance runtime** under `urban_platform/specifications/*.py`. New vertical slices (e.g. flood, property/buildings) already follow this layout.
 
 ### Ownership map
 
 | Location | Role |
 |----------|------|
-| **`src/`** | **Legacy AQ reference pipeline** — historical MVP modules still invoked via `urban_platform.applications.air_pollution.pipeline` delegation. Maintain for compatibility during migration. **Do not** add new cross-domain stacks or new domains here. |
 | **`urban_platform/connectors/`** | **Canonical** provider fetch/ingest; must align with `specifications/provider_contracts/`. |
 | **`urban_platform/processing/`** | **Canonical** reusable and domain-specific transforms / feature builders. |
 | **`urban_platform/applications/`** | **Canonical** contract-shaped application outputs (dashboard payloads, decision/review packets, field tasks) and thin domain entrypoints. |
@@ -120,18 +118,18 @@ This section clarifies **where code lives today** and **where new work should go
 ### Migration principle
 
 - **New domains and shared platform behavior** belong under **`urban_platform/`**, following the vertical-slice pattern in `docs/DOMAIN_DEVELOPMENT_PLAYBOOK.md`. **Do not** grow new domain logic under `src/`.
-- **Existing AQ code** may stay in `src/` until a **deliberate, incremental** move; each step should remain **test- and conformance-protected**.
 - **Dashboards** must consume **contract-shaped** payloads from **`urban_platform/applications/`** (and SDK/API), not re-encode domain rules in Streamlit.
 
-### Suggested air-quality migration sequence (documentation only — not a commitment to schedule)
+### Note on history
 
-1. **Inventory** `src/` modules and map each to a target home under `urban_platform/` (connector vs processing vs application vs decision_support).
-2. **Identify** canonical platform equivalents (Observation paths, feature stores, decision packets) already provided by `urban_platform/` vs gaps to extend.
-3. **Migrate provider-facing pieces first** (connectors + normalization + tests) so ingest matches existing contracts.
-4. **Migrate processing / features** next (pure functions or fabric-backed pipelines with tests).
-5. **Migrate application-level** payload and decision-packet generation next (consumer schema parity, dashboard unchanged in contract terms).
-6. After **each** bounded change: run **`python main.py --step conformance`** and **`python -m pytest -q`** (and CI when enabled).
-7. **Remove or freeze** legacy `src/` paths only when **parity** is demonstrated and callers no longer need delegation.
+Older documentation may refer to a legacy `src/` package. That code has been consolidated into `urban_platform/` and the `src/` package removed.
+
+If you are migrating or refactoring an application slice:
+
+1. **Migrate provider-facing pieces first** (connectors + normalization + tests) so ingest matches existing contracts.
+2. **Migrate processing / features** next (pure functions or fabric-backed pipelines with tests).
+3. **Migrate application-level** payload and decision-packet generation next (consumer schema parity, dashboard unchanged in contract terms).
+4. After **each** bounded change: run **`python main.py --step conformance`** and **`python -m pytest -q`** (and CI when enabled).
 
 ## How to add a new use case
 

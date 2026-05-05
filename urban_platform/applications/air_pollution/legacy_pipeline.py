@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Legacy AQ pipeline orchestrator moved under urban_platform.
 
-This module intentionally keeps the same behavior as `src.pipeline.run_pipeline` to
-support incremental migration. The legacy `src.pipeline` becomes a thin wrapper.
+This module contains the historical AQ orchestration, now living under
+`urban_platform` (the former `src/` implementation has been removed).
 """
 
 import logging
