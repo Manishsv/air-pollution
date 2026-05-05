@@ -18,7 +18,7 @@ This guide is for developers extending the AirOS repository safely and consisten
 - **Provider Adapters**: connectors and ingest adapters that normalize external inputs into canonical platform objects (future and/or fixture-based in demos).
 - **AirOS Apps**: domain/application builders that turn normalized data into contract-shaped outputs (dashboards, decision packets, review packets, tasks).
 - **App descriptors**: governed metadata describing an app’s decision logic, contracts, dashboards, deployment examples, and safety posture (see `specifications/app_descriptors/`).
-- **SDK**: developer framework for building apps/adapters (early-stage in this repo; direction captured in `docs/PRODUCT_MODEL.md`).
+- **SDK**: developer framework for building apps/adapters (early-stage; see “AirOS SDK, early skeleton” below).
 - **Studio/CLI**: developer/operator tooling (today: `tools/`).
 - **App Catalog**: discovery/installation surface (future-facing; direction captured in `docs/PRODUCT_MODEL.md`).
 - **Identity & Trust**: participants/users/roles/keys/policies (production hardening work).
@@ -69,6 +69,27 @@ AirOS uses a central manifest `specifications/manifest.json` to register schemas
   - Deployment profile: `deployment_profile.yaml`
 
 AirOS does **not** support dynamic module execution from registries in this repo’s Phase 1 demos. Demos use explicit allowlists.
+
+## AirOS SDK, early skeleton
+
+The AirOS SDK is currently an **internal Python module** under `urban_platform/sdk/`. It provides **stable helper imports** for app and adapter developers.
+
+- It does **not** replace the Core API.
+- It does **not** enable dynamic plugins or execute app descriptors.
+- It helps validate payloads/fixtures by `contract_key`, inspect contracts, inspect app descriptors (metadata), and compute deterministic payload hashes.
+
+Example:
+
+```python
+from urban_platform.sdk import assert_fixture_valid, get_app_descriptor
+
+assert_fixture_valid(
+    "consumer_city_program_submission",
+    "specifications/examples/program_reporting/city_program_submission.sample.json",
+)
+
+app = get_app_descriptor("program_reporting_review")
+```
 
 ## Reference catalogs (Phase 1 pattern)
 

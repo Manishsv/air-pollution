@@ -107,6 +107,14 @@ Provider adapters do not produce final decisions.
 
 The SDK should help developers build apps and adapters without knowing all Core internals.
 
+AirOS has an early SDK skeleton under `urban_platform/sdk/` that provides stable helper imports for:
+
+- inspecting app descriptors (metadata only)
+- validating payloads/fixtures by `contract_key` (manifest-backed)
+- computing deterministic payload hashes
+
+It does not replace the Core API and does not enable dynamic plugins.
+
 Future SDK capabilities:
 
 - contract helpers

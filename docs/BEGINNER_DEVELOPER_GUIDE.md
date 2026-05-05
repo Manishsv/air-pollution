@@ -110,6 +110,29 @@ The **consumer contract** is the schema for that response: safe for UI, explicit
 
 ---
 
+## 7.5) AirOS SDK, early skeleton
+
+AirOS has an early SDK skeleton under `urban_platform/sdk/` to make app/adaptor development easier.
+
+- It’s an **internal module** in this repo (not a separate package yet).
+- It provides stable helpers to validate fixtures and inspect app descriptors (metadata only).
+- It does **not** enable dynamic plugins.
+
+Example:
+
+```python
+from urban_platform.sdk import assert_fixture_valid, get_app_descriptor
+
+assert_fixture_valid(
+    "consumer_city_program_submission",
+    "specifications/examples/program_reporting/city_program_submission.sample.json",
+)
+
+app = get_app_descriptor("program_reporting_review")
+```
+
+---
+
 ## 8) Toy example: “streetlight monitoring” (snippets only)
 
 Imagine a city portal posts lamp status. You normalize to a generic **Observation**-like record, then build a **summary** for officials.
