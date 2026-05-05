@@ -74,15 +74,21 @@ def test_post_valid_consumer_city_program_submission(api_client: TestClient) -> 
     assert out["status"] == "accepted"
     assert out["contract_key"] == "consumer_city_program_submission"
     assert isinstance(out["payload_hash"], str) and len(out["payload_hash"]) == 64
+    assert isinstance(out.get("validation_receipt_id"), str) and out["validation_receipt_id"]
 
     store_dir = Path(os.environ["AIROS_STORE_DIR"])
     assert (store_dir / "records.jsonl").is_file()
+    assert (store_dir / "validation_receipts.jsonl").is_file()
 
 
 def test_post_invalid_submission_returns_400(api_client: TestClient) -> None:
     r = api_client.post("/records/consumer_city_program_submission", json={"submission_id": "x"})
     assert r.status_code == 400
-    assert "errors" in r.json().get("detail", {})
+    detail = r.json().get("detail", {})
+    assert detail.get("message") == "Record validation failed."
+    assert detail.get("contract_key") == "consumer_city_program_submission"
+    assert isinstance(detail.get("validation_receipt_id"), str) and detail["validation_receipt_id"]
+    assert "errors" in detail
 
 
 def test_program_reporting_application_run_completed(api_client: TestClient) -> None:

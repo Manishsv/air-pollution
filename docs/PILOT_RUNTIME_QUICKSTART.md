@@ -142,7 +142,36 @@ curl http://127.0.0.1:8000/runs/<run_id>
 
 Runs are **pilot-runtime metadata**: they summarize what ran, when, counts, inputs/outputs, and warnings. For the detailed trail, use `GET /audit-events`.
 
-## 7) Inspect outputs (generic outputs endpoint)
+## 7) Inspect validation receipts (generic validation-receipts endpoint)
+
+Validation receipts are persisted for:
+
+- record validation (accepted / rejected)
+- output schema validation during application runs
+
+List:
+
+```bash
+curl http://127.0.0.1:8000/validation-receipts
+```
+
+Filter:
+
+```bash
+curl "http://127.0.0.1:8000/validation-receipts?status=invalid"
+curl "http://127.0.0.1:8000/validation-receipts?contract_key=consumer_city_program_submission"
+curl "http://127.0.0.1:8000/validation-receipts?validation_target_type=output"
+```
+
+Get one (use `validation_receipt_id` returned by `POST /records/...`, or pick from the list):
+
+```bash
+curl http://127.0.0.1:8000/validation-receipts/<receipt_id>
+```
+
+**Important:** A validation receipt only means the payload **passed or failed schema validation**. It does **not** mean an approval, authorization, or official government decision.
+
+## 8) Inspect outputs (generic outputs endpoint)
 
 State summary:
 
@@ -156,7 +185,7 @@ Review packets:
 curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_packet"
 ```
 
-## 8) Inspect audit events
+## 9) Inspect audit events
 
 ```bash
 curl http://127.0.0.1:8000/audit-events
@@ -169,7 +198,7 @@ You should see actions such as:
 - `output_generated`
 - `application_run_completed`
 
-## 9) Start the dashboard in API mode
+## 10) Start the dashboard in API mode
 
 In a new terminal (repo root):
 

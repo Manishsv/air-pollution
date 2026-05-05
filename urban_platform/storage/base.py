@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
+from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun, StoredValidationReceipt
 
 
 class AirOsStore(Protocol):
@@ -41,4 +41,20 @@ class AirOsStore(Protocol):
         application_id: str | None = None,
         status: str | None = None,
     ) -> list[StoredRun]: ...
+
+    # Validation receipts
+    def put_validation_receipt(
+        self, receipt: StoredValidationReceipt
+    ) -> StoredValidationReceipt: ...
+
+    def get_validation_receipt(self, receipt_id: str) -> StoredValidationReceipt | None: ...
+
+    def list_validation_receipts(
+        self,
+        *,
+        deployment_id: str | None = None,
+        contract_key: str | None = None,
+        status: str | None = None,
+        validation_target_type: str | None = None,
+    ) -> list[StoredValidationReceipt]: ...
 

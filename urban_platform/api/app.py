@@ -8,6 +8,7 @@ from urban_platform.api.core_applications import router as applications_router
 from urban_platform.api.core_outputs import router as outputs_router
 from urban_platform.api.core_records import router as records_router
 from urban_platform.api.core_runs import router as runs_router
+from urban_platform.api.core_validation_receipts import router as validation_receipts_router
 from urban_platform.api.contracts import router as contracts_router
 from urban_platform.api.deps import get_store
 from urban_platform.specifications.conformance import load_manifest
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(records_router)
     app.include_router(applications_router)
     app.include_router(runs_router)
+    app.include_router(validation_receipts_router)
     app.include_router(outputs_router)
     app.include_router(contracts_router)
 

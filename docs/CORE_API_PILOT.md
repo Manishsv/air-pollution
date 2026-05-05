@@ -59,6 +59,8 @@ Then:
 | `POST` | `/applications/{application_id}/runs` | Run an **allowlisted** builder with optional Core adapters (today: `program_reporting_review_packet`) |
 | `GET` | `/runs` | List run metadata (filters: `deployment_id`, `application_id`, `status`) |
 | `GET` | `/runs/{run_id}` | One run metadata record |
+| `GET` | `/validation-receipts` | List schema validation receipts (filters: `deployment_id`, `contract_key`, `status`, `validation_target_type`) |
+| `GET` | `/validation-receipts/{receipt_id}` | One validation receipt |
 | `GET` | `/outputs` | List outputs (filters: `deployment_id`, `contract_key`, optional metadata: `application_id`, `program_id`, `reporting_period`) |
 | `GET` | `/outputs/{output_id}` | One `StoredOutput` |
 | `GET` | `/audit-events` | List audit events (`deployment_id` optional) |
@@ -119,6 +121,21 @@ curl "http://127.0.0.1:8000/runs?status=completed"
 
 ```bash
 curl http://127.0.0.1:8000/runs/<run_id>
+```
+
+**List validation receipts**
+
+```bash
+curl http://127.0.0.1:8000/validation-receipts
+curl "http://127.0.0.1:8000/validation-receipts?status=invalid"
+curl "http://127.0.0.1:8000/validation-receipts?contract_key=consumer_city_program_submission"
+curl "http://127.0.0.1:8000/validation-receipts?validation_target_type=output"
+```
+
+**Get one validation receipt**
+
+```bash
+curl http://127.0.0.1:8000/validation-receipts/<receipt_id>
 ```
 
 **List outputs**

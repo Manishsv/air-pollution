@@ -8,9 +8,21 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from urban_platform.api.audit_helpers import append_audit
 from urban_platform.api.constants import API_PILOT_SAFE_WARNINGS
 from urban_platform.api.deps import get_store
+from urban_platform.api.receipt_helpers import (
+    make_receipt_id,
+    make_receipt_id_for_record,
+    safe_errors,
+    schema_ref_for_contract,
+)
 from urban_platform.api.validation import collect_validation_errors, manifest_has_artifact
 from urban_platform.specifications.conformance import load_manifest
-from urban_platform.storage import FileAirOsStore, StoredRecord, compute_payload_hash, now_utc_iso
+from urban_platform.storage import (
+    FileAirOsStore,
+    StoredRecord,
+    StoredValidationReceipt,
+    compute_payload_hash,
+    now_utc_iso,
+)
 
 router = APIRouter(tags=["records"])
 
@@ -48,22 +60,49 @@ def ingest_record(
     ck = str(contract_key or "").strip()
     if not manifest_has_artifact(ck):
         raise HTTPException(status_code=404, detail={"message": f"Unknown contract_key {ck!r} (not in manifest)."})
+
+    # Compute hash early so invalid receipts can still reference it.
+    payload_hash = compute_payload_hash(payload) if isinstance(payload, dict) else None
     errs = collect_validation_errors(payload, schema_name=ck)
     if errs:
+        receipt_id = make_receipt_id(prefix="receipt_rec_invalid")
+        stored_errs = safe_errors(errs)
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=receipt_id,
+                deployment_id=deployment_id,
+                contract_key=ck,
+                validation_target_type="record",
+                validation_target_id=str(payload.get("submission_id") or "unknown"),
+                status="invalid",
+                validated_at=now_utc_iso(),
+                payload_hash=payload_hash,
+                schema_ref=schema_ref_for_contract(ck),
+                error_count=len(stored_errs),
+                errors=stored_errs,
+                metadata={"ingested_via": "api"},
+            )
+        )
         append_audit(
             store,
             deployment_id=deployment_id,
             action="record_rejected",
             resource_type="submission",
             resource_id=str(payload.get("submission_id") or "unknown"),
-            metadata={"contract_key": ck, "errors": errs[:50]},
+            metadata={"contract_key": ck, "validation_receipt_id": receipt_id, "errors": stored_errs[:50]},
         )
         raise HTTPException(
             status_code=400,
-            detail={"message": "Payload failed contract validation.", "errors": errs},
+            detail={
+                "message": "Record validation failed.",
+                "contract_key": ck,
+                "validation_receipt_id": receipt_id,
+                "errors": stored_errs,
+            },
         )
 
     rid = _make_record_id(deployment_id, ck, payload)
+    receipt_id = make_receipt_id_for_record(rid)
     meta = {
         "deployment_id": deployment_id,
         "contract_key": ck,
@@ -77,16 +116,34 @@ def ingest_record(
         received_at=now_utc_iso(),
         source_ref=f"api:POST /records/{ck}",
         metadata=meta,
+        payload_hash=payload_hash,
     )
     stored = store.put_record(rec)
-    ph = stored.payload_hash or compute_payload_hash(payload)
+    ph = stored.payload_hash or payload_hash or compute_payload_hash(payload)
+
+    store.put_validation_receipt(
+        StoredValidationReceipt(
+            receipt_id=receipt_id,
+            deployment_id=deployment_id,
+            contract_key=ck,
+            validation_target_type="record",
+            validation_target_id=rid,
+            status="valid",
+            validated_at=now_utc_iso(),
+            payload_hash=ph,
+            schema_ref=schema_ref_for_contract(ck),
+            error_count=0,
+            errors=[],
+            metadata={"ingested_via": "api"},
+        )
+    )
     append_audit(
         store,
         deployment_id=deployment_id,
         action="record_ingested",
         resource_type="stored_record",
         resource_id=rid,
-        metadata={"contract_key": ck, "payload_hash": ph},
+        metadata={"contract_key": ck, "payload_hash": ph, "validation_receipt_id": receipt_id},
     )
     extras = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
     return {
@@ -94,6 +151,7 @@ def ingest_record(
         "record_id": rid,
         "contract_key": ck,
         "payload_hash": ph,
+        "validation_receipt_id": receipt_id,
         "warnings": [*API_PILOT_SAFE_WARNINGS, *extras],
     }
 

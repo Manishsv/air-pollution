@@ -6,7 +6,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
+from urban_platform.storage.models import (
+    AuditEvent,
+    StoredOutput,
+    StoredRecord,
+    StoredRun,
+    StoredValidationReceipt,
+)
 
 
 def now_utc_iso() -> str:
@@ -56,6 +62,7 @@ class FileAirOsStore:
     - outputs.jsonl
     - audit_events.jsonl
     - runs.jsonl
+    - validation_receipts.jsonl
     """
 
     def __init__(self, root_dir: Path):
@@ -77,6 +84,10 @@ class FileAirOsStore:
     @property
     def runs_path(self) -> Path:
         return self.root_dir / "runs.jsonl"
+
+    @property
+    def validation_receipts_path(self) -> Path:
+        return self.root_dir / "validation_receipts.jsonl"
 
     def _append_jsonl(self, path: Path, obj: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,5 +216,53 @@ class FileAirOsStore:
             out.append(r)
 
         out.sort(key=lambda x: (x.started_at or ""), reverse=True)
+        return out
+
+    # Validation receipts
+    def put_validation_receipt(self, receipt: StoredValidationReceipt) -> StoredValidationReceipt:
+        self._append_jsonl(self.validation_receipts_path, asdict(receipt))
+        return receipt
+
+    def get_validation_receipt(self, receipt_id: str) -> StoredValidationReceipt | None:
+        rid = str(receipt_id)
+        latest: StoredValidationReceipt | None = None
+        for obj in _iter_jsonl(self.validation_receipts_path):
+            if str(obj.get("receipt_id") or "") != rid:
+                continue
+            try:
+                latest = StoredValidationReceipt(**obj)  # type: ignore[arg-type]
+            except TypeError:
+                continue
+        return latest
+
+    def list_validation_receipts(
+        self,
+        *,
+        deployment_id: str | None = None,
+        contract_key: str | None = None,
+        status: str | None = None,
+        validation_target_type: str | None = None,
+    ) -> list[StoredValidationReceipt]:
+        by_id: dict[str, StoredValidationReceipt] = {}
+        for obj in _iter_jsonl(self.validation_receipts_path):
+            try:
+                r = StoredValidationReceipt(**obj)  # type: ignore[arg-type]
+            except TypeError:
+                continue
+            by_id[str(r.receipt_id)] = r  # append-only; last write wins
+
+        out: list[StoredValidationReceipt] = []
+        for r in by_id.values():
+            if deployment_id and r.deployment_id != deployment_id:
+                continue
+            if contract_key and r.contract_key != contract_key:
+                continue
+            if status and r.status != status:
+                continue
+            if validation_target_type and r.validation_target_type != validation_target_type:
+                continue
+            out.append(r)
+
+        out.sort(key=lambda x: (x.validated_at or ""), reverse=True)
         return out
 

@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from urban_platform.storage.file_store import FileAirOsStore, compute_payload_hash
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
+from urban_platform.storage.models import (
+    AuditEvent,
+    StoredOutput,
+    StoredRecord,
+    StoredRun,
+    StoredValidationReceipt,
+)
 
 
 def test_put_get_list_record(tmp_path: Path) -> None:
@@ -118,6 +124,57 @@ def test_put_get_list_run_and_latest_wins(tmp_path: Path) -> None:
     assert store.list_runs(status="failed") == []
 
 
+def test_put_get_list_validation_receipt_and_latest_wins(tmp_path: Path) -> None:
+    store = FileAirOsStore(tmp_path)
+    a = StoredValidationReceipt(
+        receipt_id="receipt_1",
+        deployment_id="dep_a",
+        contract_key="consumer_demo",
+        validation_target_type="record",
+        validation_target_id="rec_1",
+        status="invalid",
+        validated_at="2026-01-01T00:00:00Z",
+        payload_hash="h",
+        schema_ref="specifications/consumer_contracts/demo.v1.json",
+        error_count=1,
+        errors=[{"message": "x", "path": ["a"]}],
+        metadata={},
+    )
+    b = StoredValidationReceipt(
+        receipt_id="receipt_1",
+        deployment_id="dep_a",
+        contract_key="consumer_demo",
+        validation_target_type="record",
+        validation_target_id="rec_1",
+        status="valid",
+        validated_at="2026-01-01T00:01:00Z",
+        payload_hash="h2",
+        schema_ref="specifications/consumer_contracts/demo.v1.json",
+        error_count=0,
+        errors=[],
+        metadata={"k": "v"},
+    )
+    store.put_validation_receipt(a)
+    store.put_validation_receipt(b)
+
+    got = store.get_validation_receipt("receipt_1")
+    assert got is not None
+    assert got.status == "valid"
+    assert got.payload_hash == "h2"
+
+    rows = store.list_validation_receipts()
+    assert len(rows) == 1
+    assert rows[0].receipt_id == "receipt_1"
+    assert len(store.list_validation_receipts(deployment_id="dep_a")) == 1
+    assert store.list_validation_receipts(deployment_id="dep_b") == []
+    assert len(store.list_validation_receipts(contract_key="consumer_demo")) == 1
+    assert store.list_validation_receipts(contract_key="other") == []
+    assert len(store.list_validation_receipts(status="valid")) == 1
+    assert store.list_validation_receipts(status="invalid") == []
+    assert len(store.list_validation_receipts(validation_target_type="record")) == 1
+    assert store.list_validation_receipts(validation_target_type="output") == []
+
+
 def test_missing_files_return_empty_lists(tmp_path: Path) -> None:
     store = FileAirOsStore(tmp_path)
     # root dir exists, but JSONL files may not.
@@ -125,6 +182,7 @@ def test_missing_files_return_empty_lists(tmp_path: Path) -> None:
     assert store.list_outputs() == []
     assert store.list_audit_events() == []
     assert store.list_runs() == []
+    assert store.list_validation_receipts() == []
 
 
 def test_payload_hash_deterministic_for_key_order() -> None:

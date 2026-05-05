@@ -3,10 +3,22 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from urban_platform.api.audit_helpers import append_audit
-from urban_platform.api.validation import collect_validation_errors
+from urban_platform.api.receipt_helpers import (
+    make_receipt_id_for_output,
+    safe_errors,
+    schema_ref_for_contract,
+)
+from urban_platform.api.validation import collect_validation_errors, manifest_has_artifact
 from urban_platform.applications.program_reporting.review_packets import build_program_reporting_state_summary
 from urban_platform.deployments.builder_registry import get_builder
-from urban_platform.storage import FileAirOsStore, StoredOutput, StoredRecord, now_utc_iso
+from urban_platform.storage import (
+    FileAirOsStore,
+    StoredOutput,
+    StoredRecord,
+    StoredValidationReceipt,
+    compute_payload_hash,
+    now_utc_iso,
+)
 
 CONTRACT_SUBMISSION = "consumer_city_program_submission"
 CONTRACT_REVIEW_PACKET = "consumer_fund_release_review_packet"
@@ -75,7 +87,24 @@ def execute_program_reporting_review_run(
         pkt = builder(sub)
         errs = collect_validation_errors(pkt, schema_name=CONTRACT_REVIEW_PACKET)
         if errs:
-            raise ValueError(f"Built packet failed validation: {errs!r}")
+            stored_errs = safe_errors(errs)
+            store.put_validation_receipt(
+                StoredValidationReceipt(
+                    receipt_id=make_receipt_id_for_output(f"out_invalid_pkt_{run_id}"),
+                    deployment_id=deployment_id,
+                    contract_key=CONTRACT_REVIEW_PACKET,
+                    validation_target_type="output",
+                    validation_target_id=str(pkt.get("packet_id") or "unknown"),
+                    status="invalid",
+                    validated_at=now_utc_iso(),
+                    payload_hash=compute_payload_hash(pkt) if isinstance(pkt, dict) else None,
+                    schema_ref=schema_ref_for_contract(CONTRACT_REVIEW_PACKET),
+                    error_count=len(stored_errs),
+                    errors=stored_errs,
+                    metadata={"run_id": run_id, "application_id": application_id},
+                )
+            )
+            raise ValueError("Built packet failed validation.")
 
         oid = f"out_{pkt['packet_id']}_{run_id}"
         store.put_output(
@@ -98,6 +127,24 @@ def execute_program_reporting_review_run(
             )
         )
         outputs += 1
+
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=make_receipt_id_for_output(oid),
+                deployment_id=deployment_id,
+                contract_key=CONTRACT_REVIEW_PACKET,
+                validation_target_type="output",
+                validation_target_id=oid,
+                status="valid",
+                validated_at=now_utc_iso(),
+                payload_hash=compute_payload_hash(pkt) if isinstance(pkt, dict) else None,
+                schema_ref=schema_ref_for_contract(CONTRACT_REVIEW_PACKET),
+                error_count=0,
+                errors=[],
+                metadata={"run_id": run_id, "application_id": application_id},
+            )
+        )
+
         append_audit(
             store,
             deployment_id=deployment_id,
@@ -116,6 +163,29 @@ def execute_program_reporting_review_run(
         reporting_period=reporting_period,
     )
     state_oid = f"out_state_summary_{run_id}"
+    # This demo summary contract may not be manifest-registered; if not present, skip schema validation.
+    if manifest_has_artifact(STATE_SUMMARY_CONTRACT):
+        errs_state = collect_validation_errors(state_summary, schema_name=STATE_SUMMARY_CONTRACT)
+        if errs_state:
+            stored_errs = safe_errors(errs_state)
+            store.put_validation_receipt(
+                StoredValidationReceipt(
+                    receipt_id=make_receipt_id_for_output(state_oid),
+                    deployment_id=deployment_id,
+                    contract_key=STATE_SUMMARY_CONTRACT,
+                    validation_target_type="output",
+                    validation_target_id=state_oid,
+                    status="invalid",
+                    validated_at=now_utc_iso(),
+                    payload_hash=compute_payload_hash(state_summary) if isinstance(state_summary, dict) else None,
+                    schema_ref=schema_ref_for_contract(STATE_SUMMARY_CONTRACT),
+                    error_count=len(stored_errs),
+                    errors=stored_errs,
+                    metadata={"run_id": run_id, "application_id": application_id},
+                )
+            )
+            raise ValueError("Built state summary failed validation.")
+
     store.put_output(
         StoredOutput(
             output_id=state_oid,
@@ -136,6 +206,24 @@ def execute_program_reporting_review_run(
         )
     )
     outputs += 1
+    if manifest_has_artifact(STATE_SUMMARY_CONTRACT):
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=make_receipt_id_for_output(state_oid),
+                deployment_id=deployment_id,
+                contract_key=STATE_SUMMARY_CONTRACT,
+                validation_target_type="output",
+                validation_target_id=state_oid,
+                status="valid",
+                validated_at=now_utc_iso(),
+                payload_hash=compute_payload_hash(state_summary) if isinstance(state_summary, dict) else None,
+                schema_ref=schema_ref_for_contract(STATE_SUMMARY_CONTRACT),
+                error_count=0,
+                errors=[],
+                metadata={"run_id": run_id, "application_id": application_id},
+            )
+        )
+
     append_audit(
         store,
         deployment_id=deployment_id,

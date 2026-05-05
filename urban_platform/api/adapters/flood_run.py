@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 from urban_platform.api.audit_helpers import append_audit
+from urban_platform.api.receipt_helpers import make_receipt_id_for_output, safe_errors, schema_ref_for_contract
 from urban_platform.api.validation import collect_validation_errors
 from urban_platform.connectors.flood.ingest_file import (
     ingest_drainage_asset_feed_json,
@@ -14,7 +15,14 @@ from urban_platform.connectors.flood.ingest_file import (
 )
 from urban_platform.deployments.builder_registry import get_builder
 from urban_platform.processing.flood.features import build_flood_feature_rows
-from urban_platform.storage import FileAirOsStore, StoredOutput, StoredRecord, now_utc_iso
+from urban_platform.storage import (
+    FileAirOsStore,
+    StoredOutput,
+    StoredRecord,
+    StoredValidationReceipt,
+    compute_payload_hash,
+    now_utc_iso,
+)
 
 CONTRACT_RAINFALL = "provider_rainfall_observation_feed"
 CONTRACT_INCIDENT = "provider_flood_incident_feed"
@@ -115,15 +123,66 @@ def execute_flood_demo_run(
     # Validate outputs (fail closed).
     errs_dash = collect_validation_errors(dashboard_payload, schema_name=OUT_DASHBOARD)
     if errs_dash:
-        raise ValueError(f"Generated flood dashboard payload failed validation: {errs_dash!r}")
+        stored_errs = safe_errors(errs_dash)
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=make_receipt_id_for_output(f"out_invalid_dash_{run_id}"),
+                deployment_id=deployment_id,
+                contract_key=OUT_DASHBOARD,
+                validation_target_type="output",
+                validation_target_id=f"out_invalid_dash_{run_id}",
+                status="invalid",
+                validated_at=now_utc_iso(),
+                payload_hash=compute_payload_hash(dashboard_payload) if isinstance(dashboard_payload, dict) else None,
+                schema_ref=schema_ref_for_contract(OUT_DASHBOARD),
+                error_count=len(stored_errs),
+                errors=stored_errs,
+                metadata={"run_id": run_id, "application_id": "flood_risk_dashboard_payload"},
+            )
+        )
+        raise ValueError("Generated flood dashboard payload failed validation.")
     for pkt in packets:
         errs = collect_validation_errors(pkt, schema_name=OUT_DECISION_PACKET)
         if errs:
-            raise ValueError(f"Generated flood decision packet failed validation: {errs!r}")
+            stored_errs = safe_errors(errs)
+            store.put_validation_receipt(
+                StoredValidationReceipt(
+                    receipt_id=make_receipt_id_for_output(f"out_invalid_packet_{run_id}"),
+                    deployment_id=deployment_id,
+                    contract_key=OUT_DECISION_PACKET,
+                    validation_target_type="output",
+                    validation_target_id=str(pkt.get("packet_id") or "unknown"),
+                    status="invalid",
+                    validated_at=now_utc_iso(),
+                    payload_hash=compute_payload_hash(pkt) if isinstance(pkt, dict) else None,
+                    schema_ref=schema_ref_for_contract(OUT_DECISION_PACKET),
+                    error_count=len(stored_errs),
+                    errors=stored_errs,
+                    metadata={"run_id": run_id, "application_id": "flood_decision_packets"},
+                )
+            )
+            raise ValueError("Generated flood decision packet failed validation.")
     for t in tasks:
         errs = collect_validation_errors(t, schema_name=OUT_FIELD_TASK)
         if errs:
-            raise ValueError(f"Generated flood field verification task failed validation: {errs!r}")
+            stored_errs = safe_errors(errs)
+            store.put_validation_receipt(
+                StoredValidationReceipt(
+                    receipt_id=make_receipt_id_for_output(f"out_invalid_task_{run_id}"),
+                    deployment_id=deployment_id,
+                    contract_key=OUT_FIELD_TASK,
+                    validation_target_type="output",
+                    validation_target_id=str(t.get("task_id") or "unknown"),
+                    status="invalid",
+                    validated_at=now_utc_iso(),
+                    payload_hash=compute_payload_hash(t) if isinstance(t, dict) else None,
+                    schema_ref=schema_ref_for_contract(OUT_FIELD_TASK),
+                    error_count=len(stored_errs),
+                    errors=stored_errs,
+                    metadata={"run_id": run_id, "application_id": "flood_field_verification_tasks"},
+                )
+            )
+            raise ValueError("Generated flood field verification task failed validation.")
 
     outputs = 0
 
@@ -148,6 +207,24 @@ def execute_flood_demo_run(
         )
     )
     outputs += 1
+
+    store.put_validation_receipt(
+        StoredValidationReceipt(
+            receipt_id=make_receipt_id_for_output(dash_oid),
+            deployment_id=deployment_id,
+            contract_key=OUT_DASHBOARD,
+            validation_target_type="output",
+            validation_target_id=dash_oid,
+            status="valid",
+            validated_at=now_utc_iso(),
+            payload_hash=compute_payload_hash(dashboard_payload) if isinstance(dashboard_payload, dict) else None,
+            schema_ref=schema_ref_for_contract(OUT_DASHBOARD),
+            error_count=0,
+            errors=[],
+            metadata={"run_id": run_id, "application_id": "flood_risk_dashboard_payload"},
+        )
+    )
+
     append_audit(
         store,
         deployment_id=deployment_id,
@@ -179,6 +256,24 @@ def execute_flood_demo_run(
             )
         )
         outputs += 1
+
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=make_receipt_id_for_output(oid),
+                deployment_id=deployment_id,
+                contract_key=OUT_DECISION_PACKET,
+                validation_target_type="output",
+                validation_target_id=oid,
+                status="valid",
+                validated_at=now_utc_iso(),
+                payload_hash=compute_payload_hash(pkt) if isinstance(pkt, dict) else None,
+                schema_ref=schema_ref_for_contract(OUT_DECISION_PACKET),
+                error_count=0,
+                errors=[],
+                metadata={"run_id": run_id, "application_id": "flood_decision_packets"},
+            )
+        )
+
         append_audit(
             store,
             deployment_id=deployment_id,
@@ -209,6 +304,24 @@ def execute_flood_demo_run(
             )
         )
         outputs += 1
+
+        store.put_validation_receipt(
+            StoredValidationReceipt(
+                receipt_id=make_receipt_id_for_output(oid),
+                deployment_id=deployment_id,
+                contract_key=OUT_FIELD_TASK,
+                validation_target_type="output",
+                validation_target_id=oid,
+                status="valid",
+                validated_at=now_utc_iso(),
+                payload_hash=compute_payload_hash(task) if isinstance(task, dict) else None,
+                schema_ref=schema_ref_for_contract(OUT_FIELD_TASK),
+                error_count=0,
+                errors=[],
+                metadata={"run_id": run_id, "application_id": "flood_field_verification_tasks"},
+            )
+        )
+
         append_audit(
             store,
             deployment_id=deployment_id,

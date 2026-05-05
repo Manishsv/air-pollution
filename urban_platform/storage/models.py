@@ -56,3 +56,19 @@ class StoredRun:
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
+@dataclass(frozen=True)
+class StoredValidationReceipt:
+    receipt_id: str
+    deployment_id: str
+    contract_key: str
+    validation_target_type: str
+    validation_target_id: str
+    status: str
+    validated_at: str
+    payload_hash: str | None = None
+    schema_ref: str | None = None
+    error_count: int = 0
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
