@@ -15,11 +15,13 @@ const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
 const MAX_BUFFER_BYTES = 1024 * 1024 * 20;
 
 const MAX_PROMPT_SECTION_CHARS = Number(
-  process.env.AGENT_MAX_PROMPT_SECTION_CHARS || 12000
+  process.env.AGENT_MAX_PROMPT_SECTION_CHARS || 5000
 );
 const MAX_TRACKER_PROMPT_CHARS = Number(
-  process.env.AGENT_MAX_TRACKER_PROMPT_CHARS || 16000
+  process.env.AGENT_MAX_TRACKER_PROMPT_CHARS || 8000
 );
+const USE_PREVIOUS_RESPONSE_CONTEXT =
+  process.env.AGENT_USE_PREVIOUS_RESPONSE_CONTEXT === "1";
 
 type State = {
   previousResponseId?: string;
@@ -122,7 +124,7 @@ function summarizeExecutionTrackerForPrompt(trackerText: string): string {
     currentActiveTrack,
     nextTasks,
     verificationBaseline,
-    milestoneOverview ? truncateMiddle(milestoneOverview, 5000) : "",
+    milestoneOverview ? truncateMiddle(milestoneOverview, 2500) : "",
     recentSessionHeadings
       ? `## Recent session headings only\n${recentSessionHeadings}`
       : "",
@@ -609,17 +611,28 @@ async function generateCursorInstruction(
 
   console.log(`Calling OpenAI planner with model: ${DEFAULT_MODEL}`);
 
+  const plannerInput = buildPlannerPrompt({
+    handoff: limitPromptSection(handoff),
+    cursorSummary: limitPromptSection(cursorSummary),
+    lastCursorResult: limitPromptSection(lastCursorResult),
+    localVerification: limitPromptSection(localVerification),
+    executionTracker,
+    repo,
+  });
+
+  console.log(`Planner input size: ${plannerInput.length} characters`);
+  console.log(
+    USE_PREVIOUS_RESPONSE_CONTEXT
+      ? "Planner previous_response_id context: enabled"
+      : "Planner previous_response_id context: disabled"
+  );
+
   const response = await openai.responses.create({
     model: DEFAULT_MODEL,
-    previous_response_id: state.previousResponseId,
-    input: buildPlannerPrompt({
-      handoff: limitPromptSection(handoff),
-      cursorSummary: limitPromptSection(cursorSummary),
-      lastCursorResult: limitPromptSection(lastCursorResult),
-      localVerification: limitPromptSection(localVerification),
-      executionTracker,
-      repo,
-    }),
+    ...(USE_PREVIOUS_RESPONSE_CONTEXT && state.previousResponseId
+      ? { previous_response_id: state.previousResponseId }
+      : {}),
+    input: plannerInput,
   });
 
   const outputText = response.output_text?.trim();
@@ -634,7 +647,7 @@ async function generateCursorInstruction(
     );
   }
 
-  state.previousResponseId = response.id;
+  state.previousResponseId = USE_PREVIOUS_RESPONSE_CONTEXT ? response.id : undefined;
   await saveState(state);
 
   return outputText;

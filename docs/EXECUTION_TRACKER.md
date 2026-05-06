@@ -378,3 +378,116 @@ Cursor must **not** mark a milestone **Done** unless:
 - relevant smoke checks pass (if required by that milestone)
 - a commit exists (or the user explicitly requested no commit)
 
+
+# AirOS Execution Tracker
+
+## Purpose
+
+This document is the operational control board for AirOS implementation. It tracks the current milestone, the next task, verification baseline, recent completed work, deferred work, and the update rule for coding agents.
+
+AirOS remains a **review-oriented Decision Support Operating System**, not a production-secure system. Do not claim production readiness, final automated decisions, legal attestation, or autonomous enforcement.
+
+## Current active track
+
+Current active track: **SDK-driven Program Reporting use case**.
+
+Current next task: **Create a docs-only Program Reporting SDK walkthrough that uses the documented SDK surface to inspect contracts, app descriptors, deployments, inventory, and evidence/store touchpoints without executing app logic.**
+
+Requires human decision: **no**
+
+Goal: Demonstrate how an AirOS developer or operator can use the supported SDK surface to understand an existing pilot app without relying on Core internals, unsafe plugin loading, or runtime mutation.
+
+## Current verification baseline
+
+Last updated: **2026-05-06**
+
+- **pytest**: **pass** (`385 passed`)
+- **conformance**: **pass** (`148 checks`)
+- **supervisor conformance**: **pass** (`exit 0`)
+- **latest verified commit**: **`07bf7f2`** (`refactor: enforce documented SDK public surface`; verified locally and synchronized with `origin/main`)
+
+Notes:
+
+- A clean baseline assumes `git status` has no tracked changes; local untracked tooling folders may exist in developer workspaces.
+- Runtime artifacts under `data/`, `.agent-loop/`, `node_modules/`, backups, zips, and caches must not be committed.
+- Full verification is required before marking code or behavior-changing milestones **Done**.
+
+## Milestone overview
+
+| Milestone | Status | Evidence | Next action |
+| --- | --- | --- | --- |
+| Product model and canonical docs | **Done** | `docs/PRODUCT_MODEL.md`, `docs/START_HERE.md`, `docs/PROJECT_STATUS.md` | Keep aligned as architecture evolves |
+| Core API pilot runtime | **Pilot** | Records/runs/outputs/receipts/audit + discovery endpoints under `urban_platform/api/` | Maintain; keep safety posture explicit |
+| Program Reporting pilot app | **Pilot** | Core API allowlisted run + dashboard API mode + evidence tooling | Maintain; avoid automation claims |
+| Flood pilot app | **Pilot** | Core API allowlisted run + dashboard API mode + descriptors | Maintain |
+| App and adapter descriptors | **Pilot** | `specifications/app_descriptors/`, `specifications/provider_adapters/` + discovery via API/CLI/SDK | Maintain; no plugin loading |
+| Evidence and store governance | **Pilot** | Evidence + store backup/inspect/verify/restore-dry-run helpers | Maintain; signing remains design-only |
+| Docs rationalization | **Done** | Onboarding/canonical docs cleanup commits | Keep consistent; avoid drift |
+| Legacy AQ boundary clarity | **Done** | Playbook + architecture notes label AQ legacy boundaries | Do not move/delete until first-class app migration |
+| AQ smoke test | **Done** | `tests/test_air_quality_smoke.py` | Monitor flakiness; keep bounded |
+| Agent loop guardrails | **Done** | `tools/agent-loop/agent-step.ts`, `tools/agent-loop/agent-loop.ts`, tracker gate | Improve streaming/timeout later if needed |
+| Runtime smoke validation | **Done** | Core API + dashboard API mode + evidence + store lifecycle smoke passed | Maintain as milestone gate |
+| SDK stabilization | **Done** | `docs/SDK_SURFACE.md`, SDK README, internal helper labels, `07bf7f2` | Use documented SDK surface in examples |
+| SDK-driven Program Reporting use case | **In progress** | Current active track | Create docs-only walkthrough, then read-only SDK example and tests |
+| Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
+| Identity & Trust | **Deferred** | Product model / docs only | Future |
+| Network Layer | **Deferred** | Product model / docs only | Future |
+| Production hardening | **Deferred** | Readiness/checklist docs | Future |
+
+## Next tasks
+
+1. **Create Program Reporting SDK walkthrough (docs-only).** Add or update a short guide showing how to use the documented SDK surface to list contracts, inspect the Program Reporting app descriptor, list deployments, inspect inventory, and understand evidence/store touchpoints. No runtime code changes.
+2. **Add a small SDK example script.** Create a minimal read-only example, likely under `examples/sdk/`, that prints Program Reporting contracts, app metadata, deployment metadata, and inventory using supported SDK imports only. No app execution, no dynamic imports, no store mutation.
+3. **Add tests for the SDK example.** Add a lightweight test that imports/runs the example in read-only mode and asserts stable output shape or key sections. Keep it fast and deterministic.
+4. **Update developer-facing docs.** Link the walkthrough/example from `docs/SDK_SURFACE.md`, `docs/DEVELOPER_GUIDE.md`, and/or `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md` only where appropriate. Keep examples aligned with the supported SDK surface.
+5. **Run full verification and commit.** Run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance`; commit the walkthrough/example/test/doc updates if green.
+6. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
+7. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
+8. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
+
+## Recent sessions summary
+
+| Date/order | Task | Status | Evidence / commit | Notes |
+| --- | --- | --- | --- | --- |
+| 2026-05-06 | SDK docs/examples import audit | **Done** | Audit-only; no files changed | Public-facing docs use documented SDK surface; no internal imports found |
+| 2026-05-06 | SDK guardrails verified and committed | **Done** | `07bf7f2` | SDK public surface documented; internal helpers labeled; verified and synchronized |
+| 2026-05-06 | Full AirOS runtime smoke validation | **Done** | Run ID `436748cab0ad47b2` | Core API, dashboard server start, evidence, and store lifecycle passed |
+| 2026-05-06 | Add bounded agent loop runner | **Done** | `tools/agent-loop/agent-loop.ts`, `package.json` | Bounded loop with tracker gate and no-progress stop |
+| 2026-05-06 | Agent-loop guardrails | **Done** | `tools/agent-loop/agent-step.ts` | Plan gate, tracker enforcement, docs/GitHub sync reporting |
+| 2026-05-06 | SDK public surface audit | **Done** | Tracker + `docs/SDK_SURFACE.md` | Root `__all__` is public; `UrbanPlatformClient` is advanced; helper modules internal/advanced |
+| 2026-05-06 | AQ legacy boundary labels + smoke test | **Done** | `2a5646a`, `e82bdc8` | Legacy AQ documented; minimal smoke test added |
+| 2026-05-06 | Reduce SDK/API coupling | **Done** | `e35f6a8` | Descriptor loading helper introduced |
+| recent | Product model, Core API discovery, SDK/CLI discovery, dashboard runtime trace, descriptors, readiness fix, canonical docs | **Done / Pilot** | See git log and project docs | Foundation for current SDK use case track |
+
+## Deferred work
+
+- Physical repo migration beyond compatibility wrappers
+- Deleting or moving legacy AQ modules
+- Removing Program Reporting fallbacks
+- Actual store restore beyond restore-dry-run
+- Digital signatures for evidence bundles
+- Identity & Trust implementation: auth, RBAC, keys, policies
+- Network Layer implementation: cross-node runtime messaging
+- Production deployment hardening: DB store, monitoring, runbooks, security review
+
+## Update rule for Cursor and coding agents
+
+After every task that changes files, update this file with:
+
+- task status
+- files changed
+- verification results
+- commit hash, if committed
+- push status, if pushed
+- current next task after the task
+- blockers or drift
+
+Cursor must **not** mark a milestone **Done** unless:
+
+- tests pass, when code or behavior changes
+- conformance passes, when specs/contracts/descriptors/runtime behavior may be affected
+- supervisor conformance passes, when platform checks are relevant
+- relevant smoke checks pass, when required by the milestone
+- a commit exists, unless the user explicitly requested no commit
+
+For audit-only tasks, do not update this tracker unless the audit completes or changes the current plan.
