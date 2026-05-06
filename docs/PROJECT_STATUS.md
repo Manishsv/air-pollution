@@ -102,6 +102,13 @@ Network Layer | No | N/A | Partial (product model) | Produce contracts/envelopes
 
 Recent: integrity wording was standardized across evidence and store verification surfaces (CLI + docs) so hashes/verification are consistently described as internal-consistency-only (not signatures/approval/certification).
 
+### Recent changes — SDK stabilization
+
+- SDK app descriptor loading and the Core API `/apps` surface both go through a shared helper in `urban_platform/sdk/specs_helpers.py`.
+- That helper discovers and validates descriptors under `specifications/app_descriptors/`; intent is consolidation only, not a behavior change versus the prior paths.
+- New tests align the SDK helper with descriptors and cross-check Core API `/apps` listing against the SDK (`tests/test_sdk_app_descriptor_helper.py`, `tests/test_airos_core_api_apps.py`).
+- Early SDK stabilization only; no physical repo migration has started.
+
 ## How to verify current repo health
 
 From repo root:
