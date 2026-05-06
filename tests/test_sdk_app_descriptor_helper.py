@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from urban_platform.sdk import apps as sdk_apps
 from urban_platform.sdk.specs_helpers import (
     get_app_descriptor_from_specs,
     load_all_app_descriptors_from_specs,
@@ -26,4 +27,15 @@ def test_get_app_descriptor_from_specs_matches_known_yaml_ids() -> None:
 def test_get_app_descriptor_from_specs_empty_id() -> None:
     assert get_app_descriptor_from_specs("", validate=True) is None
     assert get_app_descriptor_from_specs("   ", validate=True) is None
+
+
+def test_sdk_apps_list_app_descriptors_matches_specs_helper_ids() -> None:
+    """SDK apps module delegates to specs_helpers; listing should match direct load."""
+    from_specs = load_all_app_descriptors_from_specs(validate=True)
+    from_sdk = sdk_apps.list_app_descriptors()
+    ids_specs = {str(d.get("app_id") or "").strip() for d in from_specs if isinstance(d, dict)}
+    ids_sdk = {str(d.get("app_id") or "").strip() for d in from_sdk if isinstance(d, dict)}
+    assert ids_specs == ids_sdk
+    assert "program_reporting_review" in ids_sdk
+    assert "flood_risk_review" in ids_sdk
 

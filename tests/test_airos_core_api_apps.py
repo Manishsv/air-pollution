@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from urban_platform.sdk.apps import list_app_ids
+
 
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
@@ -41,6 +43,23 @@ def test_get_apps_lists_program_reporting_and_flood(api_client: TestClient) -> N
     assert pr["output_contracts"]
     assert isinstance(pr["safety"], dict)
     _assert_no_abs_paths(pr)
+
+
+def test_get_apps_list_matches_sdk_list_app_ids(api_client: TestClient) -> None:
+    """
+    GET /apps and urban_platform.sdk.apps both load descriptors via specs_helpers;
+    they must expose the same app_id set (regression guard after shared-loader refactor).
+    """
+    r = api_client.get("/apps")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    api_ids = {
+        str(x.get("app_id") or "").strip()
+        for x in body
+        if isinstance(x, dict) and str(x.get("app_id") or "").strip()
+    }
+    assert api_ids == set(list_app_ids())
 
 
 def test_get_app_returns_full_descriptor(api_client: TestClient) -> None:
