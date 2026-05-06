@@ -30,3 +30,7 @@ data/edge/*.jsonl
 
 # Local CI/virtualenv artifacts
 .ci_venv/
+
+# Local agent-loop + Node artifacts (dev only)
+.agent-loop/
+node_modules/
