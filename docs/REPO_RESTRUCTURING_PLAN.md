@@ -14,6 +14,8 @@ AirOS is moving from a single mixed repository toward clearer product boundaries
 
 This is a **Decision Support Operating System for urban governance**. The product model separates Core, Apps, Provider Adapters, SDK, Studio/CLI, App Catalog, Identity & Trust, Network Layer, and Audit/Receipts/Runs.
 
+For a single table mapping **product areas → current repo paths → future targets → status**, see [`docs/PRODUCT_MODEL.md#product-model-to-repository-map`](PRODUCT_MODEL.md#product-model-to-repository-map).
+
 The repository currently contains these product areas, but they are not yet physically grouped into distinct top-level packages. A gradual restructuring improves:
 
 - contributor comprehension (where to put code, what not to mix)

@@ -47,6 +47,30 @@ See also:
 - [`docs/SIGNED_EVIDENCE_BUNDLES_DESIGN.md`](SIGNED_EVIDENCE_BUNDLES_DESIGN.md) (future design; signing not implemented)
 - [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md) (what’s done vs pilot vs future)
 
+## Product model to repository map
+
+The table below is a **descriptive snapshot**: it connects product areas to where code and specs live **today**, and to **directional** future targets. The repository **has not been fully restructured** to match these targets yet.
+
+| Product area | Current repo location | Future target | Status | Notes |
+|---|---|---|---|---|
+| AirOS Core | `urban_platform/api/`, `urban_platform/storage/`, `urban_platform/deployments/`, `urban_platform/specifications/` | `urban_platform/core/` | Pilot implementation in current paths | Do not move yet; future migration requires compatibility wrappers. |
+| AirOS Apps | `urban_platform/applications/`, `specifications/app_descriptors/` | `urban_platform/apps/` | Pilot apps + descriptors | Program Reporting and Flood are current pilot apps. |
+| Provider Adapters | `urban_platform/connectors/`, `specifications/provider_adapters/` | `urban_platform/adapters/` | Pilot metadata + existing connectors | Descriptors are metadata only; no dynamic plugin loading. |
+| AirOS SDK | `urban_platform/sdk/` | `urban_platform/sdk/` | Pilot SDK | Developer helpers for contracts, apps, adapters, catalogs, deployments, evidence, and store lifecycle. |
+| AirOS Studio / CLI | `tools/airos_cli.py`, `tools/deployment_runner/`, `tools/ai_dev_supervisor/` | `urban_platform/studio/` with `tools/` wrappers | Pilot tooling | Keep tools entrypoints stable. |
+| App Catalog | `specifications/app_descriptors/`, `specifications/provider_adapters/`, local catalog commands | catalog layer later | Metadata-only pilot | No install/publish/execute workflow yet. |
+| Dashboard | `review_dashboard/` | TBD or `urban_platform/dashboard/` later | Pilot dashboard | Keep top-level during transition. |
+| Specs and contracts | `specifications/` | `specifications/` | Core foundation | Manifest, contracts, examples, descriptors. |
+| Deployment profiles | `deployments/examples/` | `deployments/` plus catalog integration later | Pilot examples | Discovery is read-only; execution remains explicit. |
+| Evidence / audit / runtime traceability | `urban_platform/sdk/` (evidence, store backup), `urban_platform/api/` (runs, receipts, audit), `urban_platform/specifications/` (conformance/runtime validation), `review_dashboard/` (review and trace panels as applicable) | Consolidation TBD with Core / review surfaces | Pilot | Split across helpers, API/store, conformance, and dashboard—not a single package yet. |
+| Identity & Trust | docs only | TBD | Future | No auth/RBAC/key infrastructure yet. |
+| Network Layer | docs only / early contracts if present | TBD | Future | No cross-node runtime networking yet. |
+
+- The current repo intentionally preserves existing import paths.
+- The namespace skeletons under `urban_platform/core`, `apps`, `adapters`, and `studio` are preparation only.
+- Physical migration should happen later, one product area at a time, with compatibility wrappers.
+- See [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md) for the migration plan.
+
 ## AirOS Core
 
 AirOS Core is domain-neutral. It provides:

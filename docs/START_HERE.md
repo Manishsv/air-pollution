@@ -79,6 +79,7 @@ Start with:
   - container topology (architecture): [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
   - implementation sequencing: [`docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md`](PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md)
   - product model boundaries: [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
+  - For a map from AirOS product areas to current repo paths, see [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md).
 
 ## Developer inspection commands
 
