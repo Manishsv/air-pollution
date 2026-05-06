@@ -2,6 +2,22 @@
 
 ## Recent Sessions
 
+### 2026-05-06 – Repair: execution tracker sync (post–docs commit)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Repair: update `docs/EXECUTION_TRACKER.md` after the docs-only commit that added the adapter helper design note and this tracker (`docs: track adapter helper design and execution history`). |
+| **Status** | **Done** (content updated in working tree; commit this file to record the repair in history). |
+| **Files changed (repair)** | `docs/EXECUTION_TRACKER.md` only. |
+| **Documentation sync status** | Tracker text now reflects the committed docs batch and task report; previously the two docs were committed without updating this file—corrected here. |
+| **Verification (task report)** | `python -m pytest -q`: not run (docs-only; recently run and green). `python main.py --step conformance`: not run (docs-only; recently run and green). `python tools/ai_dev_supervisor/run_review.py --run-conformance`: not run (docs-only; recently run and green). |
+| **Commit hash** | Docs batch: **`72bb2b3`**. This repair edit: **not committed** until staged/committed separately. |
+| **Push status** | **not pushed** (`main` still local-only vs `origin/main` for these commits). |
+| **Current next task** | Run the standard verification trio at HEAD; if green, push `main` to `origin/main`. |
+| **Blockers / drift** | None blocking. **Drift note:** an earlier task brief expected `main` to be **ahead 7** after two doc commits; current clone reports **ahead 6** vs `origin/main`—confirm against your remote before assuming commit count. |
+
+---
+
 ### 2026-05-06 – SDK stabilization and AQ legacy boundary labeling
 
 **Scope:** docs, tests, SDK, API (no runtime behavior changes intended)
@@ -21,8 +37,8 @@
   - New tests: `tests/test_sdk_app_descriptor_helper.py`, `tests/test_airos_core_api_apps.py`
 - Updated status docs for SDK stabilization:
   - `docs/PROJECT_STATUS.md`
-- Drafted adapter descriptor helper design:
-  - `docs/ADAPTER_DESCRIPTOR_HELPER_DESIGN.md` (untracked, design-only)
+- Adapter descriptor helper design note and execution tracker:
+  - `docs/ADAPTER_DESCRIPTOR_HELPER_DESIGN.md`, `docs/EXECUTION_TRACKER.md` — committed in **`72bb2b3`** (`docs: track adapter helper design and execution history`).
 
 **Verification (latest for this work):**
 
@@ -30,11 +46,15 @@
 - `python main.py --step conformance`: 148 checks validated
 - `python tools/ai_dev_supervisor/run_review.py --run-conformance`: pass (exit 0)
 
-**Git/GitHub state at end of session:**
+**Git/GitHub state at end of SDK work (before docs-only commit):**
 
 - Branch: `main`
-- Status: clean working tree except untracked docs/tools (`.agent-loop/`, `docs/ADAPTER_DESCRIPTOR_HELPER_DESIGN.md`, `docs/EXECUTION_TRACKER.md`, `node_modules/`, `package-lock.json`, `package.json`, `tools/agent-loop/`)
-- Ahead of `origin/main` by 5 commits (docs + tests + SDK helper).
+- Ahead of `origin/main` by 5 commits after SDK/helper work; then +1 docs commit (**`72bb2b3`**) → see current status below.
+
+**Git/GitHub state after docs-only commit `72bb2b3`:**
+
+- Branch: `main...origin/main` **[ahead 6]** (verify locally with `git status -sb`)
+- Working tree: clean for tracked files; typical untracked local tooling only (`.agent-loop/`, `node_modules/`, `package-lock.json`, `package.json`, `tools/agent-loop/`)
 
 ---
 
@@ -74,6 +94,7 @@ Notes:
 
 - This repo remains **review-oriented** and **not production-secure** (no auth/RBAC/hardening). Do not claim production readiness.
 - A clean baseline for this tracker assumes `git status` has no tracked changes; untracked local tooling folders may exist in developer workspaces.
+- Commit **`72bb2b3`** is **docs-only**; pytest / conformance / supervisor were **not re-run** for that commit (prior baseline remains valid for code paths).
 
 ## Milestone overview
 
@@ -113,12 +134,13 @@ Notes:
 | recent | Legacy AQ doc labels + watermark historical reviews | `2a5646a` | green at time of merge | Fixes stale `src/` guidance; archives review docs safely |
 | recent | Minimal Air Quality legacy pipeline smoke test | `e82bdc8` | green at time of merge | Bounded test; keep reliable |
 | recent | Reduce SDK/API coupling (descriptor loading helper) | `e35f6a8` | green at time of merge | Moves toward SDK stabilization |
+| 2026-05-06 | Track adapter helper design + execution tracker docs | `72bb2b3` | not re-run (docs-only; prior run green) | Single commit; no code/spec/test changes |
 
 ## Current active track
 
 Current active track: **Execution tracking + guardrails for incremental progress**.
 
-Current next task: **Keep this tracker updated after each merged task (docs-only first, then SDK stabilization).**
+Current next task: **Run pytest, conformance, and supervisor at HEAD; if green, push `main` to `origin/main`. Commit this tracker repair if the working tree change should be preserved.**
 
 Scope:
 
@@ -134,9 +156,9 @@ Non-goals:
 
 ## Next three tasks (exactly three)
 
-1. **Add legacy Air Quality documentation labels.**
-2. **Add a fast AQ pipeline smoke test, only if reliable.**
-3. **Decouple SDK app descriptor loading from API module.**
+1. **Stage/commit the repair update to `docs/EXECUTION_TRACKER.md` if not yet recorded at HEAD.**
+2. **Run the verification trio (`pytest`, `main.py --step conformance`, `run_review.py --run-conformance`) at HEAD.**
+3. **If green, push `main` to `origin/main` to sync remote documentation and history.**
 
 ## Deferred work
 
