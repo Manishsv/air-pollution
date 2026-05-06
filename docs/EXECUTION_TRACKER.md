@@ -3,6 +3,23 @@
 
 ## Recent Sessions
 
+### 2026-05-06 – SDK docs/examples import audit
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Audit public docs and examples for SDK import alignment with the documented surface. |
+| **Status** | **Done** (audit-only; no changes required). |
+| **Files changed (task)** | None (read-only audit). |
+| **Documentation sync status** | Public-facing SDK examples in `docs/DEVELOPER_GUIDE.md`, `docs/BEGINNER_DEVELOPER_GUIDE.md`, and `urban_platform/sdk/README.md` use only documented SDK surface imports (root `urban_platform.sdk` symbols in `__all__` and the advanced `UrbanPlatformClient` from `urban_platform.sdk.client`). No imports of internal modules such as `specs_helpers` or `builders` were found in user-facing docs. |
+| **Verification** | Not run (audit-only task; baseline for `07bf7f2` remains 385 tests / 148 checks / supervisor pass). |
+| **Commit hash** | n/a (no code/docs changes; audit only). |
+| **Push status** | `main` and `origin/main` both at `07bf7f2` at time of audit. |
+| **Current next task before this task** | SDK stabilization closeout: audit docs/examples and then close the track. |
+| **Current next task after this task** | Close SDK stabilization and move `Current active track` to **Milestone selection** requiring a human decision on the next major milestone. |
+| **Requires human decision** | no |
+
+---
+
 ### 2026-05-06 – SDK guardrails verified and committed locally
 
 | Field | Value |
@@ -286,7 +303,7 @@ Notes:
 | Docs rationalization | **Done** | Onboarding/canonical docs cleanup commits | Keep consistent; avoid drift in contributor guidance |
 | Legacy AQ boundary clarity | **Done** | Playbook + architecture notes label AQ legacy boundaries | Keep “no move until first-class app migration” rule |
 | AQ smoke test | **Done (minimal)** | `tests/test_air_quality_smoke.py` | Monitor flakiness; keep bounded |
-| SDK stabilization | **Done / pending docs audit** | Guardrails documented in code/README + `docs/SDK_SURFACE.md`; committed as `07bf7f2` and synchronized with `origin/main` | Audit public docs/examples for imports outside the documented SDK surface |
+| SDK stabilization | **Done** | Guardrails documented/verified in code/README + `docs/SDK_SURFACE.md`; docs/examples audit completed | None (next track: Milestone selection) |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -314,21 +331,16 @@ Notes:
 
 ## Current active track
 
-Current active track: **SDK stabilization closeout**.
+Current active track: **Milestone selection**.
 
-Current next task: Audit public docs/examples for SDK import alignment against `docs/SDK_SURFACE.md`.
-Requires human decision: **no**
-
-Scope:
-
-- audit public docs/examples against the documented SDK surface
-- no new runtime feature work
+Current next task: **Needs human decision: choose the next implementation milestone (e.g., legacy AQ boundary docs closeout, Core API symmetry, or store lifecycle enhancements).**
+Requires human decision: **yes**
 
 ## Next three tasks (exactly three)
 
-1. **Audit public docs/examples for SDK import alignment.** Inspect public-facing docs and examples (`README.md`, `docs/DEVELOPER_GUIDE.md`, `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`, `docs/SDK_SURFACE.md`, and relevant example/test references) for imports outside the documented SDK surface. Audit-only first; do not edit files unless a follow-up task is selected.
-2. **Close SDK stabilization or create a small docs fix.** If the audit is clean, set the active track to **Milestone selection** and require a human decision. If the audit finds drift, do a docs-only alignment task and then close the track.
-3. **Stop for milestone selection.** Once SDK stabilization is closed, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
+1. **Decide the next active milestone** (human decision) from the candidate list in `docs/PROJECT_STATUS.md` and `docs/NEXT_IMPLEMENTATION_BACKLOG.md`.
+2. **Update this tracker’s “Current active track” and “Milestone overview”** to reflect the chosen milestone.
+3. **Scope and run the first bounded task under the new milestone**, with verification and tracker update as usual.
 
 ## Deferred work
 
