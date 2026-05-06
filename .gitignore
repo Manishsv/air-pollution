@@ -9,6 +9,14 @@ cache/
 data/raw/
 data/processed/
 data/outputs/
+data/store/
+
+# Local tooling / packaging / evidence artifacts
+.airos/
+dist/
+backups/
+*.zip
+*.redacted.zip
 
 # Notebook checkpoints
 .ipynb_checkpoints/

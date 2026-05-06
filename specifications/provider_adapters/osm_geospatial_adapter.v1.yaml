@@ -1,0 +1,37 @@
+adapter_id: osm_geospatial_adapter
+name: OSM Geospatial Adapter
+version: v1
+status: draft_demo
+adapter_type: api_connector
+source_system_type: geospatial_feed
+description: >
+  Connector metadata for ingesting openly licensed geospatial layers derived from OpenStreetMap.
+  Produces contract-shaped provider records for review-oriented AirOS workflows (e.g., footprints and roads).
+output_contracts:
+  - provider_building_footprint_feed
+  - provider_road_network_feed
+configuration:
+  required_settings:
+    - area_of_interest
+  optional_settings:
+    - tags_filter
+    - cache_dir
+    - request_timeout_seconds
+  secrets_required: false
+  notes:
+    - Respect upstream usage policies; prefer caching and bounded AOIs for demos.
+runtime:
+  current_module: urban_platform/connectors/geospatial/osmnx_layers.py
+  current_function_examples:
+    - fetch_osm_layers(...)
+safety:
+  produces_final_decisions: false
+  records_include_provenance: true
+  records_include_quality_flags: true
+  notes:
+    - Adapter outputs are open-data signals only; they are not evidence of permit violations or ownership.
+provenance:
+  publisher: air_os_repo
+  source: provider_adapter_descriptor
+  updated_at: "2026-05-05T00:00:00Z"
+

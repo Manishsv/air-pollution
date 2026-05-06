@@ -1,0 +1,39 @@
+adapter_id: openaq_air_quality_adapter
+name: OpenAQ Air Quality Adapter
+version: v1
+status: draft_demo
+adapter_type: api_connector
+source_system_type: air_quality_feed
+description: >
+  Connector metadata for ingesting air-quality observations from an OpenAQ-style feed.
+  Produces contract-shaped provider records for review-oriented AirOS workflows.
+output_contracts:
+  - provider_air_quality_observation_feed
+configuration:
+  required_settings:
+    - base_url
+  optional_settings:
+    - api_key
+    - user_agent
+    - request_timeout_seconds
+    - rate_limit_per_minute
+  secrets_required: false
+  notes:
+    - API keys may be recommended depending on upstream limits; never commit secrets to the repo.
+    - Synthetic/fallback data must be flagged via provenance and quality flags; never treated as operational truth.
+runtime:
+  current_module: urban_platform/connectors/air_quality/openaq_v3.py
+  current_function_examples:
+    - fetch_openaq_observations(...)
+safety:
+  produces_final_decisions: false
+  records_include_provenance: true
+  records_include_quality_flags: true
+  notes:
+    - Adapter outputs are ingestion records only; review outputs and proposed actions are produced by allowlisted builders.
+    - No enforcement, penalties, public disclosure, or automated actions from adapter outputs.
+provenance:
+  publisher: air_os_repo
+  source: provider_adapter_descriptor
+  updated_at: "2026-05-05T00:00:00Z"
+

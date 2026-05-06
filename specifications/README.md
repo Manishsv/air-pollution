@@ -16,7 +16,9 @@ See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTE
     - Observation, Entity, Feature, Event
     - Source reliability (per-entity reliability table)
   - **`air_os_app_descriptor.v1`** — governed **AirOS App Descriptor** schema (catalog-style metadata for apps; not a dynamic plugin loader).
+  - **`provider_adapter_descriptor.v1`** — governed **Provider Adapter Descriptor** schema (catalog-style metadata for connectors; not a dynamic plugin loader).
   - **`reference_catalog.v1`** — declarative **shared reference data** (codes, labels, validity windows) for aligned reporting (e.g. Program Reporting Phase 1); manifest key `platform_reference_catalog`. Not the same row shape as Observation/Entity; still validated as a platform-object schema for conformance.
+    - Phase 1 in this repo exposes **local fixture examples only** under `examples/reference_data/` (read-only discovery; no sync/cache/TTL, publication workflows, signatures, or federation).
 
 - **Consumer contracts** (`consumer_contracts/`)
   - Validate what **applications/dashboards/workflows** consume.

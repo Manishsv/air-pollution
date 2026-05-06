@@ -179,6 +179,12 @@
       "schema_path": "platform_objects/air_os_app_descriptor.v1.schema.json",
       "stability": "documented"
     },
+    "platform_provider_adapter_descriptor": {
+      "description": "Platform object: Provider Adapter Descriptor (metadata for data-source connectors; validated as a governed spec, not a dynamic plugin loader).",
+      "contract_type": "platform_object",
+      "schema_path": "platform_objects/provider_adapter_descriptor.v1.schema.json",
+      "stability": "documented"
+    },
 
     "consumer_urban_decision_packet_core": {
       "description": "Consumer contract: core decision packet shell (copy of current core schema).",
@@ -328,6 +334,18 @@
     "app_descriptor_flood_risk_review": {
       "schema_name": "platform_air_os_app_descriptor",
       "path": "app_descriptors/flood_risk_review.v1.yaml"
+    },
+    "provider_adapter_openaq_air_quality_adapter": {
+      "schema_name": "platform_provider_adapter_descriptor",
+      "path": "provider_adapters/openaq_air_quality_adapter.v1.yaml"
+    },
+    "provider_adapter_open_meteo_weather_adapter": {
+      "schema_name": "platform_provider_adapter_descriptor",
+      "path": "provider_adapters/open_meteo_weather_adapter.v1.yaml"
+    },
+    "provider_adapter_osm_geospatial_adapter": {
+      "schema_name": "platform_provider_adapter_descriptor",
+      "path": "provider_adapters/osm_geospatial_adapter.v1.yaml"
     },
     "example_flood_rainfall_observation": {
       "schema_name": "provider_rainfall_observation_feed",
