@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from urban_platform.api.app_descriptors import get_app_descriptor as _get_app_descriptor
-from urban_platform.api.app_descriptors import load_all_app_descriptors as _load_all_app_descriptors
+from urban_platform.sdk.specs_helpers import (
+    get_app_descriptor_from_specs,
+    load_all_app_descriptors_from_specs,
+)
 
 
 def list_app_descriptors() -> list[dict[str, Any]]:
-    return list(_load_all_app_descriptors(validate=True))
+    return list(load_all_app_descriptors_from_specs(validate=True))
 
 
 def list_app_ids() -> list[str]:
@@ -20,6 +22,5 @@ def list_app_ids() -> list[str]:
 
 
 def get_app_descriptor(app_id: str) -> dict[str, Any] | None:
-    d = _get_app_descriptor(app_id, validate=True)
+    d = get_app_descriptor_from_specs(app_id, validate=True)
     return dict(d) if isinstance(d, dict) else None
-
