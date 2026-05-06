@@ -25,21 +25,26 @@ For deployment-scoped overlays (profiles + registries templates to copy into pri
 
 ## Repository layout (use the right layer)
 
-**Authoritative detail:** `specifications/ARCHITECTURE_NOTE.md` → section **“Repository code layout: `src/` vs `urban_platform/`”** (current state, **ownership table**, migration principles, and **suggested AQ migration sequence**).
+**Authoritative detail:** `specifications/ARCHITECTURE_NOTE.md` → section **“Repository code layout: `urban_platform/` (current state)”** (**ownership table**, migration principles, and **suggested AQ migration sequence**).
 
 Summary:
 
-- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → delegates to **`urban_platform.applications.air_pollution.legacy_pipeline`** for the AQ reference run. The old top-level `src/` package has been removed.
+- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → delegates to **`urban_platform.applications.air_pollution.legacy_pipeline`** for the **active reference** Air Quality run.
 - **`urban_platform/`** — **Canonical** home for **connectors**, **fabric**, **processing**, **applications** (contract-shaped payloads), **SDK/API**, and **conformance Python** (`urban_platform/specifications/*.py`), which **reads** root **`specifications/`** only.
 - **`review_dashboard/`** — **Presentation** only via **`urban_platform/sdk`**; build payloads under **`urban_platform/applications/<domain>/`**.
 - **`specifications/examples/`** — versioned fixtures; **`data/`** — local runtime outputs, not source of truth.
 
 For a text-diagram overview of the full stack (Core vs Node vs Network Layer), see **`docs/AIR_OS_ARCHITECTURE_OVERVIEW.md`**.
 
-### Migration rule of thumb
+### Legacy Air Quality reference path (active)
 
-- **New work:** `urban_platform/` (+ specs). **Do not** add new domain stacks under `src/`.
-- **AQ edits:** choose **`src/`** vs **`urban_platform/`** deliberately, or do a **bounded migration PR** with tests + conformance.
+- The **reference Air Quality** orchestration path is **still active** today:
+  - **`urban_platform/applications/air_pollution/pipeline.py`** — thin entrypoint used by `main.py`
+  - **`urban_platform/applications/air_pollution/legacy_pipeline.py`** — reference AQ orchestration (do not treat as disposable harness code)
+- **Do not** move or delete **`legacy_pipeline`**, its wiring from **`pipeline.py`**, or dependent modules **until** a **first-class AirOS App migration path for Air Quality** is implemented (explicit plan, parity, and migration PR), as described in **`specifications/ARCHITECTURE_NOTE.md`** and **`docs/REPO_RESTRUCTURING_PLAN.md`**.
+- **Shared platform code** for any domain belongs under the appropriate **`urban_platform/`** layer: **connectors**, **processing**, **models**, **decision_support**, **common**, **fabric**, **SDK/API**, etc., plus root **`specifications/`** for governed contracts and descriptors.
+- **New domain apps** should follow the AirOS App shape: **app descriptor**, **contracts**, **examples**, **builder**, **deployment profile**, **tests**, and **safety constraints** (see `docs/SPECS_FIRST_DEVELOPMENT.md` and `specifications/ARCHITECTURE_NOTE.md`).
+- For any bounded refactor of existing code, keep **`python main.py --step conformance`** and **`python -m pytest -q`** green.
 
 ## Reference vertical slice (copy this shape)
 

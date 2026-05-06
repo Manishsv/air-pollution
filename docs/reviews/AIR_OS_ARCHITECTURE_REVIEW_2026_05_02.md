@@ -1,4 +1,10 @@
+> **ARCHIVED / HISTORICAL — NOT CURRENT GUIDANCE**  
+> This document is a **historical architecture review** (snapshot). It may contain **outdated references** to a former top-level `src/` layout or other since-changed structure. **Do not** treat its body as the live repo map.  
+> **Current** canonical product and repository mapping: [`docs/PRODUCT_MODEL.md`](../PRODUCT_MODEL.md), [`docs/REPO_RESTRUCTURING_PLAN.md`](../REPO_RESTRUCTURING_PLAN.md).
+
 # AirOS — Architecture & development approach review
+
+**Historical review note:** this document predates parts of the AirOS product-model transition. It may reference the former top-level `src/` layout, which has since been removed. For current repo mapping, see [`docs/PRODUCT_MODEL.md#product-model-to-repository-map`](../PRODUCT_MODEL.md#product-model-to-repository-map) and [`docs/REPO_RESTRUCTURING_PLAN.md`](../REPO_RESTRUCTURING_PLAN.md).
 
 **Date:** 2026-05-02  
 **Scope:** Review only (no code/spec/doc changes in the rest of the repo).  

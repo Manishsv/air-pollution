@@ -124,6 +124,8 @@ This section clarifies **where code lives today** and **where new work should go
 
 Older documentation may refer to a legacy `src/` package. That code has been consolidated into `urban_platform/` and the `src/` package removed.
 
+**Reference Air Quality** remains an **active** orchestration path under **`urban_platform/applications/air_pollution/legacy_pipeline.py`** (entered via **`pipeline.py`**). **Do not** move or remove it until there is an **explicit first-class AirOS App migration plan** for Air Quality (descriptor, contracts, builder parity, tests) and that migration is executed—see **`docs/REPO_RESTRUCTURING_PLAN.md`**.
+
 If you are migrating or refactoring an application slice:
 
 1. **Migrate provider-facing pieces first** (connectors + normalization + tests) so ingest matches existing contracts.
