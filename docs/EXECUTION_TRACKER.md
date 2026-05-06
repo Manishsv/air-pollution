@@ -2,6 +2,37 @@
 
 ## Recent Sessions
 
+### 2026-05-06 – Agent-loop guardrails: plan gate + tracker enforcement
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Agent-loop guardrails: plan gate, tracker enforcement, docs/GitHub sync reporting. |
+| **Status** | **Done** (verification passed). |
+| **Files changed (task)** | `tools/agent-loop/agent-step.ts`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **pass (exit 0)**. |
+| **Commit hash** | (this commit) |
+| **Push status** | (pushed in this task) |
+| **Current next task before this task** | Needs human decision: choose next task from tracker. |
+| **Current next task after this task** | Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior. |
+| **Requires human decision** | **no** |
+
+---
+
+### 2026-05-06 – Verification + push sync to origin/main
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Verification + push: run verification trio and push `main` to `origin/main`. |
+| **Status** | **Done** |
+| **Files changed (task)** | None (verification + push only). |
+| **Verification** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **pass (exit 0)**. |
+| **Latest pushed commit** | **`9a0c4d0`** |
+| **Push status** | **pushed successfully**; `main` synchronized with `origin/main`. |
+| **Current next task** | Needs human decision: choose next task from tracker (return to planned implementation/docs track). |
+| **Requires human decision** | **yes** |
+
+---
+
 ### 2026-05-06 – Repair: execution tracker sync (post–docs commit)
 
 | Field | Value |
@@ -85,10 +116,10 @@ It answers:
 
 Last updated: **2026-05-06**
 
-- **pytest**: **pass** (`383 passed`)
+- **pytest**: **pass** (`385 passed`)
 - **conformance**: **pass** (`148 checks`)
 - **supervisor conformance**: **pass** (`exit 0`)
-- **latest verified commit**: **`e35f6a8`**
+- **latest verified commit**: **`9a0c4d0`** (pushed; `main` synchronized with `origin/main`)
 
 Notes:
 
@@ -138,9 +169,10 @@ Notes:
 
 ## Current active track
 
-Current active track: **Execution tracking + guardrails for incremental progress**.
+Current active track: **SDK stabilization**.
 
-Current next task: **Run pytest, conformance, and supervisor at HEAD; if green, push `main` to `origin/main`. Commit this tracker repair if the working tree change should be preserved.**
+Current next task: **Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.**
+Requires human decision: **no**
 
 Scope:
 
@@ -156,9 +188,9 @@ Non-goals:
 
 ## Next three tasks (exactly three)
 
-1. **Stage/commit the repair update to `docs/EXECUTION_TRACKER.md` if not yet recorded at HEAD.**
-2. **Run the verification trio (`pytest`, `main.py --step conformance`, `run_review.py --run-conformance`) at HEAD.**
-3. **If green, push `main` to `origin/main` to sync remote documentation and history.**
+1. **Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.**
+2. **Document the supported SDK surface (public imports) and add guardrails to prevent accidental coupling.**
+3. **If behavior changes, run the verification trio and record results here.**
 
 ## Deferred work
 
