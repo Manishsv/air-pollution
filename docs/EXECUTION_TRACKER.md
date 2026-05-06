@@ -344,7 +344,7 @@ AirOS remains a **review-oriented Decision Support Operating System**, not a pro
 
 Current active track: **SDK-driven Program Reporting use case**.
 
-Current next task: **Create a docs-only Program Reporting SDK walkthrough that uses the documented SDK surface to inspect contracts, app descriptors, deployments, inventory, and evidence/store touchpoints without executing app logic.**
+Current next task: **Run the SDK example script manually and record its output summary in the tracker; then close the SDK use case track if walkthrough, example, tests, docs, and verification are all complete.**
 
 Requires human decision: **no**
 
@@ -354,10 +354,10 @@ Goal: Demonstrate how an AirOS developer or operator can use the supported SDK s
 
 Last updated: **2026-05-06**
 
-- **pytest**: **pass** (`385 passed`)
+- **pytest**: **pass** (`403 passed`)
 - **conformance**: **pass** (`148 checks`)
 - **supervisor conformance**: **pass** (`exit 0`)
-- **latest verified commit**: **`07bf7f2`** (`refactor: enforce documented SDK public surface`; verified locally and synchronized with `origin/main`)
+- **latest verified commit**: pending (SDK walkthrough task; to be committed)
 
 Notes:
 
@@ -405,7 +405,8 @@ Notes:
 
 | Date/order | Task | Status | Evidence / commit | Notes |
 | --- | --- | --- | --- | --- |
-| 2026-05-06 | Code review triage document | **Done** | `docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md` | Classifies F-01–F-20; records owner decisions on Q1–Q10; no code changes |
+| 2026-05-06 | Program Reporting SDK walkthrough, example, and tests | **Done** | pending commit | `docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md`, `examples/sdk/program_reporting_walkthrough.py`, `tests/test_sdk_program_reporting_walkthrough.py`; 403 passed / 148 checks / supervisor pass |
+| 2026-05-06 | Code review triage document | **Done** | `b7c21ee` | Classifies F-01–F-20; records owner decisions on Q1–Q10; no code changes |
 | 2026-05-06 | SDK docs/examples import audit | **Done** | Audit-only; no files changed | Public-facing docs use documented SDK surface; no internal imports found |
 | 2026-05-06 | SDK guardrails verified and committed | **Done** | `07bf7f2` | SDK public surface documented; internal helpers labeled; verified and synchronized |
 | 2026-05-06 | Full AirOS runtime smoke validation | **Done** | Run ID `436748cab0ad47b2` | Core API, dashboard server start, evidence, and store lifecycle passed |
