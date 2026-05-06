@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Metadata-only types for documentation and tests.
+
+**Internal / pilot:** not part of ``urban_platform.sdk.__all__``; no stable
+external import contract yet (see ``docs/SDK_SURFACE.md``).
+"""
+
 from dataclasses import dataclass
 
 

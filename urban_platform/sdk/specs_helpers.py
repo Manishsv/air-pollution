@@ -3,6 +3,11 @@ from __future__ import annotations
 """
 Shared helpers for loading governed specification documents used by the SDK and API.
 
+**Internal (implementation detail):** not part of ``urban_platform.sdk.__all__``.
+New callers should use descriptor entrypoints such as ``get_app_descriptor`` /
+``urban_platform.sdk.apps`` or Core API routes, not this module directly
+(see ``docs/SDK_SURFACE.md``).
+
 App descriptors are YAML under ``specifications/app_descriptors/``; loading uses safe
 parse + optional JSON Schema validation only (no dynamic execution).
 """

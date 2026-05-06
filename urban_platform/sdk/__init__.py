@@ -9,6 +9,13 @@ small, stable helper surface for app and adapter developers:
 - inspect app descriptors (metadata only; not plugins)
 - inspect contracts and validate payloads/fixtures by manifest contract_key
 - compute deterministic payload hashes
+
+**Supported imports at package root:** only names listed in ``__all__`` below are
+the declared public surface. See ``docs/SDK_SURFACE.md`` for the full contract
+(root re-exports vs submodules vs advanced/internal modules).
+
+**Advanced:** ``UrbanPlatformClient`` is not re-exported here; import from
+``urban_platform.sdk.client`` (see ``docs/SDK_SURFACE.md``).
 """
 
 from urban_platform.sdk.apps import get_app_descriptor, list_app_descriptors, list_app_ids
@@ -44,6 +51,9 @@ from urban_platform.sdk.store_backup import (
     verify_store_backup,
 )
 
+# Canonical public names for `from urban_platform.sdk import ...`.
+# Keep this list aligned with docs/SDK_SURFACE.md; expanding it is a deliberate
+# API change (update that doc + EXECUTION_TRACKER in the same change set).
 __all__ = [
     # apps
     "get_app_descriptor",
