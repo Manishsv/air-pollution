@@ -4,8 +4,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends
 
-from urban_platform.api.deps import get_store
 from urban_platform.deployments import builder_registry
+from urban_platform.api.settings import api_store_dir
 from urban_platform.specifications.conformance import load_manifest
 from urban_platform.storage import FileAirOsStore
 
@@ -28,7 +28,7 @@ def health_live() -> Dict[str, str]:
 
 
 @router.get("/health/ready")
-def health_ready(store: FileAirOsStore = Depends(get_store)) -> Dict[str, Any]:
+def health_ready() -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
     required_failed = False
 
@@ -77,8 +77,15 @@ def health_ready(store: FileAirOsStore = Depends(get_store)) -> Dict[str, Any]:
 
     # store accessibility (no mutation beyond normal API runtime behavior)
     try:
-        store.list_runs(limit=1)
-        _ok("store", detail="store accessible")
+        store_dir = api_store_dir()
+        if store_dir.exists() and not store_dir.is_dir():
+            _fail("store", "store path is not a directory")
+        else:
+            # Initialize store the same way API routes do. This may create the directory,
+            # but must not create JSONL member files or write any records.
+            store = FileAirOsStore(store_dir)
+            store.list_runs()
+            _ok("store", detail="store accessible")
     except Exception:
         _fail("store", "store not accessible")
 
