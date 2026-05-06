@@ -14,6 +14,13 @@ const EXECUTION_TRACKER_PATH = "docs/EXECUTION_TRACKER.md";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
 const MAX_BUFFER_BYTES = 1024 * 1024 * 20;
 
+const MAX_PROMPT_SECTION_CHARS = Number(
+  process.env.AGENT_MAX_PROMPT_SECTION_CHARS || 12000
+);
+const MAX_TRACKER_PROMPT_CHARS = Number(
+  process.env.AGENT_MAX_TRACKER_PROMPT_CHARS || 16000
+);
+
 type State = {
   previousResponseId?: string;
   iteration: number;
@@ -56,6 +63,78 @@ async function readFileSafe(path: string): Promise<string> {
   } catch {
     return "";
   }
+}
+
+function truncateMiddle(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text;
+  }
+
+  const headChars = Math.floor(maxChars * 0.65);
+  const tailChars = Math.max(0, maxChars - headChars - 300);
+
+  return `${text.slice(0, headChars)}\n\n[... truncated ${
+    text.length - headChars - tailChars
+  } characters to stay within planner context ...]\n\n${text.slice(-tailChars)}`;
+}
+
+function extractSection(text: string, heading: string): string {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^##\\s+${escaped}\\s*$`, "im");
+  const match = text.match(pattern);
+
+  if (!match || match.index === undefined) {
+    return "";
+  }
+
+  const start = match.index;
+  const afterHeading = text.slice(start + match[0].length);
+  const nextHeadingMatch = afterHeading.match(/^##\s+/m);
+  const end = nextHeadingMatch?.index;
+
+  return text
+    .slice(start, end === undefined ? undefined : start + match[0].length + end)
+    .trim();
+}
+
+function summarizeExecutionTrackerForPrompt(trackerText: string): string {
+  if (!trackerText.trim()) {
+    return "";
+  }
+
+  const currentActiveTrack = extractSection(trackerText, "Current active track");
+  const nextTasks =
+    extractSection(trackerText, "Next tasks") ||
+    extractSection(trackerText, "Next three tasks (exactly three)");
+  const verificationBaseline = extractSection(
+    trackerText,
+    "Current verification baseline"
+  );
+  const milestoneOverview = extractSection(trackerText, "Milestone overview");
+
+  const recentSessionHeadings = [...trackerText.matchAll(/^###\s+.*$/gm)]
+    .slice(0, 5)
+    .map((match) => `- ${match[0].replace(/^###\s+/, "")}`)
+    .join("\n");
+
+  const summary = [
+    "# Execution tracker summary for planner",
+    currentActiveTrack,
+    nextTasks,
+    verificationBaseline,
+    milestoneOverview ? truncateMiddle(milestoneOverview, 5000) : "",
+    recentSessionHeadings
+      ? `## Recent session headings only\n${recentSessionHeadings}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return truncateMiddle(summary, MAX_TRACKER_PROMPT_CHARS);
+}
+
+function limitPromptSection(text: string): string {
+  return truncateMiddle(text, MAX_PROMPT_SECTION_CHARS);
 }
 
 async function writeFileEnsuringDir(path: string, content: string): Promise<void> {
@@ -471,7 +550,7 @@ ${lastCursorResult || "No previous orchestrated Cursor result."}
 Local verification result:
 ${localVerification || "No local verification result found."}
 
-Execution tracker:
+Execution tracker summary:
 ${executionTracker || "No execution tracker found. If the task changes files, the next task should create or update docs/EXECUTION_TRACKER.md before feature work continues."}
 
 Current git status:
@@ -524,7 +603,8 @@ async function generateCursorInstruction(
   const localVerification = await readFileSafe(
     ".agent-loop/local-verification-result.md"
   );
-  const executionTracker = await readFileSafe(EXECUTION_TRACKER_PATH);
+  const executionTrackerRaw = await readFileSafe(EXECUTION_TRACKER_PATH);
+  const executionTracker = summarizeExecutionTrackerForPrompt(executionTrackerRaw);
   const repo = await getRepoSnapshot();
 
   console.log(`Calling OpenAI planner with model: ${DEFAULT_MODEL}`);
@@ -533,10 +613,10 @@ async function generateCursorInstruction(
     model: DEFAULT_MODEL,
     previous_response_id: state.previousResponseId,
     input: buildPlannerPrompt({
-      handoff,
-      cursorSummary,
-      lastCursorResult,
-      localVerification,
+      handoff: limitPromptSection(handoff),
+      cursorSummary: limitPromptSection(cursorSummary),
+      lastCursorResult: limitPromptSection(lastCursorResult),
+      localVerification: limitPromptSection(localVerification),
       executionTracker,
       repo,
     }),
