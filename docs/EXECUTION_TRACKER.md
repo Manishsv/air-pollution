@@ -1,6 +1,24 @@
 # AirOS Execution Tracker
 
+
 ## Recent Sessions
+
+### 2026-05-06 – SDK guardrails verified and committed locally
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Verify and commit SDK guardrails for the documented public SDK surface. |
+| **Status** | **Done locally** — verification passed and the guardrail change set was committed as `07bf7f2` (`refactor: enforce documented SDK public surface`). |
+| **Files changed (task)** | `urban_platform/sdk/__init__.py`, `urban_platform/sdk/README.md`, `urban_platform/sdk/builders.py`, `urban_platform/sdk/specs_helpers.py`, `docs/SDK_SURFACE.md`, `docs/EXECUTION_TRACKER.md`. |
+| **Documentation sync status** | `docs/SDK_SURFACE.md` now records the supported SDK surface; SDK README and internal/advanced helper docstrings align with that surface. This tracker now records the verified local commit and advances to synchronization + public-docs alignment. |
+| **Verification** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **verify locally before push if not already confirmed in this session**. |
+| **Commit hash** | `07bf7f2` (`refactor: enforce documented SDK public surface`). |
+| **Push status** | **not yet confirmed pushed** — local `main` was reported as `main...origin/main [ahead 1]`. |
+| **Current next task before this task** | Run the verification trio at HEAD; if green, commit the SDK guardrail + `docs/SDK_SURFACE.md` + tracker updates. |
+| **Current next task after this task** | Push `07bf7f2` to `origin/main`; then run a docs/examples alignment audit against `docs/SDK_SURFACE.md`. |
+| **Requires human decision** | no |
+
+---
 
 ### 2026-05-06 – Verify SDK guardrails at HEAD (agent session — **blocked**: shell unavailable)
 
@@ -245,14 +263,14 @@ Last updated: **2026-05-06**
 - **pytest**: **pass** (`385 passed`)
 - **conformance**: **pass** (`148 checks`)
 - **supervisor conformance**: **pass** (`exit 0`)
-- **latest verified commit**: **`9a0c4d0`** (pushed; `main` synchronized with `origin/main`)
+- **latest verified commit**: **`07bf7f2`** (verified locally; push to `origin/main` still to be confirmed)
 
 Notes:
 
 - This repo remains **review-oriented** and **not production-secure** (no auth/RBAC/hardening). Do not claim production readiness.
 - A clean baseline for this tracker assumes `git status` has no tracked changes; untracked local tooling folders may exist in developer workspaces.
 - Commit **`72bb2b3`** is **docs-only**; pytest / conformance / supervisor were **not re-run** for that commit (prior baseline remains valid for code paths).
-- **SDK guardrails change set** (comments/README/`docs/SDK_SURFACE.md` — **Recent Sessions**, 2026-05-06): re-run the verification trio at HEAD and refresh this section if counts change before recording a new **latest verified commit**. (Latest agent verify attempt: **shell unavailable** — trio not run in that session.)
+- **SDK guardrails change set** has been verified and committed locally as `07bf7f2`. Push status must be confirmed before treating `origin/main` as synchronized.
 
 ## Milestone overview
 
@@ -268,7 +286,7 @@ Notes:
 | Docs rationalization | **Done** | Onboarding/canonical docs cleanup commits | Keep consistent; avoid drift in contributor guidance |
 | Legacy AQ boundary clarity | **Done** | Playbook + architecture notes label AQ legacy boundaries | Keep “no move until first-class app migration” rule |
 | AQ smoke test | **Done (minimal)** | `tests/test_air_quality_smoke.py` | Monitor flakiness; keep bounded |
-| SDK stabilization | **In progress** | Guardrails documented in code/README + `docs/SDK_SURFACE.md`; local verification + commit pending (agent could not run trio — Recent Sessions) | Run verification trio locally; commit guardrails; then tighten public examples |
+| SDK stabilization | **Done locally / pending push + docs audit** | Guardrails documented in code/README + `docs/SDK_SURFACE.md`; committed locally as `07bf7f2` | Push `07bf7f2`, then audit public docs/examples for imports outside the documented SDK surface |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -296,28 +314,22 @@ Notes:
 
 ## Current active track
 
-Current active track: **SDK stabilization**.
+Current active track: **SDK stabilization closeout**.
 
-Current next task: On a machine where the shell works, run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance` at repo HEAD; if all pass, stage and commit the SDK guardrail + `docs/SDK_SURFACE.md` + tracker updates (`refactor: enforce documented SDK public surface`), then mark **2026-05-06 – Implement SDK guardrails for documented surface** **Done** with measured counts and refresh **Current verification baseline**. (The latest Cursor agent attempt could not run these commands; see **Recent Sessions** → *Verify SDK guardrails at HEAD (agent session — blocked)*.)
+Current next task: Push verified local commit `07bf7f2` to `origin/main`, then confirm `main` is synchronized with `origin/main`.
 Requires human decision: **no**
 
 Scope:
 
-- verification-backed SDK surface guardrails (docs + lightweight code markers)
-- no runtime feature work beyond import-surface documentation
-
-Non-goals:
-
-- no code deletion
-- no Air Quality refactor
-- no repo moves
-- no schema changes
+- push and synchronize the verified SDK guardrails commit
+- audit public docs/examples against the documented SDK surface
+- no new runtime feature work
 
 ## Next three tasks (exactly three)
 
-1. **Done — Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.** (Recorded in **Recent Sessions** for 2026-05-06; no runtime changes.)
-2. **Done — Document the supported SDK surface (public imports) and propose guardrails.** (`docs/SDK_SURFACE.md`; design reference.)
-3. **Implemented (not yet verified at HEAD) — Implement agreed guardrails in code per `docs/SDK_SURFACE.md`** (`__init__.py` comments, internal module docstrings, README + SDK_SURFACE sync; `__all__` already matched the doc). **Remaining:** run the verification trio locally (agent session blocked — see Recent Sessions), commit if green, update the guardrails row from **Implemented** to **Done** with measured counts.
+1. **Push verified SDK guardrails commit.** Push `07bf7f2` to `origin/main`, confirm `git status -sb` shows `main` synchronized with `origin/main`, and update this tracker with the push result.
+2. **Audit public docs/examples for SDK import alignment.** Inspect public-facing docs and examples (`README.md`, `docs/DEVELOPER_GUIDE.md`, `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`, `docs/SDK_SURFACE.md`, and relevant example/test references) for imports outside the documented SDK surface. Audit-only first; do not edit files unless a follow-up task is selected.
+3. **Close SDK stabilization or create a small docs fix.** If the audit is clean, set the active track to **Milestone selection** and require a human decision. If the audit finds drift, do a docs-only alignment task and then close the track.
 
 ## Deferred work
 
