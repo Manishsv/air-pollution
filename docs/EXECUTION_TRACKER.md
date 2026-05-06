@@ -304,6 +304,7 @@ Notes:
 | Legacy AQ boundary clarity | **Done** | Playbook + architecture notes label AQ legacy boundaries | Keep “no move until first-class app migration” rule |
 | AQ smoke test | **Done (minimal)** | `tests/test_air_quality_smoke.py` | Monitor flakiness; keep bounded |
 | SDK stabilization | **Done** | Guardrails documented/verified in code/README + `docs/SDK_SURFACE.md`; docs/examples audit completed | None (next track: Milestone selection) |
+| SDK-driven Program Reporting use case | **In progress** | Selected after SDK stabilization closeout | Create docs-only SDK walkthrough, then add a read-only SDK example and tests |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -331,16 +332,23 @@ Notes:
 
 ## Current active track
 
-Current active track: **Milestone selection**.
+Current active track: **SDK-driven Program Reporting use case**.
 
-Current next task: **Needs human decision: choose the next implementation milestone (e.g., legacy AQ boundary docs closeout, Core API symmetry, or store lifecycle enhancements).**
-Requires human decision: **yes**
+Current next task: **Create a docs-only Program Reporting SDK walkthrough that uses the documented SDK surface to inspect contracts, app descriptors, deployments, inventory, and evidence/store touchpoints without executing app logic.**
+Requires human decision: **no**
 
-## Next three tasks (exactly three)
+Goal: Demonstrate how an AirOS developer or operator can use the supported SDK surface to understand an existing pilot app without relying on Core internals, unsafe plugin loading, or runtime mutation.
 
-1. **Decide the next active milestone** (human decision) from the candidate list in `docs/PROJECT_STATUS.md` and `docs/NEXT_IMPLEMENTATION_BACKLOG.md`.
-2. **Update this tracker’s “Current active track” and “Milestone overview”** to reflect the chosen milestone.
-3. **Scope and run the first bounded task under the new milestone**, with verification and tracker update as usual.
+## Next tasks
+
+1. **Create Program Reporting SDK walkthrough (docs-only).** Add or update a short guide showing how to use the documented SDK surface to list contracts, inspect the Program Reporting app descriptor, list deployments, inspect inventory, and understand evidence/store touchpoints. No runtime code changes.
+2. **Add a small SDK example script.** Create a minimal read-only example, likely under `examples/sdk/`, that prints Program Reporting contracts, app metadata, deployment metadata, and inventory using supported SDK imports only. No app execution, no dynamic imports, no store mutation.
+3. **Add tests for the SDK example.** Add a lightweight test that imports/runs the example in read-only mode and asserts stable output shape or key sections. Keep it fast and deterministic.
+4. **Update developer-facing docs.** Link the walkthrough/example from `docs/SDK_SURFACE.md`, `docs/DEVELOPER_GUIDE.md`, and/or `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md` only where appropriate. Keep examples aligned with the supported SDK surface.
+5. **Run full verification and commit.** Run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance`; commit the walkthrough/example/test/doc updates if green.
+6. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
+7. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
+8. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
 
 ## Deferred work
 
