@@ -2,6 +2,78 @@
 
 ## Recent Sessions
 
+### 2026-05-06 – Full AirOS runtime smoke validation (Core API + dashboard API mode + evidence + store lifecycle)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Full AirOS runtime smoke validation for Core API, dashboard API mode, evidence, and store lifecycle. |
+| **Status** | **Done** |
+| **Files changed (task)** | `docs/EXECUTION_TRACKER.md` only. |
+| **Verification (preflight)** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **pass (exit 0)**. |
+| **Fresh store** | `AIROS_STORE_DIR=/tmp/airos_runtime_smoke_store` (cleared before start). |
+| **Core API** | Started on `127.0.0.1:8000` (uvicorn). `/health`, `/health/live`, `/health/ready` **OK**. Discovery endpoints **OK**: `/inventory`, `/apps`, `/adapters`, `/catalogs`, `/deployments`. |
+| **Program Reporting API run** | Posted 2 fixture submissions (`consumer_city_program_submission`). Run completed via `POST /applications/program_reporting_review_packet/runs`. **run_id: `436748cab0ad47b2`**. Outputs/runs/receipts/audit visible via `/outputs`, `/runs`, `/validation-receipts`, `/audit-events`. |
+| **Dashboard API mode** | Streamlit started on `127.0.0.1:8501` with `AIROS_DASHBOARD_DATA_MODE=api` + `AIROS_API_BASE_URL=http://127.0.0.1:8000`. **Server start only; UI not manually inspected**. |
+| **Evidence** | Export/inspect/verify **OK** for run `436748cab0ad47b2`. Bundle: `/tmp/airos_runtime_smoke_evidence/evidence_bundle_436748cab0ad47b2_20260506T142708Z.zip`. |
+| **Store lifecycle** | Backup/inspect/verify/restore-dry-run **OK**. Backup: `/tmp/airos_runtime_smoke_backups/airos_store_backup_20260506T142716Z.zip`. |
+| **Cleanup** | API and dashboard processes stopped after validation (ports 8000/8501 no longer responding). |
+| **Current next task before this task** | (smoke validation) |
+| **Current next task after this task** | Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior. |
+| **Requires human decision** | no |
+
+---
+
+### 2026-05-06 – SDK surface documentation and guardrail design (docs-only)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Document the supported SDK surface (public imports) and propose guardrails (docs-only). |
+| **Status** | **Done** (documentation-only; no code/tests changed). |
+| **Files changed (task)** | `docs/SDK_SURFACE.md` and `docs/EXECUTION_TRACKER.md`. |
+| **Documentation sync status** | `docs/SDK_SURFACE.md` records the SDK public surface, internal/advanced modules, and design-only guardrails consistent with **Recent Sessions → SDK public surface audit**; this tracker’s **Current active track** / **Next three tasks** (steps 2→3) aligned with that doc. |
+| **Summary** | Consolidated the SDK audit into a documented list of supported public imports (root `urban_platform.sdk.__all__`, submodule parity, `UrbanPlatformClient` as advanced) vs internal/advanced modules (`specs_helpers`, `builders`), and described proposed guardrails via `__all__`, naming, import patterns, and contributor alignment with this doc + tracker. No runtime changes made. |
+| **Verification (task report)** | `python -m pytest -q`: not run (docs-only task). `python main.py --step conformance`: not run (docs-only task). `python tools/ai_dev_supervisor/run_review.py --run-conformance`: not run (docs-only task). Baseline from **`9a0c4d0`** remains current for code paths. |
+| **Commit hash** | (this commit) — `docs: update execution tracker for SDK surface docs` |
+| **Push status** | not pushed in this task; **`main`** baseline **`9a0c4d0`** on **`origin/main`** unchanged until push. |
+| **Current next task before this task** | Step 2 (in progress at session start): document the supported SDK surface (public imports) and propose guardrails in docs; update this tracker. |
+| **Current next task after this task** | Step 3: implement agreed SDK guardrails in code per `docs/SDK_SURFACE.md` (`__all__`, internal naming, README alignment as agreed); if behavior changes, run pytest, conformance, and supervisor and record results here. |
+| **Current next task** | Same as **after**: implement guardrails + verification when needed (see step 3 under **Next three tasks**). |
+| **Blockers / drift** | None blocking. **Drift:** after this tracker commit, `docs/SDK_SURFACE.md` remains **untracked** until a separate docs task; untracked `.agent-loop/`, `node_modules/`, `package-lock.json`, `package.json`, `tools/agent-loop/agent-loop.ts` may still be present—do not commit those unless explicitly scoped. |
+| **Requires human decision** | no |
+
+---
+
+### 2026-05-06 – Add bounded agent loop runner
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Add bounded agent loop runner. |
+| **Status** | **Done** (verification passed). |
+| **Files changed (task)** | `tools/agent-loop/agent-loop.ts`, `package.json`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **pass (exit 0)**. |
+| **TypeScript/tooling check** | `npx tsc --noEmit`: no repo TS project configured (help output only). `MAX_AGENT_STEPS=1 npx tsx tools/agent-loop/agent-loop.ts`: ran; `agent:step` failed due to missing `OPENAI_API_KEY` (expected env requirement), confirming loop stop-on-failure behavior. |
+| **Current next task before this task** | Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior. |
+| **Current next task after this task** | Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior. |
+| **Recommended next task** | Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior. |
+
+---
+
+### 2026-05-06 – SDK public surface audit (no code changes)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Audit SDK public imports and define the supported AirOS SDK surface (no behavior changes). |
+| **Status** | **Done** (documentation-only in tracker; no code edits). |
+| **Files changed (task)** | `docs/EXECUTION_TRACKER.md` only. |
+| **Summary** | Reviewed `urban_platform/sdk/` modules: `__init__.py` (`__all__`), `apps`, `adapters`, `catalogs`, `deployments`, `inventory`, `contracts`, `hashing`, `testing`, `evidence`, `store_backup`, `client`, `specs_helpers`, `builders` (no repo imports). Classified **intended public surface** as: (1) package-root re-exports in `urban_platform.sdk.__all__` (discovery, contracts, validation, hashing, evidence, store backup, testing helpers); (2) `urban_platform.sdk.client.UrbanPlatformClient` (dashboard, conformance, client tests—**not** listed in `__all__` today); submodule imports matching those entrypoints (CLI/API/tests also use `urban_platform.sdk.apps` et al. directly). **Internal / advanced:** `specs_helpers` (shared spec load + sanitize; used by API and descriptor-helper tests—treat as implementation detail vs `apps`/`get_app_descriptor` for external callers). **Unclear / thin:** `builders.BuilderSpec` (metadata-only type; unused outside its module). **Doc drift:** `urban_platform/sdk/README.md` claims the root avoids imports; root actually re-exports—flagged for the follow-up doc task, not changed here. |
+| **Verification** | Not run (audit/docs-only). Prior baseline for commit `9a0c4d0` remains current. |
+| **Commit hash** | n/a (not committed yet). |
+| **Push status** | Expected: `main` synchronized with `origin/main` at **`9a0c4d0`** (confirm locally; `git` status not available in agent environment). |
+| **Current next task** | Document the supported SDK surface (public imports) and add guardrails to prevent accidental coupling (docs + possibly light code changes). |
+| **Requires human decision** | no |
+
+---
+
 ### 2026-05-06 – Agent-loop guardrails: plan gate + tracker enforcement
 
 | Field | Value |
@@ -174,6 +246,8 @@ Current active track: **SDK stabilization**.
 Current next task: **Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.**
 Requires human decision: **no**
 
+Audit note: SDK import/symbol inventory should be recorded in this tracker as part of the SDK stabilization slice before any behavior-changing guardrails.
+
 Scope:
 
 - docs-only updates to the tracker and contributor guidance
@@ -188,9 +262,9 @@ Non-goals:
 
 ## Next three tasks (exactly three)
 
-1. **Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.**
-2. **Document the supported SDK surface (public imports) and add guardrails to prevent accidental coupling.**
-3. **If behavior changes, run the verification trio and record results here.**
+1. **Done — Audit SDK public imports and define the supported AirOS SDK surface without changing runtime behavior.** (Recorded in **Recent Sessions** for 2026-05-06; no runtime changes.)
+2. **Done — Document the supported SDK surface (public imports) and propose guardrails (docs-only).** (`docs/SDK_SURFACE.md`; no code changes.)
+3. **Implement agreed guardrails in the SDK (`__all__` and/or internal naming / README alignment) per `docs/SDK_SURFACE.md`; if any behavior changes, run the verification trio (pytest, conformance, supervisor conformance) and record results here.**
 
 ## Deferred work
 
