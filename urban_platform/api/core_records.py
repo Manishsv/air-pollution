@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from urban_platform.api.audit_helpers import append_audit
 from urban_platform.api.constants import API_PILOT_SAFE_WARNINGS
 from urban_platform.api.deps import get_store
+from urban_platform.api.pagination import paginate_items
 from urban_platform.api.receipt_helpers import (
     make_receipt_id,
     make_receipt_id_for_record,
@@ -160,11 +161,22 @@ def ingest_record(
 def list_records_endpoint(
     deployment_id: Optional[str] = Query(None),
     contract_key: Optional[str] = Query(None),
+    paginated: bool = Query(False, description="If true, return pagination envelope instead of raw array."),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     store: FileAirOsStore = Depends(get_store),
-) -> List[Dict[str, Any]]:
+) -> Any:
     # FileAirOsStore filters by deployment_id and contract_key when provided.
     rows = store.list_records(
         deployment_id=deployment_id,
         contract_key=contract_key,
     )
-    return [_record_to_public_dict(r) for r in sorted(rows, key=lambda r: r.received_at)]
+    items = [_record_to_public_dict(r) for r in sorted(rows, key=lambda r: r.received_at)]
+    if not paginated:
+        return items
+    # newest-first for pagination convenience
+    try:
+        items = sorted(items, key=lambda x: str(x.get("received_at") or ""), reverse=True)
+    except Exception:
+        pass
+    return paginate_items(items, limit=limit, offset=offset)

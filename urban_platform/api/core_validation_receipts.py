@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from urban_platform.api.deps import get_store
+from urban_platform.api.pagination import paginate_items
 from urban_platform.storage import FileAirOsStore
 
 router = APIRouter(tags=["validation"])
@@ -16,15 +17,18 @@ def list_validation_receipts(
     contract_key: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     validation_target_type: Optional[str] = Query(None),
+    paginated: bool = Query(False, description="If true, return pagination envelope instead of raw array."),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     store: FileAirOsStore = Depends(get_store),
-) -> List[Dict[str, Any]]:
+) -> Any:
     rows = store.list_validation_receipts(
         deployment_id=deployment_id,
         contract_key=contract_key,
         status=status,
         validation_target_type=validation_target_type,
     )
-    return [
+    items: List[Dict[str, Any]] = [
         {
             "receipt_id": r.receipt_id,
             "deployment_id": r.deployment_id,
@@ -41,6 +45,14 @@ def list_validation_receipts(
         }
         for r in rows
     ]
+    if not paginated:
+        return items
+    # newest-first by validated_at
+    try:
+        items = sorted(items, key=lambda x: str(x.get("validated_at") or ""), reverse=True)
+    except Exception:
+        pass
+    return paginate_items(items, limit=limit, offset=offset)
 
 
 @router.get("/validation-receipts/{receipt_id}")
