@@ -330,54 +330,7 @@ Notes:
 | recent | Reduce SDK/API coupling (descriptor loading helper) | `e35f6a8` | green at time of merge | Moves toward SDK stabilization |
 | 2026-05-06 | Track adapter helper design + execution tracker docs | `72bb2b3` | not re-run (docs-only; prior run green) | Single commit; no code/spec/test changes |
 
-## Current active track
-
-Current active track: **SDK-driven Program Reporting use case**.
-
-Current next task: **Create a docs-only Program Reporting SDK walkthrough that uses the documented SDK surface to inspect contracts, app descriptors, deployments, inventory, and evidence/store touchpoints without executing app logic.**
-Requires human decision: **no**
-
-Goal: Demonstrate how an AirOS developer or operator can use the supported SDK surface to understand an existing pilot app without relying on Core internals, unsafe plugin loading, or runtime mutation.
-
-## Next tasks
-
-1. **Create Program Reporting SDK walkthrough (docs-only).** Add or update a short guide showing how to use the documented SDK surface to list contracts, inspect the Program Reporting app descriptor, list deployments, inspect inventory, and understand evidence/store touchpoints. No runtime code changes.
-2. **Add a small SDK example script.** Create a minimal read-only example, likely under `examples/sdk/`, that prints Program Reporting contracts, app metadata, deployment metadata, and inventory using supported SDK imports only. No app execution, no dynamic imports, no store mutation.
-3. **Add tests for the SDK example.** Add a lightweight test that imports/runs the example in read-only mode and asserts stable output shape or key sections. Keep it fast and deterministic.
-4. **Update developer-facing docs.** Link the walkthrough/example from `docs/SDK_SURFACE.md`, `docs/DEVELOPER_GUIDE.md`, and/or `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md` only where appropriate. Keep examples aligned with the supported SDK surface.
-5. **Run full verification and commit.** Run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance`; commit the walkthrough/example/test/doc updates if green.
-6. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
-7. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
-8. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
-
-## Deferred work
-
-- Physical repo migration (moves) beyond compatibility wrappers
-- Deleting legacy AQ modules
-- Removing Program Reporting fallbacks
-- Actual store restore (beyond restore-dry-run)
-- Digital signatures for evidence bundles
-- Identity & Trust implementation (auth/RBAC/keys/policies)
-- Network Layer implementation (cross-node runtime messaging)
-- Production deployment hardening (DB store, monitoring, runbooks, security review)
-
-## Update rule for Cursor
-
-After every task, Cursor (or any coding agent) must update this file with:
-
-- task status (milestones + ledger row)
-- commit hash (if committed)
-- verification results (pytest + conformance + supervisor conformance)
-- next task (single sentence)
-
-Cursor must **not** mark a milestone **Done** unless:
-
-- tests pass
-- conformance passes
-- supervisor conformance passes
-- relevant smoke checks pass (if required by that milestone)
-- a commit exists (or the user explicitly requested no commit)
-
+---
 
 # AirOS Execution Tracker
 
@@ -429,6 +382,7 @@ Notes:
 | Runtime smoke validation | **Done** | Core API + dashboard API mode + evidence + store lifecycle smoke passed | Maintain as milestone gate |
 | SDK stabilization | **Done** | `docs/SDK_SURFACE.md`, SDK README, internal helper labels, `07bf7f2` | Use documented SDK surface in examples |
 | SDK-driven Program Reporting use case | **In progress** | Current active track | Create docs-only walkthrough, then read-only SDK example and tests |
+| Code review triage (2026-05-06) | **Done** | `docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md` | Classification only; no code changes; F-04 is first recommended fix after SDK track |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -444,11 +398,14 @@ Notes:
 6. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
 7. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
 8. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
+9. **[Post-SDK track] Implement F-04: structured synthetic-fallback audit event.** Emit a `provider_failure` audit event and ERROR log in `aq_data.py` when synthetic fallback fires. First recommended fix from the 2026-05-06 code review triage (`docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md`). Small scope; aligns with governance/safety posture. Do not start until the SDK track is closed.
+10. **[Post-SDK track] Implement F-13: minimal GitHub Actions CI workflow.** Add `.github/workflows/ci.yml` running `pytest -q`, conformance check, and schema lint. Do not start until F-04 is complete and verified.
 
 ## Recent sessions summary
 
 | Date/order | Task | Status | Evidence / commit | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-05-06 | Code review triage document | **Done** | `docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md` | Classifies F-01–F-20; records owner decisions on Q1–Q10; no code changes |
 | 2026-05-06 | SDK docs/examples import audit | **Done** | Audit-only; no files changed | Public-facing docs use documented SDK surface; no internal imports found |
 | 2026-05-06 | SDK guardrails verified and committed | **Done** | `07bf7f2` | SDK public surface documented; internal helpers labeled; verified and synchronized |
 | 2026-05-06 | Full AirOS runtime smoke validation | **Done** | Run ID `436748cab0ad47b2` | Core API, dashboard server start, evidence, and store lifecycle passed |
