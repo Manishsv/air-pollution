@@ -24,6 +24,7 @@ from review_dashboard.components.packet_summary import render_packet_summary
 from review_dashboard.components.flood_panel import render_flood_panel
 from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
 from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
+from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
 from review_dashboard.design_system import apply_airos_design_system
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -191,8 +192,8 @@ def main():
 
     _render_system_sidebar(client, audit=audit, metrics=metrics)
 
-    t_air, t_flood, t_property, t_program, t_heat, t_crowd, t_events = st.tabs(
-        ["Air Pollution", "Flood", "Property & Buildings", "Program Reporting", "Heat", "Crowd", "Events"]
+    t_air, t_flood, t_property, t_program, t_trace, t_heat, t_crowd, t_events = st.tabs(
+        ["Air Pollution", "Flood", "Property & Buildings", "Program Reporting", "Runtime Trace", "Heat", "Crowd", "Events"]
     )
 
     with t_air:
@@ -474,6 +475,9 @@ def main():
 
     with t_program:
         render_program_reporting_panel()
+
+    with t_trace:
+        render_runtime_trace_panel()
 
     with t_heat:
         render_domain_header(

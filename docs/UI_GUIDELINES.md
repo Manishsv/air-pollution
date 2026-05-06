@@ -35,6 +35,15 @@ Avoid language such as:
 Where a domain has operational, financial, legal, or safety consequences, show a visible safety note:
 > AirOS provides review support only. Final decisions must be taken by authorized officials through the applicable government process.
 
+### 2.1b Runtime traceability is not approval
+If a tab shows runtime traceability (runs, validation receipts, audit events), it must be framed as **traceability evidence**:
+
+- what ran
+- what validated against a schema
+- what outputs were stored
+
+It must **not** be framed as approval, authorization, or a final decision.
+
 ### 2.2 Business-readable first
 The dashboard should be understandable to a non-technical reviewer.
 Prefer:
