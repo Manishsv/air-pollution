@@ -13,9 +13,9 @@
 | **Documentation sync status** | `docs/SDK_SURFACE.md` now records the supported SDK surface; SDK README and internal/advanced helper docstrings align with that surface. This tracker now records the verified local commit and advances to synchronization + public-docs alignment. |
 | **Verification** | `python -m pytest -q`: **385 passed**. `python main.py --step conformance`: **148 checks validated**. `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **verify locally before push if not already confirmed in this session**. |
 | **Commit hash** | `07bf7f2` (`refactor: enforce documented SDK public surface`). |
-| **Push status** | **not yet confirmed pushed** — local `main` was reported as `main...origin/main [ahead 1]`. |
+| **Push status** | **pushed confirmed** — `git push origin main` returned `Everything up-to-date`; `git status -sb` shows `## main...origin/main`. |
 | **Current next task before this task** | Run the verification trio at HEAD; if green, commit the SDK guardrail + `docs/SDK_SURFACE.md` + tracker updates. |
-| **Current next task after this task** | Push `07bf7f2` to `origin/main`; then run a docs/examples alignment audit against `docs/SDK_SURFACE.md`. |
+| **Current next task after this task** | Audit public docs/examples for SDK import alignment against `docs/SDK_SURFACE.md`. |
 | **Requires human decision** | no |
 
 ---
@@ -263,14 +263,14 @@ Last updated: **2026-05-06**
 - **pytest**: **pass** (`385 passed`)
 - **conformance**: **pass** (`148 checks`)
 - **supervisor conformance**: **pass** (`exit 0`)
-- **latest verified commit**: **`07bf7f2`** (verified locally; push to `origin/main` still to be confirmed)
+- **latest verified commit**: **`07bf7f2`** (verified locally and synchronized with `origin/main`)
 
 Notes:
 
 - This repo remains **review-oriented** and **not production-secure** (no auth/RBAC/hardening). Do not claim production readiness.
 - A clean baseline for this tracker assumes `git status` has no tracked changes; untracked local tooling folders may exist in developer workspaces.
 - Commit **`72bb2b3`** is **docs-only**; pytest / conformance / supervisor were **not re-run** for that commit (prior baseline remains valid for code paths).
-- **SDK guardrails change set** has been verified and committed locally as `07bf7f2`. Push status must be confirmed before treating `origin/main` as synchronized.
+- **SDK guardrails change set** has been verified, committed as `07bf7f2`, and confirmed synchronized with `origin/main`.
 
 ## Milestone overview
 
@@ -286,7 +286,7 @@ Notes:
 | Docs rationalization | **Done** | Onboarding/canonical docs cleanup commits | Keep consistent; avoid drift in contributor guidance |
 | Legacy AQ boundary clarity | **Done** | Playbook + architecture notes label AQ legacy boundaries | Keep “no move until first-class app migration” rule |
 | AQ smoke test | **Done (minimal)** | `tests/test_air_quality_smoke.py` | Monitor flakiness; keep bounded |
-| SDK stabilization | **Done locally / pending push + docs audit** | Guardrails documented in code/README + `docs/SDK_SURFACE.md`; committed locally as `07bf7f2` | Push `07bf7f2`, then audit public docs/examples for imports outside the documented SDK surface |
+| SDK stabilization | **Done / pending docs audit** | Guardrails documented in code/README + `docs/SDK_SURFACE.md`; committed as `07bf7f2` and synchronized with `origin/main` | Audit public docs/examples for imports outside the documented SDK surface |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -316,20 +316,19 @@ Notes:
 
 Current active track: **SDK stabilization closeout**.
 
-Current next task: Push verified local commit `07bf7f2` to `origin/main`, then confirm `main` is synchronized with `origin/main`.
+Current next task: Audit public docs/examples for SDK import alignment against `docs/SDK_SURFACE.md`.
 Requires human decision: **no**
 
 Scope:
 
-- push and synchronize the verified SDK guardrails commit
 - audit public docs/examples against the documented SDK surface
 - no new runtime feature work
 
 ## Next three tasks (exactly three)
 
-1. **Push verified SDK guardrails commit.** Push `07bf7f2` to `origin/main`, confirm `git status -sb` shows `main` synchronized with `origin/main`, and update this tracker with the push result.
-2. **Audit public docs/examples for SDK import alignment.** Inspect public-facing docs and examples (`README.md`, `docs/DEVELOPER_GUIDE.md`, `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`, `docs/SDK_SURFACE.md`, and relevant example/test references) for imports outside the documented SDK surface. Audit-only first; do not edit files unless a follow-up task is selected.
-3. **Close SDK stabilization or create a small docs fix.** If the audit is clean, set the active track to **Milestone selection** and require a human decision. If the audit finds drift, do a docs-only alignment task and then close the track.
+1. **Audit public docs/examples for SDK import alignment.** Inspect public-facing docs and examples (`README.md`, `docs/DEVELOPER_GUIDE.md`, `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`, `docs/SDK_SURFACE.md`, and relevant example/test references) for imports outside the documented SDK surface. Audit-only first; do not edit files unless a follow-up task is selected.
+2. **Close SDK stabilization or create a small docs fix.** If the audit is clean, set the active track to **Milestone selection** and require a human decision. If the audit finds drift, do a docs-only alignment task and then close the track.
+3. **Stop for milestone selection.** Once SDK stabilization is closed, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
 
 ## Deferred work
 
