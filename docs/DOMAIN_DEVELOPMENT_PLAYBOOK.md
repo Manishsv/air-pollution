@@ -29,7 +29,7 @@ For deployment-scoped overlays (profiles + registries templates to copy into pri
 
 Summary:
 
-- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → today still **delegates** to **`src.pipeline.run_pipeline`** for the AQ reference run. **`src/`** is **legacy AQ MVP** only—not where new domains or shared platform logic should land.
+- **`main.py`** → **`urban_platform.applications.air_pollution.pipeline`** → delegates to **`urban_platform.applications.air_pollution.legacy_pipeline`** for the AQ reference run. The old top-level `src/` package has been removed.
 - **`urban_platform/`** — **Canonical** home for **connectors**, **fabric**, **processing**, **applications** (contract-shaped payloads), **SDK/API**, and **conformance Python** (`urban_platform/specifications/*.py`), which **reads** root **`specifications/`** only.
 - **`review_dashboard/`** — **Presentation** only via **`urban_platform/sdk`**; build payloads under **`urban_platform/applications/<domain>/`**.
 - **`specifications/examples/`** — versioned fixtures; **`data/`** — local runtime outputs, not source of truth.

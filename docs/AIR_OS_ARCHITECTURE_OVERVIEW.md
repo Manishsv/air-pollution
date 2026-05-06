@@ -1,5 +1,12 @@
 # AirOS Architecture Overview
 
+**Canonical references (current):**
+
+- **Product model**: [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
+- **Repo migration plan**: [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md)
+
+This document is retained for background/design context.
+
 AirOS is **node-first**, **specs-first**, and **federation-ready**. It supports standalone agency/city deployments (**AirOS Nodes**) and optional cross-agency coordination through a **domain-agnostic, contract-aware, policy-enforcing** **AirOS Network Layer**.
 
 This document provides **text diagrams** for contributors, forward deployment engineers, and coding agents.

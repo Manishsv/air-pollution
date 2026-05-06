@@ -45,7 +45,9 @@ python tools/airos_cli.py examples list
 
 ### Legacy `src/` note
 
-The legacy `src/` package has been migrated into `urban_platform/`. Historical notes are in [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md).
+AirOS previously had a top-level `src/` package. That package has been removed. The legacy AQ reference implementation now lives under `urban_platform/applications/air_pollution/legacy_pipeline.py`.
+
+Historical notes are in [`specifications/ARCHITECTURE_NOTE.md`](specifications/ARCHITECTURE_NOTE.md).
 
 ### Safety posture
 

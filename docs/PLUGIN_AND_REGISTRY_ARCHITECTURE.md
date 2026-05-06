@@ -1,5 +1,12 @@
 # Plugin and registry architecture (AirOS)
 
+**Canonical references (current):**
+
+- **Product model**: [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
+- **Repo migration plan**: [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md)
+
+This document is retained for background/design context.
+
 AirOS should be deployable as **AirOS Core** without hard-wiring specific data providers or specific applications/consumers into the core runtime. Providers, applications, and network transports should **plug in** through **specifications**, **contracts**, **registries**, and **conformance** so new integrations can be added without modifying core modules.
 
 This is a **design / documentation** note. It defines **plugin declarations** and proposes registry files **without implementing them**.
@@ -144,7 +151,7 @@ This repository already contains several “proto-plugins,” but they are not y
 
 ### Domains / applications
 
-- **Air quality (reference app)**: `main.py` delegates into legacy `src/` pipeline; consumer contracts and decision packet profiles exist; migration debt remains (`src/` → `urban_platform/`).
+- **Air quality (reference app)**: `main.py` delegates into legacy AQ code under `urban_platform/applications/air_pollution/legacy_pipeline.py`; migration debt remains (legacy AQ → more modular platform layout).
 - **Flood (read-only vertical slice)**: provider + consumer contracts, examples, `urban_platform` processing + applications + dashboard panel + tests; maturity checklist YAML exists.
 - **Property/buildings (open-data-first)**: open-data oriented contracts/examples + processing/app payloads + panel + tests; maturity checklist YAML exists.
 

@@ -1,5 +1,12 @@
 # AirOS interoperability model
 
+**Canonical references (current):**
+
+- **Product model**: [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
+- **Repo migration plan**: [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md)
+
+This document is retained for background/design context.
+
 This document explains how AirOS enables **interoperability** across data providers, domain applications, deployments, and (in future) separate agency nodes—using **shared contracts**, **registries**, **reference catalogs**, and **conformance**. It complements [`docs/BEGINNER_DEVELOPER_GUIDE.md`](BEGINNER_DEVELOPER_GUIDE.md) and [`docs/DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md).
 
 ---
