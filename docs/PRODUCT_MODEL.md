@@ -41,6 +41,12 @@ Identity directory | **AirOS Identity & Trust** | Participants, users, organizat
 Network fabric | **AirOS Network Layer** | Cross-node messaging, routing, envelopes, delivery receipts, retries, and inter-agency communication.
 Operational traceability | **AirOS Audit, Runs, and Validation Receipts** | Explains what was ingested, validated, run, produced, and audited.
 
+See also:
+
+- [`docs/EVIDENCE_BUNDLES.md`](EVIDENCE_BUNDLES.md) (export → inspect → verify workflow; internal consistency only, not signatures/certification/approval)
+- [`docs/SIGNED_EVIDENCE_BUNDLES_DESIGN.md`](SIGNED_EVIDENCE_BUNDLES_DESIGN.md) (future design; signing not implemented)
+- [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md) (what’s done vs pilot vs future)
+
 ## AirOS Core
 
 AirOS Core is domain-neutral. It provides:
@@ -89,6 +95,10 @@ Each app package should eventually contain:
 - documentation
 - safety constraints
 
+Developer scaffolding exists for starting new apps safely:
+
+- `python tools/airos_cli.py apps scaffold <app_id> --domain-id <domain_id>` (templates only; not registered or executable)
+
 ## Provider Adapters
 
 Provider adapters connect external systems to AirOS by turning source-system data into contract-shaped AirOS records.
@@ -102,6 +112,17 @@ Provider adapters:
 - submit records through `POST /records/{contract_key}`
 
 Provider adapters do not produce final decisions.
+
+Provider Adapter Descriptors (under `specifications/provider_adapters/`) are governed metadata for adapters:
+
+- they document what provider contracts an adapter can emit, what configuration it needs, and what provenance/quality flags it should attach
+- they are validated against a schema (and can be indexed later as part of a catalog)
+- they are not executable plugins; runtime execution remains explicit and reviewed in connector code + deployment configuration
+
+Developer inspection commands:
+
+- `python tools/airos_cli.py adapters list`
+- `python tools/airos_cli.py adapters show openaq_air_quality_adapter`
 
 ## AirOS SDK
 
@@ -154,6 +175,17 @@ AirOS App Descriptors (under `specifications/app_descriptors/`) are the first st
 - they document app boundaries and safety posture without moving folders
 - they are validated against a schema (and cross-checked against the manifest, builder allowlist, and deployment examples)
 - they are not dynamic plugin loading; execution still goes through the safe builder registry
+
+For local developer workflows, AirOS can also produce **portable app review artifacts**:
+
+- `python tools/airos_cli.py apps package <app_path> --output-dir dist/apps` (creates a zip; does not install or register)
+- `python tools/airos_cli.py apps inspect-package dist/apps/<app_id>-<version>.zip` (read-only inspection before review/registration)
+
+A **local catalog index** can record inspected package metadata (still not installed or executable):
+
+- `python tools/airos_cli.py catalog add-package dist/apps/<app_id>-<version>.zip`
+- `python tools/airos_cli.py catalog list`
+- `python tools/airos_cli.py catalog show <app_id>`
 
 Catalog should eventually include:
 

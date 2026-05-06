@@ -4,6 +4,8 @@ If you are comfortable with web forms, REST APIs, JSON request/response bodies, 
 
 **Templates you can copy:** [`docs/developer_templates/`](developer_templates/) (starters only; not wired into runtime).
 
+**New:** follow the guided tutorial: [`docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`](BUILD_YOUR_FIRST_AIR_OS_APP.md)
+
 ---
 
 ## 1) AirOS in one sentence
@@ -129,6 +131,47 @@ assert_fixture_valid(
 )
 
 app = get_app_descriptor("program_reporting_review")
+```
+
+## Developer inspection commands
+
+Read-only CLI helpers backed by the SDK:
+
+```bash
+python tools/airos_cli.py contracts list
+python tools/airos_cli.py contracts show consumer_city_program_submission
+python tools/airos_cli.py fixtures validate consumer_city_program_submission specifications/examples/program_reporting/city_program_submission.sample.json
+python tools/airos_cli.py apps list
+python tools/airos_cli.py apps show program_reporting_review
+python tools/airos_cli.py apps explain program_reporting_review
+python tools/airos_cli.py apps explain flood_risk_review
+```
+
+## Reference catalog discovery (read-only, local fixtures)
+
+Reference catalogs provide shared codes and reference data (administrative units, program codes, reporting periods) so submissions and review outputs align consistently.
+
+This repo currently exposes **local example catalogs only** (no live sync / pull / cache / signatures / federation).
+
+```bash
+python tools/airos_cli.py catalogs list
+python tools/airos_cli.py catalogs show administrative_units_demo_in
+```
+
+## App scaffolding (safe)
+
+Create a local starter folder for a new app (templates only; not registered or executable):
+
+```bash
+python tools/airos_cli.py apps scaffold heat_risk_review --domain-id heat_risk
+python tools/airos_cli.py apps validate apps/heat_risk_review
+python tools/airos_cli.py apps package apps/heat_risk_review --output-dir dist/apps
+python tools/airos_cli.py apps inspect-package dist/apps/heat_risk_review-v1.zip
+python tools/airos_cli.py catalog add-package dist/apps/heat_risk_review-v1.zip
+python tools/airos_cli.py catalog list
+python tools/airos_cli.py catalog show heat_risk_review
+python tools/airos_cli.py adapters list
+python tools/airos_cli.py adapters show openaq_air_quality_adapter
 ```
 
 ---

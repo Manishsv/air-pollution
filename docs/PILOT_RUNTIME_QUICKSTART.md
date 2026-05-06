@@ -66,6 +66,8 @@ Keep this terminal running.
 
 ```bash
 curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/live
+curl http://127.0.0.1:8000/health/ready
 ```
 
 Expected:
@@ -82,6 +84,69 @@ Use this if you want to inspect the JSON schema before posting data:
 curl http://127.0.0.1:8000/contracts/consumer_city_program_submission
 curl http://127.0.0.1:8000/contracts/consumer_fund_release_review_packet
 ```
+
+## 3c) (Optional) App discovery (read-only metadata)
+
+```bash
+curl http://127.0.0.1:8000/apps
+curl http://127.0.0.1:8000/apps/program_reporting_review
+curl http://127.0.0.1:8000/apps/flood_risk_review
+```
+
+Notes:
+
+- `/apps` is read-only metadata sourced from governed app descriptors.
+- App descriptors are not dynamic plugins. Execution still goes through the safe builder registry via `POST /applications/{application_id}/runs`.
+
+## 3d) (Optional) Provider adapter discovery (read-only metadata)
+
+```bash
+curl http://127.0.0.1:8000/adapters
+curl http://127.0.0.1:8000/adapters/openaq_air_quality_adapter
+curl http://127.0.0.1:8000/adapters/open_meteo_weather_adapter
+curl http://127.0.0.1:8000/adapters/osm_geospatial_adapter
+```
+
+Notes:
+
+- `/adapters` is read-only metadata sourced from governed adapter descriptors.
+- Adapter descriptors are not dynamic plugins and do not execute connector code.
+
+## 3e) (Optional) Reference catalog discovery (read-only local fixtures)
+
+```bash
+curl http://127.0.0.1:8000/catalogs
+curl http://127.0.0.1:8000/catalogs/administrative_units_demo_in
+```
+
+Notes:
+
+- `/catalogs` is read-only discovery over local reference-data examples under `specifications/examples/reference_data/`.
+- No pull/cache/TTL, publication workflows, trust/signatures, or federation are implemented here.
+
+## 3f) (Optional) Deployment example discovery (read-only metadata)
+
+```bash
+curl http://127.0.0.1:8000/deployments
+curl http://127.0.0.1:8000/deployments/flood_local_demo
+```
+
+Notes:
+
+- `/deployments` is read-only metadata sourced from `deployments/examples/`.
+- It does not validate or run deployments, and it does not execute builders.
+
+## 3g) (Optional) Platform inventory (read-only)
+
+```bash
+curl http://127.0.0.1:8000/inventory
+curl "http://127.0.0.1:8000/inventory?include_runtime=true"
+```
+
+Notes:
+
+- Inventory is discovery-only; it does not validate, run, or execute anything.
+- `include_runtime=true` reports local store counts from `FileAirOsStore` (pilot runtime).
 
 ## 4) Submit Program Reporting records (generic records endpoint)
 
@@ -124,6 +189,7 @@ List:
 
 ```bash
 curl http://127.0.0.1:8000/runs
+curl "http://127.0.0.1:8000/runs?paginated=true&limit=5&offset=0"
 ```
 
 Filter:
@@ -153,6 +219,7 @@ List:
 
 ```bash
 curl http://127.0.0.1:8000/validation-receipts
+curl "http://127.0.0.1:8000/validation-receipts?paginated=true&limit=5&offset=0"
 ```
 
 Filter:
@@ -177,6 +244,7 @@ State summary:
 
 ```bash
 curl "http://127.0.0.1:8000/outputs?contract_key=consumer_program_reporting_state_summary"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_program_reporting_state_summary&paginated=true&limit=5&offset=0"
 ```
 
 Review packets:
@@ -189,6 +257,7 @@ curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_pa
 
 ```bash
 curl http://127.0.0.1:8000/audit-events
+curl "http://127.0.0.1:8000/audit-events?paginated=true&limit=5&offset=0"
 ```
 
 You should see actions such as:
@@ -197,6 +266,45 @@ You should see actions such as:
 - `application_run_started`
 - `output_generated`
 - `application_run_completed`
+
+## 9b) Runtime Trace tab (dashboard, API mode)
+
+If you started the dashboard in API mode, open the **Runtime Trace** tab to see runs, validation receipts, and audit events in one place. This is **traceability evidence**, not approval evidence.
+
+## 9c) Export an evidence bundle (read-only)
+
+After you have a `run_id` (from the application run response or `GET /runs`), export a portable evidence bundle zip:
+
+```bash
+python tools/airos_cli.py evidence export \
+  --run-id <run_id> \
+  --store-dir data/store/api \
+  --output-dir data/outputs/evidence
+```
+
+This is export-only: it does not rerun applications, execute builders, or imply approval.
+
+Inspect the bundle offline (read-only):
+
+```bash
+python tools/airos_cli.py evidence inspect data/outputs/evidence/<bundle>.zip
+```
+
+Verify internal consistency (offline, read-only):
+
+```bash
+python tools/airos_cli.py evidence verify data/outputs/evidence/<bundle>.zip
+```
+
+Create a redacted sharing copy (read-only):
+
+```bash
+python tools/airos_cli.py evidence redact data/outputs/evidence/<bundle>.zip \
+  --profile public_demo \
+  --output-dir data/outputs/evidence
+```
+
+See [`docs/EVIDENCE_BUNDLES.md`](EVIDENCE_BUNDLES.md) for what these bundles contain and what verify does (and does not) mean.
 
 ## 10) Start the dashboard in API mode
 

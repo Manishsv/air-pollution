@@ -6,7 +6,7 @@ This document describes a **Docker-based alternative** to installing Python and 
 
 **Maturity note:** this path corresponds to **Level 1** in [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)—a **single image** carrying Core plus reference stacks for quickstart. Agency-grade deployments target **Level 2+** (Core, providers, applications, and adapters as **separate services**); that document explains the target topology without requiring any change to how you build or run this image today.
 
-If you want a minimal multi-container demonstration of the Level 2 topology (Core service + app service + shared deployment/data volumes), see [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md).
+If you want a minimal multi-container Compose path for the pilot runtime (Core API + dashboard), see [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md).
 
 ## 5-minute Docker quickstart (GHCR)
 
@@ -61,8 +61,9 @@ docker run --rm \
 
 Then open **http://localhost:8501** in a browser.
 
-- **Optional — Program Reporting tab via generic Core API instead of baked-in `data/outputs/deployments/program_reporting_state_demo/` files:** expose the API (separate terminal or Compose service), then launch Streamlit with  
-  `-e AIROS_DASHBOARD_DATA_MODE=api -e AIROS_API_BASE_URL=http://host.docker.internal:8000` (or another reachable Core API URL). Prerequisites and curl flow are documented in [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md).
+- **Optional — Program Reporting tab via Core API:** for the pilot-runtime API + dashboard path, use:
+  - [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md) (step-by-step)
+  - [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md) (Compose stack)
 
 - **Keep the terminal running** while you use the dashboard; stopping the container stops the UI.
 - Use **`docker ps`** to confirm the container is up and that port **8501** is published (`0.0.0.0:8501->8501/tcp`).

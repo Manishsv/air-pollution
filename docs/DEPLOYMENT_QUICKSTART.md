@@ -22,38 +22,9 @@ It is designed to help another engineer clone the repo, install dependencies, ru
 
 ### Docker alternative (optional)
 
-If you prefer not to manage a local venv, use the published **GHCR** image or build **`air-os:local`** from the repo. Full walkthrough (5-minute quickstart, flood demo, **`--from-example`** init, dashboard with **`--entrypoint streamlit`**, troubleshooting): [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
+If you prefer not to manage a local venv, use the single-image Docker path:
 
-**Fastest try (GHCR, no clone):**
-
-```bash
-mkdir -p airos-data
-docker pull ghcr.io/manishsv/air-os:latest
-docker run --rm ghcr.io/manishsv/air-os:latest doctor
-docker run --rm ghcr.io/manishsv/air-os:latest conformance
-docker run --rm -v "$(pwd)/airos-data:/app/data" ghcr.io/manishsv/air-os:latest \
-  deployment run deployments/examples/flood_local_demo
-find airos-data/outputs/deployments/flood_local_demo -maxdepth 1 -type f | sort
-```
-
-**Review dashboard in Docker** (CLI is the default image entrypoint; override for Streamlit):
-
-```bash
-docker run --rm -p 8501:8501 -v "$(pwd)/airos-data:/app/data" \
-  --entrypoint streamlit ghcr.io/manishsv/air-os:latest \
-  run review_dashboard/app.py --server.address=0.0.0.0 --server.port=8501
-```
-
-Open **http://localhost:8501** (keep that terminal running).
-
-From source (after `docker build -t air-os:local .`):
-
-```bash
-docker run --rm air-os:local doctor
-docker run --rm air-os:local conformance
-docker run --rm air-os:local review --run-conformance
-docker run --rm -v "$(pwd)/data:/app/data" air-os:local deployment run deployments/examples/flood_local_demo
-```
+- [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md)
 
 ## 3) Fresh clone setup
 
@@ -90,6 +61,17 @@ CLI equivalents:
 ```bash
 python tools/airos_cli.py conformance
 python tools/airos_cli.py review --run-conformance
+```
+
+## Discover example deployments (read-only)
+
+These commands are discovery-only: they do not validate or run deployments.
+
+```bash
+python tools/airos_cli.py examples list
+python tools/airos_cli.py examples describe flood_local_demo
+python tools/airos_cli.py deployments list
+python tools/airos_cli.py deployments show flood_local_demo
 ```
 
 Expected result:

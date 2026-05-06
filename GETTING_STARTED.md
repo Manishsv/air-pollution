@@ -1,6 +1,11 @@
-## Getting started (deploy + run locally)
+## Getting started (legacy local pipeline + connectors)
 
-This project is a local-first “urban platform” prototype. It can run end-to-end with **best-effort live data** and **synthetic fallbacks**, and it exposes outputs via a **local API/SDK** and a **Streamlit dashboard**.
+This document focuses on the **legacy local pipeline and connector examples** (e.g. the air-pollution pipeline and camera “crowd” publisher/ingestion).
+
+If you want the current **pilot-runtime** flow (generic Core API + store + receipts + dashboard API mode), start with:
+
+- [`docs/START_HERE.md`](docs/START_HERE.md)
+- [`docs/PILOT_RUNTIME_QUICKSTART.md`](docs/PILOT_RUNTIME_QUICKSTART.md)
 
 ### Prerequisites
 

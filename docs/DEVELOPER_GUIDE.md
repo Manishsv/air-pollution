@@ -2,6 +2,14 @@
 
 **New to AirOS? Start with [`docs/BEGINNER_DEVELOPER_GUIDE.md`](BEGINNER_DEVELOPER_GUIDE.md).**
 
+If you want a guided “scaffold → validate → package → inspect” walkthrough, see [`docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`](BUILD_YOUR_FIRST_AIR_OS_APP.md).
+
+For evidence export/inspection/verification (pilot runtime governance posture), see [`docs/EVIDENCE_BUNDLES.md`](EVIDENCE_BUNDLES.md).
+
+For a single repo-wide “what’s done vs pilot vs future” summary, see [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md).
+
+For how the pilot runtime store should evolve (backup/export/import/compaction/retention), see [`docs/PILOT_STORE_LIFECYCLE.md`](PILOT_STORE_LIFECYCLE.md).
+
 For how contracts, deployments, catalogs, and future federation fit together, see [`docs/INTEROPERABILITY_MODEL.md`](INTEROPERABILITY_MODEL.md).
 
 For the conceptual product boundaries (Core vs Apps vs Adapters vs SDK/Studio/Catalog/Identity/Network), see [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md).
@@ -18,6 +26,7 @@ This guide is for developers extending the AirOS repository safely and consisten
 - **Provider Adapters**: connectors and ingest adapters that normalize external inputs into canonical platform objects (future and/or fixture-based in demos).
 - **AirOS Apps**: domain/application builders that turn normalized data into contract-shaped outputs (dashboards, decision packets, review packets, tasks).
 - **App descriptors**: governed metadata describing an app’s decision logic, contracts, dashboards, deployment examples, and safety posture (see `specifications/app_descriptors/`).
+- **Provider adapter descriptors**: governed metadata describing provider adapters (what they emit, what configuration they need, and safety notes) under `specifications/provider_adapters/`. Not executable plugins.
 - **SDK**: developer framework for building apps/adapters (early-stage; see “AirOS SDK, early skeleton” below).
 - **Studio/CLI**: developer/operator tooling (today: `tools/`).
 - **App Catalog**: discovery/installation surface (future-facing; direction captured in `docs/PRODUCT_MODEL.md`).
@@ -89,6 +98,169 @@ assert_fixture_valid(
 )
 
 app = get_app_descriptor("program_reporting_review")
+```
+
+## Developer inspection commands
+
+These are read-only commands for inspecting contracts, validating fixtures, and inspecting app descriptors. They do **not** execute builders.
+
+```bash
+python tools/airos_cli.py contracts list
+python tools/airos_cli.py contracts show consumer_city_program_submission
+python tools/airos_cli.py fixtures validate consumer_city_program_submission specifications/examples/program_reporting/city_program_submission.sample.json
+python tools/airos_cli.py apps list
+python tools/airos_cli.py apps show program_reporting_review
+python tools/airos_cli.py apps explain program_reporting_review
+python tools/airos_cli.py apps explain flood_risk_review
+```
+
+## Provider adapter discovery commands
+
+Provider Adapter Descriptors are governed metadata under `specifications/provider_adapters/`. They are not executable plugins.
+
+```bash
+python tools/airos_cli.py adapters list
+python tools/airos_cli.py adapters show openaq_air_quality_adapter
+python tools/airos_cli.py adapters show open_meteo_weather_adapter
+python tools/airos_cli.py adapters show osm_geospatial_adapter
+```
+
+## Reference catalog discovery commands
+
+Reference catalogs are **local example fixtures** under `specifications/examples/reference_data/`. They provide shared codes for administrative units, programs, reporting periods, and other reference data.
+
+This is **read-only local discovery only**: no pull/cache/TTL, publication workflows, trust/signatures, or federation are implemented here.
+
+```bash
+python tools/airos_cli.py catalogs list
+python tools/airos_cli.py catalogs show administrative_units_demo_in
+python tools/airos_cli.py catalogs show program_catalog_demo_in
+python tools/airos_cli.py catalogs show reporting_periods_demo_in
+```
+
+## Deployment discovery commands (read-only)
+
+Deployment examples live under `deployments/examples/` as declarative profiles + registries.
+
+These commands are discovery-only: they do not validate or run deployments.
+
+```bash
+python tools/airos_cli.py examples list
+python tools/airos_cli.py examples describe flood_local_demo
+python tools/airos_cli.py deployments list
+python tools/airos_cli.py deployments show flood_local_demo
+```
+
+## Platform inventory (read-only)
+
+Use this when you want a quick overview of what’s available in the repo (contracts, apps, adapters, catalogs, deployments) and optionally local pilot-runtime store counts.
+
+```bash
+python tools/airos_cli.py inventory
+python tools/airos_cli.py inventory --include-runtime
+```
+
+## Core API health checks (liveness vs readiness)
+
+- `GET /health` and `GET /health/live` indicate the Core API process is alive.
+- `GET /health/ready` indicates Core can load governed metadata and access the local runtime store. Health checks are **read-only**: they do not execute apps, adapters, or deployments.
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/live
+curl http://127.0.0.1:8000/health/ready
+
+python tools/airos_cli.py health
+python tools/airos_cli.py health --api-base-url http://127.0.0.1:8000
+```
+
+### Runtime list pagination (optional)
+
+Runtime list endpoints return raw arrays by default (backward-compatible). Add `paginated=true` to receive an envelope with `items`, `total`, `limit`, and `offset`.
+
+```bash
+curl "http://127.0.0.1:8000/runs?paginated=true&limit=10&offset=0"
+curl "http://127.0.0.1:8000/outputs?contract_key=consumer_fund_release_review_packet&paginated=true&limit=10&offset=0"
+curl "http://127.0.0.1:8000/audit-events?action=output_generated&paginated=true&limit=20&offset=0"
+```
+
+## Pilot store backup (read-only)
+
+Create a zip backup of the pilot `FileAirOsStore` JSONL files with a `store_manifest.json` (file hashes + line counts). This is operational support only: it is **not** restore/import, not an evidence bundle, and not a digital signature.
+
+```bash
+python tools/airos_cli.py store backup \
+  --store-dir data/store/api \
+  --output-dir data/backups
+```
+
+Inspect a backup zip offline (read-only, no restore/import):
+
+```bash
+python tools/airos_cli.py store inspect-backup data/backups/<backup>.zip
+```
+
+Verify a backup zip offline (hashes + internal consistency; no restore/import):
+
+```bash
+python tools/airos_cli.py store verify-backup data/backups/<backup>.zip
+```
+
+Dry-run restore checks (no writes):
+
+```bash
+python tools/airos_cli.py store restore-dry-run data/backups/<backup>.zip --target-dir /tmp/airos_restore_candidate
+```
+
+Actual restore is not implemented yet. See [`docs/PILOT_STORE_RESTORE_DESIGN.md`](PILOT_STORE_RESTORE_DESIGN.md).
+
+## Evidence bundle export (pilot runtime, read-only)
+
+Export a portable zip with runs, records, outputs, validation receipts, and audit events for review/debug/audit support.
+
+This does **not** rerun applications, execute builders, or imply approval.
+
+Exported bundles include `hash_manifest.json` (SHA-256 hashes for bundle members) to support offline file-integrity checks. This is **not** a digital signature and does not prove signer identity.
+
+```bash
+python tools/airos_cli.py evidence export \
+  --run-id <run_id> \
+  --store-dir data/store/api \
+  --output-dir data/outputs/evidence
+```
+
+Inspect an exported bundle offline (read-only):
+
+```bash
+python tools/airos_cli.py evidence inspect data/outputs/evidence/<bundle>.zip
+```
+
+Verify internal consistency (offline, read-only):
+
+```bash
+python tools/airos_cli.py evidence verify data/outputs/evidence/<bundle>.zip
+```
+
+Create a redacted sharing copy (read-only):
+
+```bash
+python tools/airos_cli.py evidence redact data/outputs/evidence/<bundle>.zip \
+  --profile public_demo \
+  --output-dir data/outputs/evidence
+```
+
+## App scaffolding (safe, non-executable)
+
+Create a local starter folder for a new AirOS App. This is scaffolding only: it does **not** modify the manifest, does **not** register anything, and does **not** make the app executable.
+
+```bash
+python tools/airos_cli.py apps scaffold heat_risk_review --domain-id heat_risk
+python tools/airos_cli.py apps validate apps/heat_risk_review
+python tools/airos_cli.py apps package apps/heat_risk_review --output-dir dist/apps
+python tools/airos_cli.py apps inspect-package dist/apps/heat_risk_review-v1.zip
+python tools/airos_cli.py catalog add-package dist/apps/heat_risk_review-v1.zip
+python tools/airos_cli.py catalog list
+python tools/airos_cli.py catalog show heat_risk_review
 ```
 
 ## Reference catalogs (Phase 1 pattern)

@@ -37,6 +37,8 @@ Key endpoints:
 - `GET /validation-receipts`
 - `GET /audit-events`
 - `GET /contracts/{contract_key}`
+- `GET /deployments`
+- `GET /deployments/{deployment_id}`
 
 Supported verticals (tested end-to-end):
 
@@ -61,6 +63,11 @@ Start with:
 ## Choose your path
 
 - If you are new: [`docs/BEGINNER_DEVELOPER_GUIDE.md`](BEGINNER_DEVELOPER_GUIDE.md)
+- If you want a single “what’s done vs pilot vs future” summary: [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md)
+- If you are a contributor/technical lead and want the next execution plan: [`docs/NEXT_IMPLEMENTATION_BACKLOG.md`](NEXT_IMPLEMENTATION_BACKLOG.md)
+- If you want a guided tutorial: [`docs/BUILD_YOUR_FIRST_AIR_OS_APP.md`](BUILD_YOUR_FIRST_AIR_OS_APP.md)
+- If you want the evidence workflow (export → inspect → verify): [`docs/EVIDENCE_BUNDLES.md`](EVIDENCE_BUNDLES.md)
+- If you want the pilot store lifecycle (backup/export/import/compaction): [`docs/PILOT_STORE_LIFECYCLE.md`](PILOT_STORE_LIFECYCLE.md)
 - If you want the product model (Core vs Apps vs Adapters): [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
 - If you want the safe repo restructuring plan (no breaking moves): [`docs/REPO_RESTRUCTURING_PLAN.md`](REPO_RESTRUCTURING_PLAN.md)
 - If you want to build/extend the platform: [`docs/DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) and [`docs/developer_templates/`](developer_templates/)
@@ -72,6 +79,26 @@ Start with:
   - container topology (architecture): [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)
   - implementation sequencing: [`docs/PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md`](PRODUCTION_LIKE_AIR_OS_IMPLEMENTATION_PLAN.md)
   - product model boundaries: [`docs/PRODUCT_MODEL.md`](PRODUCT_MODEL.md)
+
+## Developer inspection commands
+
+Read-only CLI helpers (contracts, fixtures, app descriptors):
+
+```bash
+python tools/airos_cli.py inventory
+python tools/airos_cli.py inventory --include-runtime
+python tools/airos_cli.py contracts list
+python tools/airos_cli.py contracts show consumer_city_program_submission
+python tools/airos_cli.py fixtures validate consumer_city_program_submission specifications/examples/program_reporting/city_program_submission.sample.json
+python tools/airos_cli.py apps list
+python tools/airos_cli.py apps show program_reporting_review
+python tools/airos_cli.py apps explain program_reporting_review
+python tools/airos_cli.py apps explain flood_risk_review
+python tools/airos_cli.py examples list
+python tools/airos_cli.py examples describe flood_local_demo
+python tools/airos_cli.py deployments list
+python tools/airos_cli.py deployments show flood_local_demo
+```
 
 ## Safety posture (pilot + demo)
 

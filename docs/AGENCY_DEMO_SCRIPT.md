@@ -4,7 +4,10 @@
 
 This is a **practical, demo-ready** walkthrough of **AirOS** as a **governed, registry-driven** layer for urban data and decision support. It uses the **published Docker image** and the **flood fixture demo** so you can show value without local Python setup, live agency feeds, or production infrastructure.
 
-**Related:** technical Docker details and troubleshooting live in [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
+**Related (do not duplicate here):**
+
+- Docker commands + troubleshooting: [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md)
+- Pilot runtime (Core API + dashboard API mode): [`docs/PILOT_RUNTIME_QUICKSTART.md`](PILOT_RUNTIME_QUICKSTART.md)
 
 **Optional state-level demo:** Program Reporting Phase 1 (two synthetic cities → review packets + state-level financial + program progress summary + action items; **no** automated disbursement). Run:
 

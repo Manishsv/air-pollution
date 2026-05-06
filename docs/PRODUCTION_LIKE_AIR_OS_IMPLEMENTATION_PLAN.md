@@ -1,9 +1,11 @@
-# Production-like AirOS — phased implementation plan
+# Pilot-ready AirOS runtime — phased implementation plan
 
 **Audience:** technical leads sequencing platform work.  
 **Scope:** planning only. This document does not change code or runtime behavior.
 
-**Related reading:** [`docs/INTEROPERABILITY_MODEL.md`](INTEROPERABILITY_MODEL.md), [`docs/DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md), [`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`](PLUGIN_AND_REGISTRY_ARCHITECTURE.md), [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md), [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](PROGRAM_REPORTING_AND_FUND_RELEASE.md), [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md).
+**Maturity note:** This roadmap does not claim production readiness. It distinguishes fixture demos and pilot-runtime scaffolding from the hardening required for any real deployment.
+
+**Related reading:** [`docs/INTEROPERABILITY_MODEL.md`](INTEROPERABILITY_MODEL.md), [`docs/DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md), [`docs/PLUGIN_AND_REGISTRY_ARCHITECTURE.md`](PLUGIN_AND_REGISTRY_ARCHITECTURE.md), [`docs/CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md), [`docs/PROGRAM_REPORTING_AND_FUND_RELEASE.md`](PROGRAM_REPORTING_AND_FUND_RELEASE.md), [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md).
 
 ---
 
@@ -24,7 +26,7 @@ AirOS today is **specs-first** and **demo- and validation-oriented**. It is suit
 - **Core API (pilot-runtime):** optional local FastAPI app under [`urban_platform/api/`](../urban_platform/api/) — **generic** routes over manifest validation, storage, and allowlisted builders; Program Reporting is the first vertical exercised end-to-end. See [`docs/CORE_API_PILOT.md`](CORE_API_PILOT.md). Not production-secured; does not replace deployment JSON outputs or conformance.
 - **Dashboard:** [`review_dashboard/`](../review_dashboard/) (Streamlit) **reads generated files** from `data/outputs/...` for several tabs; it is **presentation-first** and must not own domain rules.
 - **Docker (Level 1):** Single image; doctor/conformance/deployment demos per [`docs/DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md).
-- **Docker Compose (Level 2 POC):** [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md) — minimal multi-container topology (packaging/orchestration slice), **not** production guidance.
+- **Docker Compose (pilot runtime):** [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md) — developer compose stack for Core API + dashboard; **not** production guidance.
 - **Pilot storage building block:** `urban_platform/storage/file_store.py` provides a **file-backed JSONL store** for ingested records, generated outputs, and audit events. This is additive scaffolding for future APIs/audit; demos still write primary outputs under `data/outputs/`.
 
 **Explicit non-production areas today:**
@@ -140,7 +142,7 @@ The **specs-first** model (contracts, manifest, domain specs, blocked uses) rema
 ### I. Docker Compose Level 2
 
 - Services: **airos-core**, **store**, **dashboard**, **worker or app** for program reporting; optional **provider simulator** later.
-- Align with [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md) but evolve toward API-backed paths.
+- Align with [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md) but evolve toward API-backed paths.
 
 ### J. Security and trust (later / beta blocker)
 
@@ -218,7 +220,7 @@ Each phase includes **goal**, **likely touch areas**, **must not regress**, **ac
 ### Phase 7: Docker Compose Level 2 (production-like path)
 
 - **Goal:** Compose brings up **core + store + dashboard + worker**; program reporting flow uses API + store.
-- **Files:** `docker-compose.yml`, [`docs/DOCKER_COMPOSE_POC.md`](DOCKER_COMPOSE_POC.md) evolution.
+- **Files:** `docker-compose.yml`, [`docs/DOCKER_COMPOSE_PILOT_RUNTIME.md`](DOCKER_COMPOSE_PILOT_RUNTIME.md) evolution.
 - **Must not change:** Level 1 single-image story.
 - **Acceptance:** One command brings stack up; smoke test hits health + ingest + output GET.
 - **Tests:** CI job optional (heavy); document manual smoke.
