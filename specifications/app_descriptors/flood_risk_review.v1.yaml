@@ -32,7 +32,7 @@ dashboard:
   panels:
     - Flood panel
   supports_file_mode: true
-  supports_api_mode: false
+  supports_api_mode: true
 safety:
   review_support_only: true
   human_review_required: true
