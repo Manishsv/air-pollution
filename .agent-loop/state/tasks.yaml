@@ -249,7 +249,8 @@ tasks:
       - the audit event schema does not support provider_failure type
     depends_on:
       - agentic-phase0-schemas
-    status: ready
+    status: done
+    commit: pending
 
   - task_id: f13-github-actions-ci
     type: code_edit

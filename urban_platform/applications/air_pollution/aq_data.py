@@ -5,9 +5,10 @@ import math
 import os
 import time
 import hashlib
+import uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -354,16 +355,60 @@ def fetch_openaq_pm25_v3(
         return pd.DataFrame()
 
 
+def _emit_provider_failure(
+    connector_id: str,
+    reason: str,
+    deployment_id: str,
+    store: Any,
+) -> None:
+    """Write a provider_failure AuditEvent to the store."""
+    from urban_platform.storage.models import AuditEvent  # local import avoids top-level coupling
+
+    event = AuditEvent(
+        event_id=f"provider_failure_{uuid.uuid4().hex[:12]}",
+        deployment_id=deployment_id,
+        actor="aq_data",
+        action="provider_failure",
+        resource_type="connector",
+        resource_id=connector_id,
+        occurred_at=datetime.now(timezone.utc).isoformat(),
+        metadata={
+            "connector_id": connector_id,
+            "reason": reason,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    store.append_audit_event(event)
+
+
 def generate_synthetic_station_pm25(
     *,
     boundary_wgs84_polygon,
     lookback_days: int,
     n_stations: int = 6,
     seed: int = 42,
+    connector_id: str = "openaq",
+    deployment_id: str = "",
+    store: Any = None,
 ) -> pd.DataFrame:
     """
     Fallback synthetic station data (documented) so pipeline runs end-to-end.
+
+    When the real provider is unavailable, logs at ERROR level and writes a
+    provider_failure audit event to `store` (if provided).
     """
+    reason = "real provider data unavailable or insufficient; synthetic fallback activated"
+    logger.error(
+        "PROVIDER FAILURE: synthetic fallback activated for connector=%s — %s",
+        connector_id,
+        reason,
+    )
+    if store is not None:
+        try:
+            _emit_provider_failure(connector_id, reason, deployment_id, store)
+        except Exception:
+            logger.exception("Failed to write provider_failure audit event")
+
     rng = np.random.default_rng(seed)
     end = _utc_now_hour()
     hours = _date_range_hours(end, lookback_days)

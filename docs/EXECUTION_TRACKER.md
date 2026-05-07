@@ -3,6 +3,19 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – f04-synthetic-fallback-audit-event
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Emit structured `provider_failure` audit event and ERROR log in `aq_data.py` when the synthetic data fallback fires. |
+| **Status** | **Done** |
+| **Files changed** | `urban_platform/applications/air_pollution/aq_data.py`, `tests/test_aq_data_synthetic_fallback.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **537 passed** (19 new). `python main.py --step conformance`: **148 checks**. |
+| **Commit hash** | pending |
+| **Current next task** | `f13-github-actions-ci` |
+
+---
+
 ### 2026-05-07 – agentic-phase3-dashboard: write dashboard.py
 
 | Field | Value |
