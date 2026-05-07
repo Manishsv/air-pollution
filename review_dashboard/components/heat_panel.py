@@ -62,25 +62,36 @@ def _load_live_temperature(city_id: str, lat_min: float, lon_min: float,
 
 
 def _synthetic_temperature(bbox: dict) -> pd.DataFrame:
-    lat_mid = (bbox["lat_min"] + bbox["lat_max"]) / 2
-    lon_mid = (bbox["lon_min"] + bbox["lon_max"]) / 2
-    return pd.DataFrame([
-        {"station_id": f"demo_{bbox['lat_min']}_{bbox['lon_min']}",
-         "latitude": bbox["lat_min"], "longitude": bbox["lon_min"],
-         "timestamp": "2026-05-07T06:00:00Z", "temperature_c": 28.0,
-         "apparent_temperature_c": 30.5, "relative_humidity_pct": 72.0,
-         "data_source": "openmeteo", "quality_flag": "real"},
-        {"station_id": f"demo_{lat_mid}_{lon_mid}",
-         "latitude": lat_mid, "longitude": lon_mid,
-         "timestamp": "2026-05-07T06:00:00Z", "temperature_c": 32.5,
-         "apparent_temperature_c": 36.0, "relative_humidity_pct": 60.0,
-         "data_source": "openmeteo", "quality_flag": "real"},
-        {"station_id": f"demo_{bbox['lat_max']}_{bbox['lon_max']}",
-         "latitude": bbox["lat_max"], "longitude": bbox["lon_max"],
-         "timestamp": "2026-05-07T06:00:00Z", "temperature_c": 27.5,
-         "apparent_temperature_c": 29.5, "relative_humidity_pct": 80.0,
-         "data_source": "openmeteo", "quality_flag": "real"},
-    ])
+    """3×3 grid of synthetic stations matching OpenMeteo's sampling pattern.
+
+    Temperature pattern creates two distinct heat islands (center-east and
+    south-center) so IDW spreads candidates across the city, not just one corner.
+    """
+    lats = [bbox["lat_min"], (bbox["lat_min"] + bbox["lat_max"]) / 2, bbox["lat_max"]]
+    lons = [bbox["lon_min"], (bbox["lon_min"] + bbox["lon_max"]) / 2, bbox["lon_max"]]
+    # [lat_row][lon_col]: south→north rows, west→east columns
+    # Two equally-hot stations at SW and NE corners create two distinct candidate clusters
+    # spread across the full bbox diagonal rather than piling up around a single peak.
+    temps = [
+        [33.0, 29.0, 27.5],   # south: SW industrial hotspot, south-mid warm, SE cool
+        [28.5, 29.5, 28.0],   # center: moderate gradient
+        [27.0, 27.5, 33.0],   # north: NW cool, NE dense-urban hotspot
+    ]
+    rows = []
+    for i, lat in enumerate(lats):
+        for j, lon in enumerate(lons):
+            t = temps[i][j]
+            rows.append({
+                "station_id": f"demo_{lat:.3f}_{lon:.3f}",
+                "latitude": lat, "longitude": lon,
+                "timestamp": "2026-05-07T06:00:00Z",
+                "temperature_c": t,
+                "apparent_temperature_c": round(t + 2.5, 1),
+                "relative_humidity_pct": 70.0,
+                "data_source": "openmeteo",
+                "quality_flag": "real",
+            })
+    return pd.DataFrame(rows)
 
 
 # ── Colour helpers ─────────────────────────────────────────────────────────
@@ -111,7 +122,15 @@ def _risk_emoji(score: float) -> str:
 
 # ── Map rendering ──────────────────────────────────────────────────────────
 
-def _render_heat_map(dashboard: dict, candidates: dict) -> None:
+def _render_heat_map(
+    dashboard: dict,
+    candidates: dict,
+    bbox: dict,
+    h3_res: int,
+    temp_df: pd.DataFrame,
+) -> None:
+    import h3 as _h3
+
     cells = dashboard.get("heat_cells", [])
     cands = candidates.get("candidates", [])
 
@@ -130,7 +149,6 @@ def _render_heat_map(dashboard: dict, candidates: dict) -> None:
             "uhi_intensity": c.get("uhi_intensity"),
             "green_cover": c.get("green_cover_fraction", 0.0),
             "color": _risk_score_to_rgb(c.get("heat_risk_score") or 0.0),
-            "is_candidate": c["h3_id"] in candidate_ids,
         }
         for c in cells
     ])
@@ -148,67 +166,80 @@ def _render_heat_map(dashboard: dict, candidates: dict) -> None:
         id="heat_grid",
     )
 
-    # ── Layer 2: Intervention candidates (bright orange outline + taller) ─
+    layers = [heat_layer]
+
+    # ── Layer 2: Intervention candidates — large ScatterplotLayer circles ──
+    # H3HexagonLayer borders (~174m at res-9) are invisible at city-bbox zoom.
+    # ScatterplotLayer circles (r=500m) are clearly visible regardless of zoom.
     if cands:
-        cand_df = pd.DataFrame([
+        cand_scatter_df = pd.DataFrame([
             {
+                "lat": _h3.cell_to_latlng(c["h3_id"])[0],
+                "lon": _h3.cell_to_latlng(c["h3_id"])[1],
                 "h3_id": c["h3_id"],
-                "risk_score": c.get("risk_score", 0.0),
-                "green_deficit": c.get("green_deficit", 0.0),
+                "rank": i + 1,
+                "risk_score": round(c.get("risk_score", 0.0), 3),
+                "green_deficit": round(c.get("green_deficit", 0.0), 3),
                 "uhi_intensity": c.get("uhi_intensity"),
                 "interventions": ", ".join(c.get("suggested_interventions", [])),
-                "rank": i + 1,
             }
             for i, c in enumerate(cands)
         ])
-
         candidate_layer = pdk.Layer(
-            "H3HexagonLayer",
-            data=cand_df,
-            get_hexagon="h3_id",
-            get_fill_color=[255, 140, 0, 40],   # translucent orange fill
-            get_line_color=[255, 100, 0, 255],   # solid orange border
-            line_width_min_pixels=3,
+            "ScatterplotLayer",
+            data=cand_scatter_df,
+            get_position=["lon", "lat"],
+            get_radius=900,           # ~900m radius so clusters are clearly visible at city scale
+            radius_min_pixels=6,
+            get_fill_color=[255, 100, 0, 180],
+            get_line_color=[180, 40, 0, 255],
+            line_width_min_pixels=2,
+            stroked=True,
+            filled=True,
             pickable=True,
-            extruded=False,
-            opacity=1.0,
             id="candidates",
         )
-    else:
-        candidate_layer = None
+        layers.append(candidate_layer)
 
-    # ── View state centred on bbox ────────────────────────────────────────
-    avg_lat = grid_df["h3_id"].apply(lambda h: __import__("h3").cell_to_latlng(h)[0]).mean()
-    avg_lon = grid_df["h3_id"].apply(lambda h: __import__("h3").cell_to_latlng(h)[1]).mean()
-    zoom = {7: 10, 8: 11, 9: 12, 10: 13}.get(int(grid_df.shape[0] > 0 and 9), 11)
-    view = pdk.ViewState(latitude=avg_lat, longitude=avg_lon, zoom=zoom, pitch=0)
+    # ── Layer 3: IDW sample points (NOT physical weather stations) ────────
+    # OpenMeteo is a forecast API — we query it at a 3×3 virtual grid.
+    # Both synthetic and live data show the same 9 grid positions.
+    if not temp_df.empty and "latitude" in temp_df.columns:
+        station_df = temp_df[["latitude", "longitude", "temperature_c", "station_id"]].copy()
+        station_layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=station_df,
+            get_position=["longitude", "latitude"],
+            get_radius=400,
+            radius_min_pixels=5,
+            get_fill_color=[30, 100, 220, 180],
+            get_line_color=[10, 60, 200, 255],
+            line_width_min_pixels=2,
+            stroked=True,
+            filled=True,
+            pickable=True,
+            id="stations",
+        )
+        layers.append(station_layer)
 
-    layers = [heat_layer] + ([candidate_layer] if candidate_layer else [])
+    # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
+    center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
+    center_lon = (bbox["lon_min"] + bbox["lon_max"]) / 2
+    zoom = {7: 9, 8: 10, 9: 11, 10: 12}.get(h3_res, 11)
+    view = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=zoom, pitch=0)
 
     tooltip = {
         "html": """
-            <div style="font-family:sans-serif; font-size:12px; padding:4px 8px; background:rgba(0,0,0,0.8); color:#fff; border-radius:4px; max-width:220px;">
+            <div style="font-family:sans-serif;font-size:12px;padding:4px 8px;background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;max-width:240px;">
               <b>H3:</b> {h3_id}<br/>
               <b>Risk score:</b> {heat_risk_score}<br/>
-              <b>Heat index:</b> {heat_index_c}°C<br/>
-              <b>UHI intensity:</b> {uhi_intensity}°C<br/>
-              <b>Green cover:</b> {green_cover}
+              <b>Heat index:</b> {heat_index_c}°C &nbsp; <b>UHI:</b> {uhi_intensity}°C<br/>
+              <b>Green cover:</b> {green_cover}<br/>
+              <i style="color:#ffa040;">Candidate #{rank} — {interventions}</i><br/>
+              <i style="color:#6ab0ff;">Station {station_id}: {temperature_c}°C</i>
             </div>
         """,
         "style": {"color": "white"},
-    }
-    cand_tooltip = {
-        "html": """
-            <div style="font-family:sans-serif; font-size:12px; padding:4px 8px; background:rgba(180,70,0,0.9); color:#fff; border-radius:4px; max-width:240px;">
-              <b>🏆 Candidate #</b>{rank}<br/>
-              <b>H3:</b> {h3_id}<br/>
-              <b>Risk score:</b> {risk_score}<br/>
-              <b>Green deficit:</b> {green_deficit}<br/>
-              <b>UHI:</b> {uhi_intensity}°C<br/>
-              <b>Interventions:</b> {interventions}
-            </div>
-        """,
-        "style": {},
     }
 
     deck = pdk.Deck(
@@ -227,20 +258,21 @@ def _render_heat_map(dashboard: dict, candidates: dict) -> None:
         st.markdown("**Legend**")
         st.markdown(
             """
-            <div style="font-size:12px; line-height:1.8;">
+            <div style="font-size:12px;line-height:1.9;">
             <span style="display:inline-block;width:12px;height:12px;background:#27ae60;margin-right:6px;border-radius:2px;"></span>Low risk (0–0.33)<br/>
             <span style="display:inline-block;width:12px;height:12px;background:#f1c40f;margin-right:6px;border-radius:2px;"></span>Moderate (0.33–0.66)<br/>
             <span style="display:inline-block;width:12px;height:12px;background:#c0392b;margin-right:6px;border-radius:2px;"></span>High risk (0.66–1.0)<br/>
             <hr style="margin:6px 0;"/>
-            <span style="display:inline-block;width:12px;height:12px;border:2px solid #ff6400;background:rgba(255,140,0,0.2);margin-right:6px;border-radius:2px;"></span>Intervention candidate<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(255,100,0,0.65);border:2px solid #dc3200;margin-right:6px;border-radius:50%;"></span>Intervention candidate<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(30,100,220,0.7);border:2px solid #0a3cc8;margin-right:6px;border-radius:50%;"></span>IDW sample point<br/>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.caption("Hover a cell for details.")
+        st.caption("Hover for details.")
         n_high = int((grid_df["heat_risk_score"] >= 0.66).sum())
         n_cand = len(cands)
-        st.markdown(f"**{n_high}** high-risk cells  \n**{n_cand}** intervention candidates")
+        st.markdown(f"**{n_high}** high-risk cells  \n**{n_cand}** candidates")
 
 
 # ── Main panel ─────────────────────────────────────────────────────────────
@@ -327,7 +359,15 @@ def render_heat_panel() -> None:
     t_map, t_browse, t_detail = st.tabs(["🗺️ Map", "📊 Grid table", "🎯 Intervention candidates"])
 
     with t_map:
-        _render_heat_map(dashboard, candidates)
+        _render_heat_map(dashboard, candidates, bbox=bbox, h3_res=h3_res, temp_df=temp_df)
+        st.caption(
+            "**Blue circles** are IDW sample points — virtual grid coordinates queried from "
+            "the OpenMeteo forecast API (or synthesised for demo), not physical weather stations. "
+            "Both live and synthetic data use the same 3×3 sampling grid. "
+            "**Orange circles** mark the top-10 intervention candidates; they cluster near the "
+            "hottest sample points because IDW interpolation peaks at observation locations. "
+            "Enable 'Fetch live data' for real temperature readings across the full grid."
+        )
 
     with t_browse:
         render_section_title("Heat risk grid")
