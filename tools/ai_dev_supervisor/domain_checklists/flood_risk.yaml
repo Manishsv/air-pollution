@@ -161,8 +161,8 @@ checklist_groups:
         path: tests/test_flood_field_tasks.py
         required: true
         category: tests
-      - id: test_flood_dashboard_panel_demo
-        label: Flood dashboard panel demo test
-        path: tests/test_flood_dashboard_panel_demo.py
+      - id: test_flood_pipeline
+        label: Flood pipeline tests
+        path: tests/test_flood_pipeline.py
         required: true
         category: tests

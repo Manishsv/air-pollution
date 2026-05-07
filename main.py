@@ -7,7 +7,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from urban_platform.common.config import load_config
-from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
 from urban_platform.specifications.audit import run_conformance_audit
 from urban_platform.specifications.engine import list_conformance_result_violations
 
@@ -62,24 +61,11 @@ def main() -> None:
 
     cfg = load_config(Path(__file__).parent / "config.yaml")
     logging.getLogger(__name__).info(
-        "Running air-quality MVP for city=%s mode=%s h3r=%s lookback_days=%s horizon=%sh",
+        "Config loaded for city=%s mode=%s h3r=%s",
         cfg.city_name,
         cfg.spatial_mode,
         cfg.h3_resolution,
-        cfg.lookback_days,
-        cfg.forecast_horizon_hours,
     )
-    outputs = run_air_pollution_pipeline(
-        cfg,
-        step=args.step,
-        refresh_scope=args.force_refresh,
-        no_recommendations=bool(args.no_recommendations),
-        sample_mode_override=True if args.sample else None,
-        sensor_siting_mode=args.sensor_siting_mode,
-    )
-    logging.getLogger(__name__).info("Done. Outputs:")
-    for k, v in outputs.items():
-        logging.getLogger(__name__).info("  %s: %s", k, v)
 
 
 if __name__ == "__main__":
