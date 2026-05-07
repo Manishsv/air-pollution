@@ -45,7 +45,7 @@ def _city_selector() -> tuple[str, dict, int, bool]:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="air_h3_res",
                            help="Higher = smaller cells, more detail, slower")
     with c3:
-        live = st.toggle("Live data (cached ≤1h)", value=False, key="air_live_toggle",
+        live = st.toggle("Live data (cached ≤1h)", value=True, key="air_live_toggle",
                          help="Uses CPCB if CPCB_API_KEY is set, otherwise OpenMeteo AQ")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)

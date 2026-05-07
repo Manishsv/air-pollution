@@ -41,7 +41,7 @@ def _city_selector() -> tuple[str, dict, int, bool]:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="heat_h3_res",
                            help="Higher = smaller cells, more detail, slower")
     with c3:
-        live = st.toggle("Live data (cached ≤1h)", value=False, key="heat_live_toggle",
+        live = st.toggle("Live data (cached ≤1h)", value=True, key="heat_live_toggle",
                          help="Uses GEE MODIS LST if GEE_PROJECT is set, otherwise OpenMeteo")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
