@@ -67,15 +67,18 @@ def _render_combined_map(cells_df: pd.DataFrame, city_id: str) -> None:
 
     lat_c, lon_c = _CITY_CENTRES.get(city_id, (20.0, 78.0))
 
+    def _fmt(val) -> str:
+        return f"{val:.2f}" if pd.notna(val) else "n/a"
+
     viz = cells_df.copy()
     viz["fill_color"] = viz["composite_risk_score"].apply(_risk_color)
     viz["tooltip_text"] = viz.apply(
         lambda r: (
             f"H3: {r['h3_id']}\n"
-            f"Composite: {r['composite_risk_score']:.2f}\n"
-            f"Flood: {r['flood_risk_score']:.2f if pd.notna(r.get('flood_risk_score')) else 'n/a'}\n"
-            f"AQI: {r['aqi_score']:.2f if pd.notna(r.get('aqi_score')) else 'n/a'}\n"
-            f"Heat: {r['heat_risk_score']:.2f if pd.notna(r.get('heat_risk_score')) else 'n/a'}"
+            f"Composite: {_fmt(r.get('composite_risk_score'))}\n"
+            f"Flood: {_fmt(r.get('flood_risk_score'))}\n"
+            f"AQI: {_fmt(r.get('aqi_score'))}\n"
+            f"Heat: {_fmt(r.get('heat_risk_score'))}"
         ),
         axis=1,
     )
