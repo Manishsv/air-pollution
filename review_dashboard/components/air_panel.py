@@ -252,8 +252,30 @@ def _render_aq_map(
     layers = [aq_layer]
 
     # ── Layer 2: AQ IDW sample points (blue circles) ──────────────────────
+    # Build H3 cell lookup so station tooltip can show cell AQI
+    cell_lookup = {c["h3_id"]: c for c in cells}
     if not aq_df.empty and "latitude" in aq_df.columns:
-        aq_pts = aq_df[["latitude", "longitude", "pm25_ugm3", "station_id"]].copy()
+        try:
+            import h3
+            def _station_row(row):
+                cell = h3.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                ci = cell_lookup.get(cell, {})
+                return {
+                    "latitude":     row["latitude"],
+                    "longitude":    row["longitude"],
+                    "station_id":   row.get("station_id", ""),
+                    "pm25_ugm3":    f"{row['pm25_ugm3']:.1f}" if row.get("pm25_ugm3") == row.get("pm25_ugm3") else "N/A",
+                    "h3_id":        cell,
+                    "aqi_category": ci.get("aqi_category", ""),
+                    "aqi_score":    f"{ci.get('aqi_score', 0):.3f}",
+                }
+            aq_pts = pd.DataFrame([_station_row(r) for _, r in aq_df.iterrows()])
+        except Exception:
+            aq_pts = aq_df[["latitude", "longitude", "pm25_ugm3", "station_id"]].copy()
+            aq_pts["h3_id"] = ""
+            aq_pts["aqi_category"] = ""
+            aq_pts["aqi_score"] = ""
+
         sample_layer = pdk.Layer(
             "ScatterplotLayer",
             data=aq_pts,
@@ -268,6 +290,10 @@ def _render_aq_map(
         )
         layers.append(sample_layer)
 
+    # Add station placeholder fields to H3 grid layer so tooltip renders cleanly
+    grid_df["station_id"] = ""
+    grid_df["pm25_ugm3"] = ""
+
     # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
     center_lon = (bbox["lon_min"] + bbox["lon_max"]) / 2
@@ -280,7 +306,7 @@ def _render_aq_map(
                         background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;max-width:260px;">
               <b>H3:</b> {h3_id}<br/>
               <b>AQI category:</b> {aqi_category} &nbsp; <b>Score:</b> {aqi_score}<br/>
-              <i style="color:#6ab0ff;">Station {station_id}: {pm25_ugm3} µg/m³ PM2.5</i>
+              <i style="color:#6ab0ff;">{station_id}: {pm25_ugm3} µg/m³ PM2.5</i>
             </div>
         """,
         "style": {"color": "white"},
