@@ -1,0 +1,4 @@
+- task_id: heat-phase0-specs
+  files_changed: []
+  verification_run: false
+  notes: completion record not found in agent output

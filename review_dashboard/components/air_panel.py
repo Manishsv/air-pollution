@@ -1,4 +1,4 @@
-"""Flood Risk Review dashboard panel."""
+"""Air Quality Review dashboard panel."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import pydeck as pdk
 import streamlit as st
 
 from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
-from urban_platform.applications.flood.flood_pipeline import (
-    build_flood_risk_dashboard,
-    build_flood_decision_packets,
+from urban_platform.applications.air.air_pipeline import (
+    build_air_quality_dashboard,
+    build_air_quality_decision_packets,
 )
-from urban_platform.connectors.flood.openmeteo_rainfall import fetch_rainfall_observations
+from urban_platform.connectors.air_quality.openmeteo_aq import fetch_air_quality_observations
 
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -29,7 +29,7 @@ from review_dashboard.formatters import (
 )
 
 
-_LOOKBACK_HOURS = 3
+_LOOKBACK_HOURS = 24
 
 _CITIES = {
     "Bangalore (demo)": ("bangalore_demo", dict(lat_min=12.87, lon_min=77.49, lat_max=13.07, lon_max=77.69)),
@@ -42,22 +42,22 @@ _CITIES = {
 
 def _city_selector() -> tuple[str, dict, int, bool]:
     with st.sidebar:
-        st.markdown("### Flood Risk Settings")
-        city_label = st.selectbox("City", list(_CITIES.keys()), key="flood_city_selector")
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="flood_h3_res",
+        st.markdown("### Air Quality Settings")
+        city_label = st.selectbox("City", list(_CITIES.keys()), key="air_city_selector")
+        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="air_h3_res",
                            help="Higher = smaller cells, more detail, slower")
-        live = st.toggle("Fetch live data from OpenMeteo", value=False, key="flood_live_toggle",
-                         help="Real HTTP call to api.open-meteo.com — no API key needed")
+        live = st.toggle("Fetch live data from OpenMeteo AQ", value=False, key="air_live_toggle",
+                         help="Real HTTP call to air-quality-api.open-meteo.com — no API key needed")
     city_id, bbox = _CITIES[city_label]
     return city_id, bbox, h3_res, live
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300, show_spinner="Fetching rainfall data from OpenMeteo…")
-def _load_live_rainfall(city_id: str, lat_min: float, lon_min: float,
-                        lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
-    return fetch_rainfall_observations(
+@st.cache_data(ttl=300, show_spinner="Fetching air quality data from OpenMeteo…")
+def _load_live_aq(city_id: str, lat_min: float, lon_min: float,
+                  lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
+    return fetch_air_quality_observations(
         city_name=city_id,
         lat_min=lat_min, lon_min=lon_min,
         lat_max=lat_max, lon_max=lon_max,
@@ -65,69 +65,47 @@ def _load_live_rainfall(city_id: str, lat_min: float, lon_min: float,
     )
 
 
-def _synthetic_rainfall(bbox: dict) -> pd.DataFrame:
-    """3×3 grid of synthetic rainfall matching OpenMeteo's sampling pattern.
+def _synthetic_aq(bbox: dict) -> pd.DataFrame:
+    """3×3 grid of synthetic AQ observations.
 
-    NE corner is the storm cell (45 mm/hr), creating a flood risk gradient
-    across the city with two elevated-risk clusters at center and NE corner.
+    SW corner industrial (heavy pollution), NE corner cleaner.
     """
     lats = [bbox["lat_min"], (bbox["lat_min"] + bbox["lat_max"]) / 2, bbox["lat_max"]]
     lons = [bbox["lon_min"], (bbox["lon_min"] + bbox["lon_max"]) / 2, bbox["lon_max"]]
     # [lat_row][lon_col]: south→north rows, west→east columns
-    intensities = [
-        [0.5,  2.0,  5.0],   # south: mostly dry
-        [1.5,  4.0, 15.0],   # center: moderate in NE direction
-        [3.0, 18.0, 45.0],   # north: heavy storm cell at NE corner
+    pm25_vals = [
+        [145.0, 95.0, 65.0],   # south: very_poor SW, poor, moderate
+        [110.0, 75.0, 45.0],   # center: poor, moderate, satisfactory
+        [80.0,  50.0, 25.0],   # north: poor, satisfactory, good NE corner
     ]
     rows = []
     for i, lat in enumerate(lats):
         for j, lon in enumerate(lons):
-            r = intensities[i][j]
+            pm25 = pm25_vals[i][j]
             rows.append({
                 "station_id": f"demo_{lat:.3f}_{lon:.3f}",
                 "latitude": lat, "longitude": lon,
                 "timestamp": "2026-05-07T06:00:00Z",
-                "rainfall_intensity_mm_per_hr": r,
-                "rainfall_accumulation_3h_mm": round(r * 3, 1),
-                "data_source": "openmeteo",
+                "pm25_ugm3": pm25,
+                "pm10_ugm3": round(pm25 * 1.6, 1),
+                "european_aqi": None,
+                "data_source": "openmeteo_aq",
                 "quality_flag": "real",
             })
     return pd.DataFrame(rows)
 
 
-def _synthetic_incidents(bbox: dict) -> pd.DataFrame:
-    """A few waterlogging incidents near the storm cell (NE corner)."""
-    lat_max, lon_max = bbox["lat_max"], bbox["lon_max"]
-    lat_mid = (bbox["lat_min"] + lat_max) / 2
-    lon_mid = (bbox["lon_min"] + lon_max) / 2
-    return pd.DataFrame([
-        {"latitude": lat_max - 0.01, "longitude": lon_max - 0.02,
-         "severity": "high", "incident_type": "waterlogging", "quality_flag": "unverified"},
-        {"latitude": lat_max - 0.03, "longitude": lon_max - 0.05,
-         "severity": "high", "incident_type": "road_flooding", "quality_flag": "unverified"},
-        {"latitude": lat_mid + 0.02, "longitude": lon_mid + 0.03,
-         "severity": "moderate", "incident_type": "waterlogging", "quality_flag": "unverified"},
-    ])
-
-
-def _synthetic_assets(bbox: dict) -> pd.DataFrame:
-    """Distributed drainage assets across the city."""
-    lat_min, lat_max = bbox["lat_min"], bbox["lat_max"]
-    lon_min, lon_max = bbox["lon_min"], bbox["lon_max"]
-    lat_mid = (lat_min + lat_max) / 2
-    lon_mid = (lon_min + lon_max) / 2
-    return pd.DataFrame([
-        {"latitude": lat_mid - 0.04, "longitude": lon_mid - 0.03, "asset_type": "drain"},
-        {"latitude": lat_mid + 0.05, "longitude": lon_mid - 0.04, "asset_type": "drain"},
-        {"latitude": lat_min + 0.03, "longitude": lon_min + 0.05, "asset_type": "pump_station"},
-        {"latitude": lat_max - 0.05, "longitude": lon_min + 0.04, "asset_type": "drain"},
-    ])
-
-
 # ── Colour helpers ─────────────────────────────────────────────────────────
 
-def _flood_risk_emoji(level: str) -> str:
-    return {"low": "🟢", "moderate": "🟡", "high": "🟠", "severe": "🔴"}.get(level, "⚪")
+def _aqi_emoji(cat: str) -> str:
+    return {
+        "good": "🟢",
+        "satisfactory": "🟡",
+        "moderate": "🟠",
+        "poor": "🔴",
+        "very_poor": "🟣",
+        "severe": "⚫",
+    }.get(cat, "⚪")
 
 
 _STATUS_STYLE = {
@@ -215,21 +193,23 @@ def _render_evidence_chain(packet: dict) -> None:
                 st.caption(f"Algorithm: {algo} · Data quality: {trace.get('data_quality_flag', '—')}")
 
 
-# ── Map rendering ──────────────────────────────────────────────────────────
+# ── AQI color map ──────────────────────────────────────────────────────────
 
-_FLOOD_COLOR_MAP = {
-    "low":      [30, 120, 220, 160],
-    "moderate": [240, 170, 30, 180],
-    "high":     [220, 60, 20, 200],
-    "severe":   [140, 10, 10, 220],
+_AQI_COLOR_MAP = {
+    "good":         [34, 139, 34, 180],
+    "satisfactory": [144, 238, 0, 180],
+    "moderate":     [255, 215, 0, 190],
+    "poor":         [255, 140, 0, 200],
+    "very_poor":    [200, 40, 40, 210],
+    "severe":       [128, 0, 32, 230],
 }
 
 
-def _render_flood_map(
+# ── Map rendering ──────────────────────────────────────────────────────────
+
+def _render_aq_map(
     dashboard: dict,
-    rainfall_df: pd.DataFrame,
-    incidents_df: pd.DataFrame,
-    assets_df: pd.DataFrame,
+    aq_df: pd.DataFrame,
     bbox: dict,
     h3_res: int,
 ) -> None:
@@ -238,20 +218,18 @@ def _render_flood_map(
         st.info("No H3 cells to display.")
         return
 
-    # ── Layer 1: Flood risk grid (all cells, coloured by risk level) ──────
+    # ── Layer 1: AQ grid (all cells, coloured by AQI category) ───────────
     grid_df = pd.DataFrame([
         {
             "h3_id": c["h3_id"],
-            "flood_risk_score": c.get("flood_risk_score") or 0.0,
-            "risk_level": c.get("risk_level", "low"),
-            "rainfall_mm_per_hr": c.get("rainfall_mm_per_hr"),
-            "incident_count": c.get("incident_count", 0),
-            "color": _FLOOD_COLOR_MAP.get(c.get("risk_level", "low"), [30, 120, 220, 160]),
+            "aqi_score": c.get("aqi_score") or 0.0,
+            "aqi_category": c.get("aqi_category", "good"),
+            "color": _AQI_COLOR_MAP.get(c.get("aqi_category", "good"), [128, 128, 128, 150]),
         }
         for c in cells
     ])
 
-    risk_layer = pdk.Layer(
+    aq_layer = pdk.Layer(
         "H3HexagonLayer",
         data=grid_df,
         get_hexagon="h3_id",
@@ -261,17 +239,16 @@ def _render_flood_map(
         pickable=True,
         extruded=False,
         opacity=0.75,
-        id="flood_grid",
+        id="aq_grid",
     )
-    layers = [risk_layer]
+    layers = [aq_layer]
 
-    # ── Layer 2: Rainfall IDW sample points (blue circles) ────────────────
-    # OpenMeteo is a forecast API queried at a 3×3 virtual grid — not rain gauges.
-    if not rainfall_df.empty and "latitude" in rainfall_df.columns:
-        rain_layer = pdk.Layer(
+    # ── Layer 2: AQ IDW sample points (blue circles) ──────────────────────
+    if not aq_df.empty and "latitude" in aq_df.columns:
+        aq_pts = aq_df[["latitude", "longitude", "pm25_ugm3", "station_id"]].copy()
+        sample_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=rainfall_df[["latitude", "longitude",
-                               "rainfall_intensity_mm_per_hr", "station_id"]].copy(),
+            data=aq_pts,
             get_position=["longitude", "latitude"],
             get_radius=400,
             radius_min_pixels=5,
@@ -279,46 +256,9 @@ def _render_flood_map(
             get_line_color=[10, 60, 200, 255],
             line_width_min_pixels=2,
             stroked=True, filled=True, pickable=True,
-            id="rainfall_points",
+            id="aq_sample_points",
         )
-        layers.append(rain_layer)
-
-    # ── Layer 3: Waterlogging incidents (red/orange circles) ──────────────
-    if not incidents_df.empty and "latitude" in incidents_df.columns:
-        _sev_color = {"high": [220, 40, 20, 220], "moderate": [240, 140, 20, 200]}
-        inc_df = incidents_df.copy()
-        inc_df["color"] = inc_df["severity"].apply(
-            lambda s: _sev_color.get(str(s).lower(), [200, 100, 20, 180])
-        )
-        inc_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=inc_df,
-            get_position=["longitude", "latitude"],
-            get_radius=600,
-            radius_min_pixels=7,
-            get_fill_color="color",
-            get_line_color=[100, 0, 0, 255],
-            line_width_min_pixels=2,
-            stroked=True, filled=True, pickable=True,
-            id="incidents",
-        )
-        layers.append(inc_layer)
-
-    # ── Layer 4: Drainage assets (green circles) ──────────────────────────
-    if not assets_df.empty and "latitude" in assets_df.columns:
-        asset_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=assets_df,
-            get_position=["longitude", "latitude"],
-            get_radius=300,
-            radius_min_pixels=4,
-            get_fill_color=[20, 180, 80, 180],
-            get_line_color=[10, 100, 40, 255],
-            line_width_min_pixels=2,
-            stroked=True, filled=True, pickable=True,
-            id="assets",
-        )
-        layers.append(asset_layer)
+        layers.append(sample_layer)
 
     # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
@@ -331,10 +271,8 @@ def _render_flood_map(
             <div style="font-family:sans-serif;font-size:12px;padding:4px 8px;
                         background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;max-width:260px;">
               <b>H3:</b> {h3_id}<br/>
-              <b>Risk level:</b> {risk_level} &nbsp; <b>Score:</b> {flood_risk_score}<br/>
-              <b>Rainfall:</b> {rainfall_mm_per_hr} mm/hr<br/>
-              <b>Incidents:</b> {incident_count}<br/>
-              <i style="color:#6ab0ff;">Station {station_id}: {rainfall_intensity_mm_per_hr} mm/hr</i>
+              <b>AQI category:</b> {aqi_category} &nbsp; <b>Score:</b> {aqi_score}<br/>
+              <i style="color:#6ab0ff;">Station {station_id}: {pm25_ugm3} µg/m³ PM2.5</i>
             </div>
         """,
         "style": {"color": "white"},
@@ -357,81 +295,75 @@ def _render_flood_map(
         st.markdown(
             """
             <div style="font-size:12px;line-height:1.9;">
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(30,120,220,0.65);
-                         margin-right:6px;border-radius:2px;"></span>Low risk<br/>
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(240,170,30,0.75);
-                         margin-right:6px;border-radius:2px;"></span>Moderate risk<br/>
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(220,60,20,0.8);
-                         margin-right:6px;border-radius:2px;"></span>High risk<br/>
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(140,10,10,0.9);
-                         margin-right:6px;border-radius:2px;"></span>Severe risk<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(34,139,34,0.7);
+                         margin-right:6px;border-radius:2px;"></span>Good (0–30 µg/m³)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(144,238,0,0.7);
+                         margin-right:6px;border-radius:2px;"></span>Satisfactory (30–60)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(255,215,0,0.75);
+                         margin-right:6px;border-radius:2px;"></span>Moderate (60–90)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(255,140,0,0.8);
+                         margin-right:6px;border-radius:2px;"></span>Poor (90–120)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(200,40,40,0.85);
+                         margin-right:6px;border-radius:2px;"></span>Very Poor (120–250)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(128,0,32,0.9);
+                         margin-right:6px;border-radius:2px;"></span>Severe (&gt;250)<br/>
             <hr style="margin:6px 0;"/>
             <span style="display:inline-block;width:12px;height:12px;background:rgba(30,100,220,0.7);
-                         border:2px solid #0a3cc8;margin-right:6px;border-radius:50%;"></span>Rainfall IDW point<br/>
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(220,40,20,0.85);
-                         border:2px solid #640000;margin-right:6px;border-radius:50%;"></span>Waterlogging incident<br/>
-            <span style="display:inline-block;width:12px;height:12px;background:rgba(20,180,80,0.7);
-                         border:2px solid #0a6428;margin-right:6px;border-radius:50%;"></span>Drainage asset<br/>
+                         border:2px solid #0a3cc8;margin-right:6px;border-radius:50%;"></span>AQ IDW sample point<br/>
             </div>
             """,
             unsafe_allow_html=True,
         )
         st.caption("Hover for details.")
-        n_severe = sum(1 for c in cells if c.get("risk_level") == "severe")
-        n_high = sum(1 for c in cells if c.get("risk_level") == "high")
-        st.markdown(f"**{n_severe}** severe cells  \n**{n_high}** high-risk cells")
+        n_severe = sum(1 for c in cells if c.get("aqi_category") == "severe")
+        n_vpoor = sum(1 for c in cells if c.get("aqi_category") == "very_poor")
+        n_poor = sum(1 for c in cells if c.get("aqi_category") == "poor")
+        st.markdown(f"**{n_severe}** severe cells  \n**{n_vpoor}** very poor cells  \n**{n_poor}** poor cells")
 
 
 # ── Main panel ─────────────────────────────────────────────────────────────
 
-def render_flood_panel() -> None:
+def render_air_panel() -> None:
     city_id, bbox, h3_res, live = _city_selector()
 
     render_domain_header(
-        title="Flood Risk Review",
+        title="Air Quality Review",
         caption=(
-            "Per-H3-cell flood risk scores combining IDW-interpolated rainfall intensity, "
-            "waterlogging incidents, and drainage asset coverage. Review-support only."
+            "Per-H3-cell India AQI scores based on IDW-interpolated PM2.5 from "
+            "OpenMeteo Air Quality API. Review-support only."
         ),
         primary_alert=(
-            "**Decision support only.** Flood risk scores are IDW-interpolated estimates. "
-            "Field verification and human protocol required before any emergency response."
+            "**Decision support only.** AQI scores are IDW-interpolated estimates. "
+            "Human review required before any public health communications or emergency response."
         ),
         primary_alert_kind="error",
     )
 
     # ── Load data ──────────────────────────────────────────────────────────
-    with st.spinner("Building flood risk grid…"):
+    with st.spinner("Building air quality grid…"):
         if live:
-            rainfall_df = _load_live_rainfall(
+            aq_df = _load_live_aq(
                 city_id, bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"],
                 lookback_hours=_LOOKBACK_HOURS,
             )
-            if rainfall_df.empty:
-                st.warning("OpenMeteo returned no rainfall data. Falling back to synthetic demo data.")
-                rainfall_df = _synthetic_rainfall(bbox)
-                data_note = "synthetic (OpenMeteo call failed)"
+            if aq_df.empty:
+                st.warning("OpenMeteo AQ returned no data. Falling back to synthetic demo data.")
+                aq_df = _synthetic_aq(bbox)
+                data_note = "synthetic (OpenMeteo AQ call failed)"
             else:
-                data_note = f"live OpenMeteo ({len(rainfall_df)} records)"
+                data_note = f"live OpenMeteo AQ ({len(aq_df)} records)"
         else:
-            rainfall_df = _synthetic_rainfall(bbox)
-            data_note = "synthetic demo (toggle 'Fetch live data' in sidebar for real rainfall)"
+            aq_df = _synthetic_aq(bbox)
+            data_note = "synthetic demo (toggle 'Fetch live data' in sidebar for real AQ)"
 
-        incidents_df = _synthetic_incidents(bbox)
-        assets_df = _synthetic_assets(bbox)
-
-        dashboard = build_flood_risk_dashboard(
-            rainfall_df=rainfall_df,
-            incidents_df=incidents_df,
-            assets_df=assets_df,
+        dashboard = build_air_quality_dashboard(
+            aq_df=aq_df,
             h3_resolution=h3_res,
             city_id=city_id,
             **bbox,
         )
-        packets = build_flood_decision_packets(
-            rainfall_df=rainfall_df,
-            incidents_df=incidents_df,
-            assets_df=assets_df,
+        packets = build_air_quality_decision_packets(
+            aq_df=aq_df,
             h3_resolution=h3_res,
             city_id=city_id,
             **bbox,
@@ -440,73 +372,70 @@ def render_flood_panel() -> None:
 
     # Schema validation
     validator_for_schema_file(
-        str((SPEC_ROOT / "consumer_contracts" / "flood_risk_dashboard.v1.schema.json").resolve())
+        str((SPEC_ROOT / "consumer_contracts" / "air_quality_dashboard.v1.schema.json").resolve())
     ).validate(dashboard)
     for p in packets:
         validator_for_schema_file(
-            str((SPEC_ROOT / "consumer_contracts" / "flood_decision_packet.v1.schema.json").resolve())
+            str((SPEC_ROOT / "consumer_contracts" / "air_quality_decision_packet.v1.schema.json").resolve())
         ).validate(p)
 
     # ── Context metrics ────────────────────────────────────────────────────
     rs = dashboard.get("risk_summary", {})
     cells = dashboard.get("risk_cells", [])
+    summary = dashboard.get("summary", {})
     render_context_metrics(
         ("City", city_id),
         ("H3 resolution", str(h3_res)),
         ("Total cells", str(len(cells))),
-        ("Severe/high cells", str(sum(1 for c in cells if c.get("risk_level") in ("severe", "high")))),
-        ("Overall risk", str(rs.get("overall_risk_level", "—"))),
-        ("Data quality flag", dashboard.get("data_quality_flag", "—")),
-        ("Packets reviewed", str(len(packets))),
+        ("Poor+ cells", str(sum(1 for c in cells if c.get("aqi_category") in ("poor", "very_poor", "severe")))),
+        ("Overall AQI category", str(rs.get("overall_aqi_category", "—"))),
+        ("Max PM2.5 (µg/m³)", f"{summary.get('max_pm25_ugm3') or 0:.1f}"),
         ("Data source", data_note),
+        ("Quality flag", dashboard.get("data_quality_flag", "—")),
     )
 
     for w in dashboard.get("active_warnings", []):
         sev = str(w.get("severity", "info")).lower()
         msg = f"**{humanize_warning_id(str(w.get('warning_id', '')))}** — {w.get('message', '')}"
-        (st.error if sev == "high" else st.warning if sev == "medium" else st.info)(msg)
+        (st.error if sev == "error" else st.warning if sev == "warning" else st.info)(msg)
 
     st.divider()
 
     # ── Tabs: Map / Grid table / Decision packets ──────────────────────────
-    t_map, t_browse, t_detail = st.tabs(["🗺️ Map", "📊 Risk grid", "🎯 Decision packets"])
+    t_map, t_browse, t_detail = st.tabs(["🗺️ Map", "📊 AQI grid", "🎯 Decision packets"])
 
     with t_map:
-        _render_flood_map(dashboard, rainfall_df, incidents_df, assets_df, bbox=bbox, h3_res=h3_res)
+        _render_aq_map(dashboard, aq_df, bbox=bbox, h3_res=h3_res)
         st.caption(
             "**Blue circles** are IDW sample points — virtual grid coordinates queried from "
-            "the OpenMeteo forecast API (or synthesised for demo), not physical rain gauges. "
-            "**Red/orange circles** are reported waterlogging incidents. "
-            "**Green circles** are drainage infrastructure assets. "
-            "H3 cells are coloured by flood risk score: "
-            "blue (low) → orange (moderate) → red (high) → dark red (severe)."
+            "the OpenMeteo Air Quality API (or synthesised for demo), not physical sensors. "
+            "H3 cells are coloured by India AQI category: "
+            "green (good) → yellow-green (satisfactory) → yellow (moderate) → "
+            "orange (poor) → red (very poor) → maroon (severe)."
         )
 
     with t_browse:
-        render_section_title("Flood risk grid")
+        render_section_title("Air quality grid")
         if cells:
             rows = [
                 {
-                    "Risk": _flood_risk_emoji(c.get("risk_level", "low")),
+                    "AQI": _aqi_emoji(c.get("aqi_category", "good")),
                     "H3 cell": str(c.get("h3_id", ""))[:16] + "…",
-                    "Rainfall (mm/hr)": c.get("rainfall_mm_per_hr"),
-                    "Incidents": c.get("incident_count", 0),
-                    "Drainage assets": c.get("asset_count", 0),
-                    "Risk score": f"{c.get('flood_risk_score', 0) or 0:.3f}",
-                    "Risk level": c.get("risk_level", "—"),
+                    "AQI category": c.get("aqi_category", "—"),
+                    "AQI score": f"{c.get('aqi_score') or c.get('confidence_score', 0) or 0:.3f}",
                 }
                 for c in cells
             ]
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-            render_section_title("Risk score distribution")
-            score_df = pd.DataFrame({"flood_risk_score": [c.get("flood_risk_score", 0) or 0 for c in cells]})
-            st.bar_chart(score_df, y="flood_risk_score", height=200)
+            render_section_title("AQI score distribution")
+            score_df = pd.DataFrame({"aqi_score": [c.get("confidence_score", 0) or 0 for c in cells]})
+            st.bar_chart(score_df, y="aqi_score", height=200)
         else:
             st.info("No H3 cells generated.")
 
     with t_detail:
-        render_section_title("Decision packets (top-10 highest risk)")
+        render_section_title("Decision packets (top-10 highest AQI)")
         if not packets:
             st.info("No decision packets generated.")
         else:
@@ -514,7 +443,7 @@ def render_flood_panel() -> None:
                 {
                     "Packet ID": str(p.get("packet_id") or ""),
                     "H3 cell": str(p.get("h3_id") or "")[:16] + "…",
-                    "Risk level": str((p.get("risk_assessment") or {}).get("risk_level") or "—"),
+                    "AQI category": str((p.get("aqi_assessment") or {}).get("aqi_category") or "—"),
                     "Field verification": "Yes" if p.get("field_verification_required") else "No",
                     "Rec. allowed": "Yes" if (p.get("confidence") or {}).get("recommendation_allowed") else "No",
                 }
@@ -525,15 +454,15 @@ def render_flood_panel() -> None:
             render_section_title("Drill-down")
             ids = [str(p.get("packet_id")) for p in packets if p.get("packet_id")]
             sel = st.selectbox("Select a packet for details", options=ids, index=0,
-                               key="flood_selected_packet")
+                               key="air_selected_packet")
             selected = next((p for p in packets if str(p.get("packet_id")) == sel), None)
             if selected:
-                ra = selected.get("risk_assessment") or {}
+                aa = selected.get("aqi_assessment") or {}
                 conf = selected.get("confidence") or {}
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Risk level", str(ra.get("risk_level", "—")))
-                    st.metric("Primary driver", str(ra.get("primary_driver", "—")))
+                    st.metric("AQI category", str(aa.get("aqi_category", "—")))
+                    st.metric("Primary pollutant", str(aa.get("primary_pollutant", "—")))
                 with col2:
                     st.metric("Confidence score", f"{conf.get('confidence_score', 0):.3f}")
                     st.metric("Field verification required",
@@ -569,5 +498,5 @@ def render_flood_panel() -> None:
 
     render_technical_json_expander(
         title="Technical: Raw contract payloads",
-        payload={"flood_risk_dashboard": dashboard, "flood_decision_packets": packets},
+        payload={"air_quality_dashboard": dashboard, "air_quality_decision_packets": packets},
     )

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/air_quality_decision_packet",
+  "title": "Consumer contract: air quality decision packet (v1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["packet_id", "domain_id", "h3_id", "timestamp", "aqi_assessment", "evidence", "safety_gates", "blocked_uses", "field_verification_required", "confidence", "review_guidance"],
+  "properties": {
+    "packet_id": { "type": "string", "minLength": 1 },
+    "domain_id": { "type": "string", "minLength": 1 },
+    "h3_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "aqi_assessment": {
+      "type": "object", "additionalProperties": true,
+      "required": ["aqi_category", "primary_pollutant"],
+      "properties": {
+        "aqi_category": { "type": "string", "minLength": 1 },
+        "primary_pollutant": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence": { "type": "object", "additionalProperties": true },
+    "safety_gates": { "type": "array", "minItems": 1 },
+    "blocked_uses": { "type": "array", "minItems": 1 },
+    "field_verification_required": { "type": "boolean" },
+    "confidence": {
+      "type": "object", "additionalProperties": true,
+      "required": ["confidence_score", "recommendation_allowed"],
+      "properties": {
+        "confidence_score": { "type": ["number", "null"] },
+        "recommendation_allowed": { "type": "boolean" }
+      }
+    },
+    "review_guidance": {
+      "type": "object", "additionalProperties": true,
+      "required": ["review_prompts", "when_not_to_act"]
+    }
+  }
+}

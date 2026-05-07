@@ -1,0 +1,45 @@
+app_id: air_quality_review
+name: Air Quality Review
+version: v1
+status: draft_demo
+domain_id: air_quality
+description: >
+  Review-support app for air quality situational awareness and triage. Produces
+  dashboard payloads and decision packets based on PM2.5/PM10 IDW-interpolated
+  from OpenMeteo Air Quality API across an H3 grid.
+app_type: review_support
+input_contracts:
+  - provider_air_quality_observation_feed
+output_contracts:
+  - consumer_air_quality_dashboard
+  - consumer_air_quality_decision_packet
+decision_logic:
+  builder_ids:
+    - air_quality_dashboard
+    - air_quality_decision_packets
+  description: >
+    IDW-interpolates PM2.5 observations across H3 cells, classifies by India AQI
+    bands, and produces review packets. Final decisions remain with authorized reviewers.
+  execution_model: allowlisted_python_builder
+deployment_examples:
+  - deployment_id: air_quality_local_demo
+    path: deployments/examples/air_quality_local_demo
+dashboard:
+  panels:
+    - Air Quality panel
+  supports_file_mode: true
+  supports_api_mode: false
+safety:
+  review_support_only: true
+  human_review_required: true
+  blocked_uses:
+    - automatic_public_health_advisory_without_review
+    - emergency_closure_orders_without_human_authorization
+    - replace_official_cpcb_aqi_readings
+  notes:
+    - Decision support only; IDW estimates are not official AQI readings.
+    - Human review required before public health communications.
+provenance:
+  publisher: AirOS repository
+  updated_at: "2026-05-07T00:00:00Z"
+  source: specifications/app_descriptors/air_quality_review.v1.yaml

@@ -6,10 +6,12 @@ No modeling or dashboard logic lives here.
 """
 
 from .ingest_file import ingest_drainage_asset_feed_json, ingest_flood_incident_feed_json, ingest_rainfall_observation_feed_json
+from .openmeteo_rainfall import fetch_rainfall_observations
 
 __all__ = [
     "ingest_rainfall_observation_feed_json",
     "ingest_flood_incident_feed_json",
     "ingest_drainage_asset_feed_json",
+    "fetch_rainfall_observations",
 ]
 

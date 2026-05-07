@@ -243,6 +243,18 @@
       "schema_path": "consumer_contracts/field_verification_task.v1.schema.json",
       "stability": "documented"
     },
+    "consumer_air_quality_dashboard": {
+      "description": "Consumer contract: air quality dashboard payload (situational awareness + review queue, PM2.5-based India AQI).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/air_quality_dashboard.v1.schema.json",
+      "stability": "draft_demo"
+    },
+    "consumer_air_quality_decision_packet": {
+      "description": "Consumer contract: air quality decision packet (domain_id=air_quality, India AQI bands).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/air_quality_decision_packet.v1.schema.json",
+      "stability": "draft_demo"
+    },
     "consumer_property_building_dashboard": {
       "description": "Consumer contract: built-environment change dashboard (domain_id=property_buildings; open-data MVP path).",
       "contract_type": "consumer",
