@@ -1,28 +1,37 @@
-# AirOS — DIGIT3 Module Specification
+# AIROS Platform — DIGIT3 Infrastructure Specification
 
 ## 1. Purpose
 
-This document specifies how AirOS integrates with DIGIT3 as a domain module.
-It defines: which DIGIT3 services AirOS consumes, which APIs AirOS exposes back
-to the platform, the data contracts at each boundary, and the integration
-roadmap.
+DIGIT3 is the infrastructure layer embedded within AIROS. This document
+specifies how AIROS configures and uses DIGIT3 services — which services it
+depends on, the exact API calls at each boundary, the data contracts, and the
+provisioning sequence for a new city deployment.
 
-The target audience is AirOS engineers and DIGIT3 platform teams evaluating
-AirOS for deployment on city urban platforms.
+AIROS is the platform. DIGIT3 is its foundation. A city deploys AIROS and
+receives a fully-working urban climate platform; DIGIT3 is an implementation
+detail of that deployment, not its host.
+
+See [`AIR_PLATFORM_ARCHITECTURE.md`](AIR_PLATFORM_ARCHITECTURE.md) for the
+full three-layer positioning (AIROS / AIRNet / AIR Climate Suite).
 
 ---
 
-## 2. Module identity
+## 2. AIROS identity within DIGIT3
+
+AIROS registers itself with DIGIT3's Studio service so that DIGIT3 tooling
+(dashboards, audit, service discovery) can locate and manage it. This
+registration does not make AIROS subordinate to DIGIT3 — it is the mechanism
+by which AIROS declares its API surface and governance bindings to the
+infrastructure layer it runs on.
 
 | Field | Value |
 |-------|-------|
-| **Module code** | `airos` |
-| **Module name** | AirOS — Urban Climate Decision Support |
+| **Service code** | `airos` |
+| **Service name** | AIROS — Urban Climate Platform |
 | **Module type** | `GOVERNANCE` |
 | **Version** | `1.0.0` |
 | **API base path** | `/airos/v1` |
-| **Dependencies** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `governance`, `account` |
-| **Publisher** | AirOS |
+| **DIGIT3 services used** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `governance`, `account` |
 
 **Studio service registration** — full `serviceDefinition` (called once per city deployment):
 
@@ -33,12 +42,12 @@ X-Client-ID: airos-admin
 
 {
   "serviceCode": "airos",
-  "name": "AirOS — Urban Climate Decision Support",
+  "name": "AIROS — Urban Climate Platform",
   "moduleType": "GOVERNANCE",
   "status": "ACTIVE",
   "metadata": {
     "version": "1.0.0",
-    "description": "Climate risk monitoring, ward-level quality-of-life scoring, and decision support for ward engineers and city administrators.",
+    "description": "Urban climate decision platform — ward-level QoL scoring, multi-domain decision packets, officer Decision Inbox, and governance accountability for the AIR Climate Suite.",
     "apiBaseUrl": "http://airos:8200",
     "domains": ["air", "flood", "heat"],
     "dependencies": ["boundary", "workflow", "notification", "registry", "idgen", "governance", "account"]
