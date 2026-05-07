@@ -364,6 +364,13 @@ def run_flood_pipeline(
 
     risk_cells = pd.DataFrame(rows)
 
+    try:
+        from urban_platform.feature_store.writer import FeatureStoreWriter
+        with FeatureStoreWriter() as fsw:
+            fsw.write_flood_features(risk_cells, city_id=city_id, data_quality_flag=dqf)
+    except Exception as _fse:
+        logger.warning("feature_store write skipped: %s", _fse)
+
     counts = risk_cells["risk_level"].value_counts().to_dict()
     return {
         "risk_cells": risk_cells,

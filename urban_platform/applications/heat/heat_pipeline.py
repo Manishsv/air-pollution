@@ -210,6 +210,14 @@ def run_heat_pipeline(
     else:
         dq_flag = "real"
 
+    if not merged.empty:
+        try:
+            from urban_platform.feature_store.writer import FeatureStoreWriter
+            with FeatureStoreWriter() as fsw:
+                fsw.write_heat_features(merged, city_id=city_id, data_quality_flag=dq_flag)
+        except Exception as _fse:
+            logger.warning("feature_store write skipped: %s", _fse)
+
     return {
         "heat_cells": merged,
         "data_quality_flag": dq_flag,
