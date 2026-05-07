@@ -1,463 +1,436 @@
-# AirOS task queue — machine-readable control state for the agentic framework.
-# Human-readable summary: docs/EXECUTION_TRACKER.md
-# Schema: agentic/schemas/task.schema.yaml
-#
-# Status values: ready | in_progress | blocked | done | rejected | deferred
-# The loop executes the first task with status: ready.
-
 current_track: urban-heat-risk
-
 tasks:
+- task_id: sdk-program-reporting-walkthrough
+  type: docs_edit
+  scope_description: 'Add Program Reporting SDK walkthrough doc, read-only example
+    script, and tests using only the documented SDK surface.
 
-  # ── Completed ────────────────────────────────────────────────────────────
+    '
+  allowed_files:
+  - docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md
+  - examples/sdk/program_reporting_walkthrough.py
+  - tests/test_sdk_program_reporting_walkthrough.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify runtime code
+  - modify specification contracts
+  success_criteria:
+  - walkthrough doc exists and covers all five SDK sections
+  - example script runs without error from repo root
+  - 18 new tests all pass
+  - tracker updated with commit hash
+  escalation_conditions:
+  - allowed files are insufficient
+  - verification fails after two attempts
+  status: done
+  commit: e860b89
+- task_id: code-review-triage
+  type: docs_edit
+  scope_description: 'Classify code review findings F-01 through F-20 and record owner
+    decisions on Q1 through Q10.
 
-  - task_id: sdk-program-reporting-walkthrough
-    type: docs_edit
-    scope_description: >
-      Add Program Reporting SDK walkthrough doc, read-only example script,
-      and tests using only the documented SDK surface.
-    allowed_files:
-      - docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md
-      - examples/sdk/program_reporting_walkthrough.py
-      - tests/test_sdk_program_reporting_walkthrough.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify runtime code
-      - modify specification contracts
-    success_criteria:
-      - walkthrough doc exists and covers all five SDK sections
-      - example script runs without error from repo root
-      - 18 new tests all pass
-      - tracker updated with commit hash
-    escalation_conditions:
-      - allowed files are insufficient
-      - verification fails after two attempts
-    status: done
-    commit: e860b89
+    '
+  allowed_files:
+  - docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify runtime code
+  - modify schemas
+  - modify tests
+  success_criteria:
+  - triage doc classifies all 20 findings
+  - owner decisions recorded for all 10 questions
+  - tracker updated
+  escalation_conditions:
+  - owner decision cannot be inferred and requires explicit input
+  status: done
+  commit: b7c21ee
+- task_id: agentic-phase0-schemas
+  type: docs_edit
+  scope_description: 'Create the agentic/ framework folder with four schemas, examples,
+    role templates, protocol docs, setup guide, AirOS project config, and initial
+    tasks.yaml.
 
-  - task_id: code-review-triage
-    type: docs_edit
-    scope_description: >
-      Classify code review findings F-01 through F-20 and record owner
-      decisions on Q1 through Q10.
-    allowed_files:
-      - docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify runtime code
-      - modify schemas
-      - modify tests
-    success_criteria:
-      - triage doc classifies all 20 findings
-      - owner decisions recorded for all 10 questions
-      - tracker updated
-    escalation_conditions:
-      - owner decision cannot be inferred and requires explicit input
-    status: done
-    commit: b7c21ee
+    '
+  allowed_files:
+  - agentic/
+  - .agent-loop/config.yaml
+  - .agent-loop/state/tasks.yaml
+  - agents/roles/implementation_agent.md
+  - agents/roles/qa_agent.md
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify runtime code
+  - modify specification contracts
+  - modify existing tests
+  - commit without tracker update
+  success_criteria:
+  - agentic/schemas/ contains four schema files (task, review, escalation, decision)
+  - each schema has a corresponding example in agentic/schemas/examples/
+  - agentic/docs/PROTOCOLS.md documents all four protocols
+  - agentic/docs/SETUP.md provides a new-project adoption guide
+  - agentic/roles/templates/ contains implementation_agent.md and qa_agent.md
+  - .agent-loop/config.yaml exists with AirOS project settings
+  - .agent-loop/state/tasks.yaml exists and contains at least one task per status
+  - agents/roles/ contains AirOS-specific role definitions
+  - existing tasks in the tracker can be expressed in task.schema.yaml
+  - docs/EXECUTION_TRACKER.md updated and tracker closed for SDK track
+  escalation_conditions:
+  - existing tracker tasks cannot be expressed in the schema without losing information
+  - schema design conflict requires owner decision
+  status: done
+  commit: f35fa99
+- task_id: agentic-phase1-validate
+  type: code_edit
+  scope_description: "Write agentic/core/validate.py \u2014 validates tasks.yaml against\
+    \ task.schema.yaml and reports errors before the loop runs.\n"
+  allowed_files:
+  - agentic/core/validate.py
+  - agentic/core/__init__.py
+  - tests/test_agentic_validate.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify schemas
+  - modify AirOS runtime code
+  success_criteria:
+  - validate.py reads tasks.yaml and config.yaml
+  - validate.py checks required fields, enum values, and list types
+  - validate.py exits 0 if all tasks are valid, exits 1 with reasons if not
+  - validate.py passes on the current tasks.yaml
+  - at least one test covers a valid task and one covers an invalid task
+  - pytest passes (403+ tests)
+  - tracker updated
+  escalation_conditions:
+  - schema validation logic requires a third-party library not in requirements.txt
+  - tasks.yaml structure requires changes to pass validation
+  depends_on:
+  - agentic-phase0-schemas
+  status: done
+  commit: 22b9155
+- task_id: agentic-phase2-loop
+  type: code_edit
+  scope_description: "Write agentic/core/loop.py \u2014 the main agent loop that reads\
+    \ tasks.yaml, runs preflight checks, invokes Claude Code as the implementation\
+    \ agent, and routes outcomes.\n"
+  allowed_files:
+  - agentic/core/loop.py
+  - agentic/core/invoke.py
+  - agentic/core/state.py
+  - agentic/core/config.py
+  - agentic/core/__init__.py
+  - tests/test_agentic_loop.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - invoke external AI APIs other than Claude Code CLI
+  - modify AirOS runtime code
+  - modify schemas
+  success_criteria:
+  - loop.py reads config.yaml and tasks.yaml
+  - loop.py validates the current task before invoking any agent
+  - loop.py checks for dirty working tree before invoking any agent
+  - loop.py invokes Claude Code via subprocess (claude -p)
+  - loop.py writes a task completion record after implementation
+  - loop.py writes an escalation record on preflight failure
+  - tests cover preflight pass, preflight fail (dirty tree), and escalation write
+  - pytest passes (403+ tests)
+  - tracker updated
+  escalation_conditions:
+  - claude CLI not installed or unavailable
+  - verification fails after two attempts
+  depends_on:
+  - agentic-phase1-validate
+  status: done
+  commit: a10ea1d
+- task_id: agentic-phase2-qa
+  type: code_edit
+  scope_description: "Write agentic/core/qa.py \u2014 the QA agent invocation that\
+    \ reads the git diff and task completion record, invokes Claude Code as the QA\
+    \ agent, and writes a review record.\n"
+  allowed_files:
+  - agentic/core/qa.py
+  - agentic/core/__init__.py
+  - tests/test_agentic_qa.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify AirOS runtime code
+  - modify schemas
+  success_criteria:
+  - qa.py builds a QA prompt from the role template, task, diff, and completion record
+  - qa.py invokes Claude Code with the QA role
+  - qa.py parses the review record from Claude Code output
+  - qa.py validates the review record against review.schema.yaml
+  - qa.py writes the review record to .agent-loop/state/reviews.yaml
+  - tests cover approved, rejected, and needs_human_decision outcomes
+  - pytest passes (403+ tests)
+  - tracker updated
+  escalation_conditions:
+  - claude CLI not installed or unavailable
+  - review record cannot be parsed from Claude Code output
+  depends_on:
+  - agentic-phase2-loop
+  status: done
+  commit: ab2afd3
+- task_id: agentic-phase3-dashboard
+  type: code_edit
+  scope_description: "Write agentic/core/dashboard.py \u2014 terminal dashboard showing\
+    \ current task, escalations, decisions, and baseline; human selects option and\
+    \ result is written back to decisions.yaml.\n"
+  allowed_files:
+  - agentic/core/dashboard.py
+  - agentic/core/__init__.py
+  - tests/test_agentic_dashboard.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify AirOS runtime code
+  - modify schemas
+  - add web framework dependencies (keep CLI only)
+  success_criteria:
+  - dashboard.py shows current task, verification baseline, open escalations, open
+    decisions
+  - human can type a number to select a decision option
+  - dashboard writes chosen_option and resolved_at back to decisions.yaml
+  - dashboard exits cleanly with no decisions pending
+  - tests cover display with no decisions, display with one decision, and write-back
+    of a resolved decision
+  - pytest passes (403+ tests)
+  - tracker updated
+  escalation_conditions:
+  - required input mechanism not supported in target terminal
+  - decisions.yaml schema changes required
+  depends_on:
+  - agentic-phase2-qa
+  status: done
+  commit: ab2f551
+- task_id: f04-synthetic-fallback-audit-event
+  type: code_edit
+  scope_description: 'Emit a structured provider_failure audit event and ERROR log
+    in aq_data.py when the synthetic data fallback fires.
 
-  # ── Active track: agentic framework build ────────────────────────────────
+    '
+  allowed_files:
+  - urban_platform/applications/air_pollution/aq_data.py
+  - tests/test_aq_data_synthetic_fallback.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify quality gate thresholds
+  - change synthetic data generation logic
+  - modify specification contracts
+  success_criteria:
+  - aq_data.py logs at ERROR level when synthetic fallback fires
+  - aq_data.py writes a provider_failure event with timestamp, connector_id, reason
+  - a test asserts the audit event is present on the fallback path
+  - pytest passes (403+ tests)
+  - conformance passes (148 checks)
+  - tracker updated
+  escalation_conditions:
+  - writing the audit event requires circular imports
+  - the audit event schema does not support provider_failure type
+  depends_on:
+  - agentic-phase0-schemas
+  status: done
+  commit: 3abde9b
+- task_id: f13-github-actions-ci
+  type: code_edit
+  scope_description: 'Add a minimal GitHub Actions CI workflow running pytest, conformance
+    check, and schema lint on every push and pull request.
 
-  - task_id: agentic-phase0-schemas
-    type: docs_edit
-    scope_description: >
-      Create the agentic/ framework folder with four schemas, examples,
-      role templates, protocol docs, setup guide, AirOS project config,
-      and initial tasks.yaml.
-    allowed_files:
-      - agentic/
-      - .agent-loop/config.yaml
-      - .agent-loop/state/tasks.yaml
-      - agents/roles/implementation_agent.md
-      - agents/roles/qa_agent.md
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify runtime code
-      - modify specification contracts
-      - modify existing tests
-      - commit without tracker update
-    success_criteria:
-      - agentic/schemas/ contains four schema files (task, review, escalation, decision)
-      - each schema has a corresponding example in agentic/schemas/examples/
-      - agentic/docs/PROTOCOLS.md documents all four protocols
-      - agentic/docs/SETUP.md provides a new-project adoption guide
-      - agentic/roles/templates/ contains implementation_agent.md and qa_agent.md
-      - .agent-loop/config.yaml exists with AirOS project settings
-      - .agent-loop/state/tasks.yaml exists and contains at least one task per status
-      - agents/roles/ contains AirOS-specific role definitions
-      - existing tasks in the tracker can be expressed in task.schema.yaml
-      - docs/EXECUTION_TRACKER.md updated and tracker closed for SDK track
-    escalation_conditions:
-      - existing tracker tasks cannot be expressed in the schema without losing information
-      - schema design conflict requires owner decision
-    status: done
-    commit: f35fa99
+    '
+  allowed_files:
+  - .github/workflows/ci.yml
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify runtime code
+  - modify test files
+  success_criteria:
+  - .github/workflows/ci.yml exists and is valid YAML
+  - workflow runs on push and pull_request triggers
+  - workflow runs python -m pytest -q
+  - workflow runs python main.py --step conformance
+  - workflow runs agentic/core/validate.py to lint task schemas
+  - tracker updated
+  escalation_conditions:
+  - required GitHub Actions runners or secrets are unclear
+  depends_on:
+  - agentic-phase1-validate
+  status: done
+  commit: 6df1e5d
+- task_id: heat-phase0-specs
+  type: spec_edit
+  scope_description: 'Write provider contracts, consumer contracts, domain spec, and
+    app descriptor for the urban heat risk use case; register all in manifest.json.
 
-  - task_id: agentic-phase1-validate
-    type: code_edit
-    scope_description: >
-      Write agentic/core/validate.py — validates tasks.yaml against
-      task.schema.yaml and reports errors before the loop runs.
-    allowed_files:
-      - agentic/core/validate.py
-      - agentic/core/__init__.py
-      - tests/test_agentic_validate.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify schemas
-      - modify AirOS runtime code
-    success_criteria:
-      - validate.py reads tasks.yaml and config.yaml
-      - validate.py checks required fields, enum values, and list types
-      - validate.py exits 0 if all tasks are valid, exits 1 with reasons if not
-      - validate.py passes on the current tasks.yaml
-      - at least one test covers a valid task and one covers an invalid task
-      - pytest passes (403+ tests)
-      - tracker updated
-    escalation_conditions:
-      - schema validation logic requires a third-party library not in requirements.txt
-      - tasks.yaml structure requires changes to pass validation
-    depends_on:
-      - agentic-phase0-schemas
-    status: done
-    commit: 22b9155
+    '
+  allowed_files:
+  - specifications/provider_contracts/temperature_observation_feed.v1.schema.json
+  - specifications/provider_contracts/green_cover_feed.v1.schema.json
+  - specifications/consumer_contracts/heat_risk_dashboard.v1.schema.json
+  - specifications/consumer_contracts/heat_intervention_candidates.v1.schema.json
+  - specifications/app_descriptors/urban_heat_risk_review.v1.yaml
+  - specifications/domain_specs/urban_heat.v1.yaml
+  - specifications/examples/heat/temperature_observation_feed.sample.json
+  - specifications/examples/heat/green_cover_feed.sample.json
+  - specifications/examples/heat/heat_risk_dashboard.sample.json
+  - specifications/examples/heat/heat_intervention_candidates.sample.json
+  - specifications/manifest.json
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify existing provider or consumer contracts
+  - modify runtime code
+  - modify tests
+  success_criteria:
+  - temperature_observation_feed.v1.schema.json exists and is valid JSON Schema
+  - green_cover_feed.v1.schema.json exists and is valid JSON Schema
+  - heat_risk_dashboard.v1.schema.json exists with required fields (generated_at,
+    city_id, heat_cells, summary, data_quality_flag, provenance_summary)
+  - heat_intervention_candidates.v1.schema.json exists with required fields (generated_at,
+    city_id, candidates list with h3_id, risk_score, green_deficit)
+  - urban_heat_risk_review.v1.yaml app descriptor exists with safety gates (review_support_only
+    true, human_review_required true, blocked_uses populated)
+  - urban_heat.v1.yaml domain spec exists
+  - all four contracts registered in specifications/manifest.json
+  - sample JSON files validate against their schemas
+  - conformance passes (148+ checks)
+  - tracker updated
+  escalation_conditions:
+  - manifest.json structure is incompatible with new entries
+  - existing schema conventions cannot express heat-specific fields
+  status: ready
+- task_id: heat-phase1-openmeteo-connector
+  type: code_edit
+  scope_description: 'Write an OpenMeteo connector fetching hourly temperature, apparent
+    temperature, and relative humidity for a city bbox; returns a DataFrame matching
+    the temperature_observation_feed provider contract.
 
-  - task_id: agentic-phase2-loop
-    type: code_edit
-    scope_description: >
-      Write agentic/core/loop.py — the main agent loop that reads tasks.yaml,
-      runs preflight checks, invokes Claude Code as the implementation agent,
-      and routes outcomes.
-    allowed_files:
-      - agentic/core/loop.py
-      - agentic/core/invoke.py
-      - agentic/core/state.py
-      - agentic/core/config.py
-      - agentic/core/__init__.py
-      - tests/test_agentic_loop.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - invoke external AI APIs other than Claude Code CLI
-      - modify AirOS runtime code
-      - modify schemas
-    success_criteria:
-      - loop.py reads config.yaml and tasks.yaml
-      - loop.py validates the current task before invoking any agent
-      - loop.py checks for dirty working tree before invoking any agent
-      - loop.py invokes Claude Code via subprocess (claude -p)
-      - loop.py writes a task completion record after implementation
-      - loop.py writes an escalation record on preflight failure
-      - tests cover preflight pass, preflight fail (dirty tree), and escalation write
-      - pytest passes (403+ tests)
-      - tracker updated
-    escalation_conditions:
-      - claude CLI not installed or unavailable
-      - verification fails after two attempts
-    depends_on:
-      - agentic-phase1-validate
-    status: done
-    commit: a10ea1d
+    '
+  allowed_files:
+  - urban_platform/connectors/heat/__init__.py
+  - urban_platform/connectors/heat/openmeteo.py
+  - tests/test_heat_openmeteo_connector.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify specification contracts
+  - modify existing connectors
+  - require an API key (OpenMeteo is free and keyless)
+  success_criteria:
+  - openmeteo.py fetches from https://api.open-meteo.com/v1/forecast
+  - connector accepts city_name, bbox (lat_min, lon_min, lat_max, lon_max), and lookback_days
+    parameters
+  - returns a pandas DataFrame with columns (station_id, latitude, longitude, timestamp,
+    temperature_c, apparent_temperature_c, relative_humidity_pct, data_source)
+  - data_source column is always "openmeteo"
+  - connector returns empty DataFrame on network failure (no exception raised)
+  - at least one test mocks the HTTP response and validates DataFrame schema
+  - at least one test covers the empty-on-failure path
+  - pytest passes (537+ tests)
+  - tracker updated
+  escalation_conditions:
+  - OpenMeteo API schema differs from documented endpoint
+  - verification fails after two attempts
+  depends_on:
+  - heat-phase0-specs
+  status: ready
+- task_id: heat-phase2-osm-green-cover
+  type: code_edit
+  scope_description: 'Write an OSM green cover connector using osmnx that pulls parks,
+    trees, and water bodies for a city boundary and computes green cover fraction
+    and water proximity score per H3 cell.
 
-  - task_id: agentic-phase2-qa
-    type: code_edit
-    scope_description: >
-      Write agentic/core/qa.py — the QA agent invocation that reads the
-      git diff and task completion record, invokes Claude Code as the QA
-      agent, and writes a review record.
-    allowed_files:
-      - agentic/core/qa.py
-      - agentic/core/__init__.py
-      - tests/test_agentic_qa.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify AirOS runtime code
-      - modify schemas
-    success_criteria:
-      - qa.py builds a QA prompt from the role template, task, diff, and completion record
-      - qa.py invokes Claude Code with the QA role
-      - qa.py parses the review record from Claude Code output
-      - qa.py validates the review record against review.schema.yaml
-      - qa.py writes the review record to .agent-loop/state/reviews.yaml
-      - tests cover approved, rejected, and needs_human_decision outcomes
-      - pytest passes (403+ tests)
-      - tracker updated
-    escalation_conditions:
-      - claude CLI not installed or unavailable
-      - review record cannot be parsed from Claude Code output
-    depends_on:
-      - agentic-phase2-loop
-    status: done
-    commit: ab2afd3
+    '
+  allowed_files:
+  - urban_platform/connectors/heat/osm_green_cover.py
+  - tests/test_heat_osm_green_cover.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify specification contracts
+  - modify existing connectors
+  - make live OSM network calls in tests (mock osmnx)
+  success_criteria:
+  - osm_green_cover.py accepts a boundary polygon (shapely) and h3_resolution
+  - fetches parks and green spaces using osmnx.features_from_polygon with tags for
+    parks, forests, grass, trees
+  - fetches water bodies with tags for water, wetland, reservoir
+  - "computes green_cover_fraction per H3 cell (0.0\u20131.0)"
+  - computes water_proximity_score per H3 cell (1.0 if water in cell, 0.0 if no water
+    within 500m, interpolated in between)
+  - returns a DataFrame with columns (h3_id, green_cover_fraction, water_proximity_score,
+    osm_feature_count)
+  - tests mock osmnx calls; at least one test covers a cell with full green cover
+    and one with zero
+  - pytest passes (537+ tests)
+  - tracker updated
+  escalation_conditions:
+  - osmnx API for features_from_polygon has changed
+  - H3 cell geometry computation requires a library not in requirements.txt
+  - verification fails after two attempts
+  depends_on:
+  - heat-phase0-specs
+  status: ready
+- task_id: heat-phase3-pipeline
+  type: code_edit
+  scope_description: 'Write the urban heat risk scoring pipeline that combines temperature
+    observations and green cover to produce an H3 heat risk grid and ranked intervention
+    candidates matching the consumer contracts.
 
-  - task_id: agentic-phase3-dashboard
-    type: code_edit
-    scope_description: >
-      Write agentic/core/dashboard.py — terminal dashboard showing current
-      task, escalations, decisions, and baseline; human selects option
-      and result is written back to decisions.yaml.
-    allowed_files:
-      - agentic/core/dashboard.py
-      - agentic/core/__init__.py
-      - tests/test_agentic_dashboard.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify AirOS runtime code
-      - modify schemas
-      - add web framework dependencies (keep CLI only)
-    success_criteria:
-      - dashboard.py shows current task, verification baseline, open escalations,
-        open decisions
-      - human can type a number to select a decision option
-      - dashboard writes chosen_option and resolved_at back to decisions.yaml
-      - dashboard exits cleanly with no decisions pending
-      - tests cover display with no decisions, display with one decision,
-        and write-back of a resolved decision
-      - pytest passes (403+ tests)
-      - tracker updated
-    escalation_conditions:
-      - required input mechanism not supported in target terminal
-      - decisions.yaml schema changes required
-    depends_on:
-      - agentic-phase2-qa
-    status: done
-    commit: ab2f551
+    '
+  allowed_files:
+  - urban_platform/applications/heat/__init__.py
+  - urban_platform/applications/heat/heat_pipeline.py
+  - tests/test_heat_pipeline.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify specification contracts
+  - modify existing AQ or flood pipeline code
+  - claim production readiness
+  success_criteria:
+  - heat_pipeline.py accepts (temperature_df, green_cover_df, h3_resolution, city_id)
+    parameters
+  - computes heat_index per H3 cell using IDW interpolation of temperature observations
+    (reuse pattern from aq_data.py build_aq_panel)
+  - computes uhi_intensity as cell heat_index minus city-wide median
+  - "computes heat_risk_score per cell (0.0\u20131.0) combining uhi_intensity and\
+    \ green_cover_fraction deficit"
+  - build_heat_risk_dashboard() returns a dict conforming to heat_risk_dashboard.v1.schema.json
+  - build_intervention_candidates() returns a dict conforming to heat_intervention_candidates.v1.schema.json
+    with top-10 cells ranked by risk_score descending
+  - data_quality_flag is "synthetic" if temperature data_source is synthetic
+  - pytest passes (537+ tests)
+  - conformance passes (148+ checks)
+  - tracker updated
+  escalation_conditions:
+  - IDW interpolation produces NaN for all cells (insufficient temperature points)
+  - consumer contract fields cannot be populated from available data
+  - verification fails after two attempts
+  depends_on:
+  - heat-phase1-openmeteo-connector
+  - heat-phase2-osm-green-cover
+  status: ready
+- task_id: heat-phase4-sdk-walkthrough
+  type: docs_edit
+  scope_description: 'Write an SDK walkthrough doc and read-only example script for
+    the urban heat risk use case using only urban_platform.sdk public surface.
 
-  # ── Post-agentic: review triage fixes ────────────────────────────────────
-
-  - task_id: f04-synthetic-fallback-audit-event
-    type: code_edit
-    scope_description: >
-      Emit a structured provider_failure audit event and ERROR log in
-      aq_data.py when the synthetic data fallback fires.
-    allowed_files:
-      - urban_platform/applications/air_pollution/aq_data.py
-      - tests/test_aq_data_synthetic_fallback.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify quality gate thresholds
-      - change synthetic data generation logic
-      - modify specification contracts
-    success_criteria:
-      - aq_data.py logs at ERROR level when synthetic fallback fires
-      - aq_data.py writes a provider_failure event with timestamp, connector_id, reason
-      - a test asserts the audit event is present on the fallback path
-      - pytest passes (403+ tests)
-      - conformance passes (148 checks)
-      - tracker updated
-    escalation_conditions:
-      - writing the audit event requires circular imports
-      - the audit event schema does not support provider_failure type
-    depends_on:
-      - agentic-phase0-schemas
-    status: done
-    commit: 3abde9b
-
-  - task_id: f13-github-actions-ci
-    type: code_edit
-    scope_description: >
-      Add a minimal GitHub Actions CI workflow running pytest, conformance
-      check, and schema lint on every push and pull request.
-    allowed_files:
-      - .github/workflows/ci.yml
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify runtime code
-      - modify test files
-    success_criteria:
-      - .github/workflows/ci.yml exists and is valid YAML
-      - workflow runs on push and pull_request triggers
-      - workflow runs python -m pytest -q
-      - workflow runs python main.py --step conformance
-      - workflow runs agentic/core/validate.py to lint task schemas
-      - tracker updated
-    escalation_conditions:
-      - required GitHub Actions runners or secrets are unclear
-    depends_on:
-      - agentic-phase1-validate
-    status: done
-    commit: 6df1e5d
-
-  # ── Urban Heat Risk use case ──────────────────────────────────────────────
-
-  - task_id: heat-phase0-specs
-    type: spec_edit
-    scope_description: >
-      Write provider contracts, consumer contracts, domain spec, and app
-      descriptor for the urban heat risk use case; register all in manifest.json.
-    allowed_files:
-      - specifications/provider_contracts/temperature_observation_feed.v1.schema.json
-      - specifications/provider_contracts/green_cover_feed.v1.schema.json
-      - specifications/consumer_contracts/heat_risk_dashboard.v1.schema.json
-      - specifications/consumer_contracts/heat_intervention_candidates.v1.schema.json
-      - specifications/app_descriptors/urban_heat_risk_review.v1.yaml
-      - specifications/domain_specs/urban_heat.v1.yaml
-      - specifications/examples/heat/temperature_observation_feed.sample.json
-      - specifications/examples/heat/green_cover_feed.sample.json
-      - specifications/examples/heat/heat_risk_dashboard.sample.json
-      - specifications/examples/heat/heat_intervention_candidates.sample.json
-      - specifications/manifest.json
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify existing provider or consumer contracts
-      - modify runtime code
-      - modify tests
-    success_criteria:
-      - temperature_observation_feed.v1.schema.json exists and is valid JSON Schema
-      - green_cover_feed.v1.schema.json exists and is valid JSON Schema
-      - heat_risk_dashboard.v1.schema.json exists with required fields (generated_at,
-        city_id, heat_cells, summary, data_quality_flag, provenance_summary)
-      - heat_intervention_candidates.v1.schema.json exists with required fields
-        (generated_at, city_id, candidates list with h3_id, risk_score, green_deficit)
-      - urban_heat_risk_review.v1.yaml app descriptor exists with safety gates
-        (review_support_only true, human_review_required true, blocked_uses populated)
-      - urban_heat.v1.yaml domain spec exists
-      - all four contracts registered in specifications/manifest.json
-      - sample JSON files validate against their schemas
-      - conformance passes (148+ checks)
-      - tracker updated
-    escalation_conditions:
-      - manifest.json structure is incompatible with new entries
-      - existing schema conventions cannot express heat-specific fields
-    status: ready
-
-  - task_id: heat-phase1-openmeteo-connector
-    type: code_edit
-    scope_description: >
-      Write an OpenMeteo connector fetching hourly temperature, apparent temperature,
-      and relative humidity for a city bbox; returns a DataFrame matching the
-      temperature_observation_feed provider contract.
-    allowed_files:
-      - urban_platform/connectors/heat/__init__.py
-      - urban_platform/connectors/heat/openmeteo.py
-      - tests/test_heat_openmeteo_connector.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify specification contracts
-      - modify existing connectors
-      - require an API key (OpenMeteo is free and keyless)
-    success_criteria:
-      - openmeteo.py fetches from https://api.open-meteo.com/v1/forecast
-      - connector accepts city_name, bbox (lat_min, lon_min, lat_max, lon_max),
-        and lookback_days parameters
-      - returns a pandas DataFrame with columns (station_id, latitude, longitude,
-        timestamp, temperature_c, apparent_temperature_c, relative_humidity_pct,
-        data_source)
-      - data_source column is always "openmeteo"
-      - connector returns empty DataFrame on network failure (no exception raised)
-      - at least one test mocks the HTTP response and validates DataFrame schema
-      - at least one test covers the empty-on-failure path
-      - pytest passes (537+ tests)
-      - tracker updated
-    escalation_conditions:
-      - OpenMeteo API schema differs from documented endpoint
-      - verification fails after two attempts
-    depends_on:
-      - heat-phase0-specs
-    status: ready
-
-  - task_id: heat-phase2-osm-green-cover
-    type: code_edit
-    scope_description: >
-      Write an OSM green cover connector using osmnx that pulls parks, trees,
-      and water bodies for a city boundary and computes green cover fraction
-      and water proximity score per H3 cell.
-    allowed_files:
-      - urban_platform/connectors/heat/osm_green_cover.py
-      - tests/test_heat_osm_green_cover.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify specification contracts
-      - modify existing connectors
-      - make live OSM network calls in tests (mock osmnx)
-    success_criteria:
-      - osm_green_cover.py accepts a boundary polygon (shapely) and h3_resolution
-      - fetches parks and green spaces using osmnx.features_from_polygon with
-        tags for parks, forests, grass, trees
-      - fetches water bodies with tags for water, wetland, reservoir
-      - computes green_cover_fraction per H3 cell (0.0–1.0)
-      - computes water_proximity_score per H3 cell (1.0 if water in cell, 0.0 if
-        no water within 500m, interpolated in between)
-      - returns a DataFrame with columns (h3_id, green_cover_fraction,
-        water_proximity_score, osm_feature_count)
-      - tests mock osmnx calls; at least one test covers a cell with full green
-        cover and one with zero
-      - pytest passes (537+ tests)
-      - tracker updated
-    escalation_conditions:
-      - osmnx API for features_from_polygon has changed
-      - H3 cell geometry computation requires a library not in requirements.txt
-      - verification fails after two attempts
-    depends_on:
-      - heat-phase0-specs
-    status: ready
-
-  - task_id: heat-phase3-pipeline
-    type: code_edit
-    scope_description: >
-      Write the urban heat risk scoring pipeline that combines temperature
-      observations and green cover to produce an H3 heat risk grid and ranked
-      intervention candidates matching the consumer contracts.
-    allowed_files:
-      - urban_platform/applications/heat/__init__.py
-      - urban_platform/applications/heat/heat_pipeline.py
-      - tests/test_heat_pipeline.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify specification contracts
-      - modify existing AQ or flood pipeline code
-      - claim production readiness
-    success_criteria:
-      - heat_pipeline.py accepts (temperature_df, green_cover_df, h3_resolution,
-        city_id) parameters
-      - computes heat_index per H3 cell using IDW interpolation of temperature
-        observations (reuse pattern from aq_data.py build_aq_panel)
-      - computes uhi_intensity as cell heat_index minus city-wide median
-      - computes heat_risk_score per cell (0.0–1.0) combining uhi_intensity and
-        green_cover_fraction deficit
-      - build_heat_risk_dashboard() returns a dict conforming to
-        heat_risk_dashboard.v1.schema.json
-      - build_intervention_candidates() returns a dict conforming to
-        heat_intervention_candidates.v1.schema.json with top-10 cells ranked
-        by risk_score descending
-      - data_quality_flag is "synthetic" if temperature data_source is synthetic
-      - pytest passes (537+ tests)
-      - conformance passes (148+ checks)
-      - tracker updated
-    escalation_conditions:
-      - IDW interpolation produces NaN for all cells (insufficient temperature points)
-      - consumer contract fields cannot be populated from available data
-      - verification fails after two attempts
-    depends_on:
-      - heat-phase1-openmeteo-connector
-      - heat-phase2-osm-green-cover
-    status: ready
-
-  - task_id: heat-phase4-sdk-walkthrough
-    type: docs_edit
-    scope_description: >
-      Write an SDK walkthrough doc and read-only example script for the urban
-      heat risk use case using only urban_platform.sdk public surface.
-    allowed_files:
-      - docs/URBAN_HEAT_RISK_SDK_WALKTHROUGH.md
-      - examples/sdk/heat_risk_walkthrough.py
-      - tests/test_sdk_heat_risk_walkthrough.py
-      - docs/EXECUTION_TRACKER.md
-    forbidden_actions:
-      - modify runtime code
-      - modify specification contracts
-      - use internal SDK imports (only urban_platform.sdk.__all__ symbols)
-    success_criteria:
-      - walkthrough doc covers (inventory, app descriptor, contracts, pipeline
-        outputs, intervention candidates, safety gates)
-      - example script runs without error from repo root
-      - example script uses only urban_platform.sdk public imports
-      - example script is read-only (no store writes)
-      - at least 10 new tests covering the walkthrough fixture assertions
-      - pytest passes (537+ tests)
-      - tracker updated
-    escalation_conditions:
-      - SDK public surface is insufficient to demonstrate the heat use case
-      - verification fails after two attempts
-    depends_on:
-      - heat-phase3-pipeline
-    status: ready
+    '
+  allowed_files:
+  - docs/URBAN_HEAT_RISK_SDK_WALKTHROUGH.md
+  - examples/sdk/heat_risk_walkthrough.py
+  - tests/test_sdk_heat_risk_walkthrough.py
+  - docs/EXECUTION_TRACKER.md
+  forbidden_actions:
+  - modify runtime code
+  - modify specification contracts
+  - use internal SDK imports (only urban_platform.sdk.__all__ symbols)
+  success_criteria:
+  - walkthrough doc covers (inventory, app descriptor, contracts, pipeline outputs,
+    intervention candidates, safety gates)
+  - example script runs without error from repo root
+  - example script uses only urban_platform.sdk public imports
+  - example script is read-only (no store writes)
+  - at least 10 new tests covering the walkthrough fixture assertions
+  - pytest passes (537+ tests)
+  - tracker updated
+  escalation_conditions:
+  - SDK public surface is insufficient to demonstrate the heat use case
+  - verification fails after two attempts
+  depends_on:
+  - heat-phase3-pipeline
+  status: ready
