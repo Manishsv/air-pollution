@@ -118,13 +118,18 @@ def _render_decisions_table(packets: list[dict], domain_filter: str, urgency_fil
         dom_label = {"air": "Air Quality", "flood": "Flood", "heat": "Heat", "cross_domain": "Cross-Domain"}.get(domain, domain)
         dom_color = _DOMAIN_COLOR.get(dom_label, "#6c757d")
 
+        escalate_html = (
+            '<span style="color:#dc3545;font-size:11px">⬆ Escalate to '
+            + (p.get("escalate_to") or "") + "</span>"
+            if p.get("escalation_required") else ""
+        )
         header = (
             f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">'
             f'<span style="background:{dom_color};color:white;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">{dom_label}</span>'
             f'{_urgency_badge(urg)}'
-            f'<span style="font-weight:600;font-size:14px">{p.get("ward_name","")}</span>'
+            f'<span style="font-weight:600;font-size:14px">{p.get("ward_name", "")}</span>'
             f'<span style="color:#6c757d;font-size:12px">{p["decision_id"]}</span>'
-            f'{"<span style=\"color:#dc3545;font-size:11px\">⬆ Escalate to " + (p.get("escalate_to") or "") + "</span>" if p.get("escalation_required") else ""}'
+            f'{escalate_html}'
             f'</div>'
         )
         st.markdown(header, unsafe_allow_html=True)
