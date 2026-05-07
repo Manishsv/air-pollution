@@ -1,0 +1,53 @@
+{
+  "provider_id": "openmeteo_demo",
+  "source_name": "Open-Meteo API (demo)",
+  "source_type": "weather_api",
+  "city_id": "bangalore_demo",
+  "bbox": {
+    "lat_min": 12.87,
+    "lon_min": 77.49,
+    "lat_max": 13.07,
+    "lon_max": 77.69
+  },
+  "license": "CC BY 4.0 (Open-Meteo)",
+  "source_metadata": {
+    "api_endpoint": "https://api.open-meteo.com/v1/forecast",
+    "variables": ["temperature_2m", "apparent_temperature", "relative_humidity_2m"],
+    "lookback_days": 1
+  },
+  "records": [
+    {
+      "station_id": "openmeteo_12.87_77.49",
+      "latitude": 12.87,
+      "longitude": 77.49,
+      "timestamp": "2026-05-07T06:00:00Z",
+      "temperature_c": 28.4,
+      "apparent_temperature_c": 31.2,
+      "relative_humidity_pct": 72.0,
+      "data_source": "openmeteo",
+      "quality_flag": "real"
+    },
+    {
+      "station_id": "openmeteo_12.97_77.59",
+      "latitude": 12.97,
+      "longitude": 77.59,
+      "timestamp": "2026-05-07T06:00:00Z",
+      "temperature_c": 30.1,
+      "apparent_temperature_c": 34.5,
+      "relative_humidity_pct": 68.0,
+      "data_source": "openmeteo",
+      "quality_flag": "real"
+    },
+    {
+      "station_id": "openmeteo_13.07_77.69",
+      "latitude": 13.07,
+      "longitude": 77.69,
+      "timestamp": "2026-05-07T06:00:00Z",
+      "temperature_c": 27.9,
+      "apparent_temperature_c": 30.1,
+      "relative_humidity_pct": 78.0,
+      "data_source": "openmeteo",
+      "quality_flag": "real"
+    }
+  ]
+}

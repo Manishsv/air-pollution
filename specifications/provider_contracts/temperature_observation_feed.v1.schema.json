@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/temperature_observation_feed",
+  "title": "Provider contract: temperature observation feed (v1)",
+  "description": "Hourly temperature, apparent temperature, and relative humidity observations for a city bounding box. Sourced from OpenMeteo or compatible weather APIs. Used as primary input to the urban heat risk pipeline.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "city_id", "bbox", "records", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "city_id": { "type": "string", "minLength": 1 },
+    "bbox": {
+      "type": "object",
+      "required": ["lat_min", "lon_min", "lat_max", "lon_max"],
+      "properties": {
+        "lat_min": { "type": "number" },
+        "lon_min": { "type": "number" },
+        "lat_max": { "type": "number" },
+        "lon_max": { "type": "number" }
+      }
+    },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["station_id", "latitude", "longitude", "timestamp", "temperature_c", "data_source"],
+        "properties": {
+          "station_id": { "type": "string", "minLength": 1 },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "timestamp": { "type": "string", "minLength": 1 },
+          "temperature_c": { "type": ["number", "null"] },
+          "apparent_temperature_c": { "type": ["number", "null"] },
+          "relative_humidity_pct": { "type": ["number", "null"] },
+          "data_source": { "type": "string", "minLength": 1 },
+          "quality_flag": { "type": "string" }
+        }
+      }
+    }
+  }
+}

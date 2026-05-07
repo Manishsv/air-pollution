@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-05-07T07:00:00Z",
+  "city_id": "bangalore_demo",
+  "h3_resolution": 8,
+  "data_quality_flag": "real",
+  "candidates": [
+    {
+      "h3_id": "882a100d73fffff",
+      "risk_score": 0.79,
+      "green_deficit": 0.99,
+      "heat_index_c": 30.1,
+      "uhi_intensity": 1.3,
+      "water_proximity_score": 0.00,
+      "suggested_interventions": ["tree_planting", "shade_structures", "cool_pavement"]
+    },
+    {
+      "h3_id": "882a100d5bfffff",
+      "risk_score": 0.51,
+      "green_deficit": 0.92,
+      "heat_index_c": 29.5,
+      "uhi_intensity": 0.7,
+      "water_proximity_score": 0.10,
+      "suggested_interventions": ["tree_planting", "green_roofs"]
+    }
+  ],
+  "provenance_summary": {
+    "sources": ["openmeteo", "osm_via_osmnx"],
+    "synthetic_used": false
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/heat_intervention_candidates",
+  "title": "Consumer contract: heat intervention candidates (v1)",
+  "description": "Ranked list of H3 cells identified as priority candidates for urban cooling interventions (tree planting, shade structures, cool pavements). Produced by the heat risk pipeline; requires human review before any public or operational action.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["generated_at", "city_id", "candidates", "data_quality_flag", "provenance_summary"],
+  "properties": {
+    "generated_at": { "type": "string", "minLength": 1 },
+    "city_id": { "type": "string", "minLength": 1 },
+    "h3_resolution": { "type": "integer", "minimum": 0, "maximum": 15 },
+    "data_quality_flag": {
+      "type": "string",
+      "enum": ["real", "synthetic", "mixed", "unavailable"]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["h3_id", "risk_score", "green_deficit"],
+        "properties": {
+          "h3_id": { "type": "string", "minLength": 1 },
+          "risk_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "green_deficit": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "heat_index_c": { "type": ["number", "null"] },
+          "uhi_intensity": { "type": ["number", "null"] },
+          "water_proximity_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "suggested_interventions": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "provenance_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sources", "synthetic_used"],
+      "properties": {
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "synthetic_used": { "type": "boolean" }
+      }
+    }
+  }
+}

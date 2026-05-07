@@ -3,15 +3,27 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – Urban heat risk use case: all 5 phases complete
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Urban Heat Risk use case — specs, connectors, pipeline, SDK walkthrough (phases 0–4). |
+| **Status** | **Done** |
+| **Files changed** | `specifications/provider_contracts/temperature_observation_feed.v1.schema.json`, `specifications/provider_contracts/green_cover_feed.v1.schema.json`, `specifications/consumer_contracts/heat_risk_dashboard.v1.schema.json`, `specifications/consumer_contracts/heat_intervention_candidates.v1.schema.json`, `specifications/app_descriptors/urban_heat_risk_review.v1.yaml`, `specifications/domain_specs/urban_heat.v1.yaml`, `specifications/examples/heat/*.json`, `specifications/manifest.json`, `urban_platform/connectors/heat/openmeteo.py`, `urban_platform/connectors/heat/osm_green_cover.py`, `urban_platform/applications/heat/heat_pipeline.py`, `tests/test_heat_openmeteo_connector.py` (14 tests), `tests/test_heat_osm_green_cover.py` (18 tests), `tests/test_heat_pipeline.py` (33 tests), `tests/test_sdk_heat_risk_walkthrough.py` (28 tests), `examples/sdk/heat_risk_walkthrough.py`, `docs/URBAN_HEAT_RISK_SDK_WALKTHROUGH.md`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **630 passed** (93 new). `python main.py --step conformance`: **161 checks**. `python examples/sdk/heat_risk_walkthrough.py`: walkthrough complete, all assertions passed. |
+| **Commit hash** | TBD |
+| **Current track** | `urban-heat-risk` — all tasks done |
+| **Next task** | None — track complete |
+
+---
+
 ### 2026-05-07 – Urban heat risk use case: task queue written
 
 | Field | Value |
 | --- | --- |
 | **Task name** | Define 5-task queue for urban heat risk use case (specs → connectors → pipeline → SDK walkthrough). |
-| **Status** | **Done** (planning only; tasks are now `ready` in queue) |
+| **Status** | **Done** (planning only) |
 | **Files changed** | `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
-| **Current track** | `urban-heat-risk` |
-| **Next task** | `heat-phase0-specs` — run `python agentic/core/loop.py` to start |
 
 ---
 

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/heat_risk_dashboard",
+  "title": "Consumer contract: heat risk dashboard payload (v1)",
+  "description": "Dashboard payload for urban heat risk situational awareness. Surfaces per-H3-cell heat risk scores, UHI intensity, green cover deficit, and data quality flags. Human review required before any operational or public-facing action.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["generated_at", "city_id", "heat_cells", "summary", "data_quality_flag", "provenance_summary"],
+  "properties": {
+    "generated_at": { "type": "string", "minLength": 1 },
+    "city_id": { "type": "string", "minLength": 1 },
+    "h3_resolution": { "type": "integer", "minimum": 0, "maximum": 15 },
+    "data_quality_flag": {
+      "type": "string",
+      "enum": ["real", "synthetic", "mixed", "unavailable"]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["city_median_temperature_c", "max_heat_risk_score", "high_risk_cell_count"],
+      "properties": {
+        "city_median_temperature_c": { "type": ["number", "null"] },
+        "max_heat_risk_score": { "type": ["number", "null"] },
+        "high_risk_cell_count": { "type": "integer", "minimum": 0 },
+        "total_cells": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "heat_cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["h3_id", "heat_risk_score", "uhi_intensity", "green_cover_fraction"],
+        "properties": {
+          "h3_id": { "type": "string", "minLength": 1 },
+          "heat_index_c": { "type": ["number", "null"] },
+          "uhi_intensity": { "type": ["number", "null"] },
+          "green_cover_fraction": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "water_proximity_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "heat_risk_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
+      }
+    },
+    "active_warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["warning_id", "severity", "message"],
+        "properties": {
+          "warning_id": { "type": "string", "minLength": 1 },
+          "severity": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "provenance_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sources", "synthetic_used"],
+      "properties": {
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "synthetic_used": { "type": "boolean" }
+      }
+    }
+  }
+}

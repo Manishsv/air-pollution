@@ -1,0 +1,32 @@
+{
+  "provider_id": "osm_green_cover_demo",
+  "source_name": "OpenStreetMap via osmnx (demo)",
+  "source_type": "osm_derived",
+  "city_id": "bangalore_demo",
+  "h3_resolution": 8,
+  "license": "ODbL (OpenStreetMap contributors)",
+  "source_metadata": {
+    "osmnx_version": "1.x",
+    "tags_fetched": ["leisure=park", "landuse=forest", "landuse=grass", "natural=tree_row", "natural=water", "landuse=reservoir"]
+  },
+  "records": [
+    {
+      "h3_id": "882a100d57fffff",
+      "green_cover_fraction": 0.42,
+      "water_proximity_score": 0.85,
+      "osm_feature_count": 12
+    },
+    {
+      "h3_id": "882a100d5bfffff",
+      "green_cover_fraction": 0.08,
+      "water_proximity_score": 0.10,
+      "osm_feature_count": 2
+    },
+    {
+      "h3_id": "882a100d73fffff",
+      "green_cover_fraction": 0.01,
+      "water_proximity_score": 0.00,
+      "osm_feature_count": 0
+    }
+  ]
+}

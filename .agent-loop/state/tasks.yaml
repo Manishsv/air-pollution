@@ -82,8 +82,10 @@ tasks:
   commit: f35fa99
 - task_id: agentic-phase1-validate
   type: code_edit
-  scope_description: "Write agentic/core/validate.py \u2014 validates tasks.yaml against\
-    \ task.schema.yaml and reports errors before the loop runs.\n"
+  scope_description: 'Write agentic/core/validate.py — validates tasks.yaml against
+    task.schema.yaml and reports errors before the loop runs.
+
+    '
   allowed_files:
   - agentic/core/validate.py
   - agentic/core/__init__.py
@@ -109,9 +111,11 @@ tasks:
   commit: 22b9155
 - task_id: agentic-phase2-loop
   type: code_edit
-  scope_description: "Write agentic/core/loop.py \u2014 the main agent loop that reads\
-    \ tasks.yaml, runs preflight checks, invokes Claude Code as the implementation\
-    \ agent, and routes outcomes.\n"
+  scope_description: 'Write agentic/core/loop.py — the main agent loop that reads
+    tasks.yaml, runs preflight checks, invokes Claude Code as the implementation agent,
+    and routes outcomes.
+
+    '
   allowed_files:
   - agentic/core/loop.py
   - agentic/core/invoke.py
@@ -143,9 +147,11 @@ tasks:
   commit: a10ea1d
 - task_id: agentic-phase2-qa
   type: code_edit
-  scope_description: "Write agentic/core/qa.py \u2014 the QA agent invocation that\
-    \ reads the git diff and task completion record, invokes Claude Code as the QA\
-    \ agent, and writes a review record.\n"
+  scope_description: 'Write agentic/core/qa.py — the QA agent invocation that reads
+    the git diff and task completion record, invokes Claude Code as the QA agent,
+    and writes a review record.
+
+    '
   allowed_files:
   - agentic/core/qa.py
   - agentic/core/__init__.py
@@ -172,9 +178,11 @@ tasks:
   commit: ab2afd3
 - task_id: agentic-phase3-dashboard
   type: code_edit
-  scope_description: "Write agentic/core/dashboard.py \u2014 terminal dashboard showing\
-    \ current task, escalations, decisions, and baseline; human selects option and\
-    \ result is written back to decisions.yaml.\n"
+  scope_description: 'Write agentic/core/dashboard.py — terminal dashboard showing
+    current task, escalations, decisions, and baseline; human selects option and result
+    is written back to decisions.yaml.
+
+    '
   allowed_files:
   - agentic/core/dashboard.py
   - agentic/core/__init__.py
@@ -294,7 +302,7 @@ tasks:
   escalation_conditions:
   - manifest.json structure is incompatible with new entries
   - existing schema conventions cannot express heat-specific fields
-  status: ready
+  status: done
 - task_id: heat-phase1-openmeteo-connector
   type: code_edit
   scope_description: 'Write an OpenMeteo connector fetching hourly temperature, apparent
@@ -328,7 +336,7 @@ tasks:
   - verification fails after two attempts
   depends_on:
   - heat-phase0-specs
-  status: ready
+  status: done
 - task_id: heat-phase2-osm-green-cover
   type: code_edit
   scope_description: 'Write an OSM green cover connector using osmnx that pulls parks,
@@ -349,7 +357,7 @@ tasks:
   - fetches parks and green spaces using osmnx.features_from_polygon with tags for
     parks, forests, grass, trees
   - fetches water bodies with tags for water, wetland, reservoir
-  - "computes green_cover_fraction per H3 cell (0.0\u20131.0)"
+  - computes green_cover_fraction per H3 cell (0.0–1.0)
   - computes water_proximity_score per H3 cell (1.0 if water in cell, 0.0 if no water
     within 500m, interpolated in between)
   - returns a DataFrame with columns (h3_id, green_cover_fraction, water_proximity_score,
@@ -364,7 +372,7 @@ tasks:
   - verification fails after two attempts
   depends_on:
   - heat-phase0-specs
-  status: ready
+  status: done
 - task_id: heat-phase3-pipeline
   type: code_edit
   scope_description: 'Write the urban heat risk scoring pipeline that combines temperature
@@ -387,8 +395,8 @@ tasks:
   - computes heat_index per H3 cell using IDW interpolation of temperature observations
     (reuse pattern from aq_data.py build_aq_panel)
   - computes uhi_intensity as cell heat_index minus city-wide median
-  - "computes heat_risk_score per cell (0.0\u20131.0) combining uhi_intensity and\
-    \ green_cover_fraction deficit"
+  - computes heat_risk_score per cell (0.0–1.0) combining uhi_intensity and green_cover_fraction
+    deficit
   - build_heat_risk_dashboard() returns a dict conforming to heat_risk_dashboard.v1.schema.json
   - build_intervention_candidates() returns a dict conforming to heat_intervention_candidates.v1.schema.json
     with top-10 cells ranked by risk_score descending
@@ -403,7 +411,7 @@ tasks:
   depends_on:
   - heat-phase1-openmeteo-connector
   - heat-phase2-osm-green-cover
-  status: ready
+  status: done
 - task_id: heat-phase4-sdk-walkthrough
   type: docs_edit
   scope_description: 'Write an SDK walkthrough doc and read-only example script for
@@ -433,4 +441,4 @@ tasks:
   - verification fails after two attempts
   depends_on:
   - heat-phase3-pipeline
-  status: ready
+  status: done
