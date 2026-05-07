@@ -48,17 +48,24 @@ def _city_selector() -> tuple[str, dict, int, bool]:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="air_h3_res",
                            help="Higher = smaller cells, more detail, slower")
     with c3:
-        live = st.toggle("Live data (OpenMeteo AQ)", value=False, key="air_live_toggle",
-                         help="Real HTTP call to air-quality-api.open-meteo.com — no API key needed")
+        live = st.toggle("Live data (cached ≤1h)", value=False, key="air_live_toggle",
+                         help="Uses observation store cache if data is <1h old, otherwise calls OpenMeteo AQ")
     city_id, bbox = _CITIES[city_label]
     return city_id, bbox, h3_res, live
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300, show_spinner="Fetching air quality data from OpenMeteo…")
+@st.cache_data(ttl=300, show_spinner="Loading air quality data…")
 def _load_live_aq(city_id: str, lat_min: float, lon_min: float,
                   lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
+    try:
+        from urban_platform.observation_store import ObservationStoreReader, to_wide
+        cached = ObservationStoreReader().read_recent("air", city_id, max_age_hours=1)
+        if not cached.empty:
+            return to_wide(cached)
+    except Exception:
+        pass
     return fetch_air_quality_observations(
         city_name=city_id,
         lat_min=lat_min, lon_min=lon_min,

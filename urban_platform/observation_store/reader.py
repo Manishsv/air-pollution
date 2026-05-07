@@ -12,6 +12,36 @@ from .schema import OBSERVATION_COLUMNS, RAW_DATA_ROOT
 logger = logging.getLogger(__name__)
 
 
+def to_wide(narrow_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Pivot a narrow observation DataFrame back to wide format for pipeline consumption.
+
+    Narrow: one row per (station_id, timestamp, variable).
+    Wide:   one row per (station_id, timestamp), variable names become columns.
+    Returns empty DataFrame if input is empty.
+    """
+    if narrow_df is None or narrow_df.empty:
+        return pd.DataFrame()
+
+    index_cols = ["station_id", "latitude", "longitude", "timestamp", "source", "quality_flag"]
+    present = [c for c in index_cols if c in narrow_df.columns]
+
+    wide = (
+        narrow_df
+        .pivot_table(
+            index=present,
+            columns="variable",
+            values="value",
+            aggfunc="first",
+        )
+        .reset_index()
+    )
+    wide.columns.name = None
+    if "source" in wide.columns:
+        wide = wide.rename(columns={"source": "data_source"})
+    return wide
+
+
 def _date_from_stem(path: Path) -> Optional[date]:
     try:
         return date.fromisoformat(path.stem)

@@ -9,7 +9,7 @@ import pytest
 
 from urban_platform.observation_store.schema import OBSERVATION_COLUMNS
 from urban_platform.observation_store.writer import ObservationStoreWriter, melt_to_narrow
-from urban_platform.observation_store.reader import ObservationStoreReader
+from urban_platform.observation_store.reader import ObservationStoreReader, to_wide
 from urban_platform.observation_store.pruner import prune, prune_all
 
 
@@ -276,3 +276,47 @@ def test_prune_all_covers_multiple_domains(root: Path) -> None:
     results = prune_all(root=root, today=date(2026, 5, 7))
     assert results.get(f"flood/{_CITY}", 0) == 1
     assert results.get(f"air/{_CITY}", 0) == 1
+
+
+# ── E: to_wide round-trip ──────────────────────────────────────────────────
+
+def test_to_wide_flood_round_trip(flood_wide: pd.DataFrame) -> None:
+    narrow = melt_to_narrow(flood_wide, "flood", _CITY, _FETCHED_AT)
+    wide = to_wide(narrow)
+    assert "rainfall_intensity_mm_per_hr" in wide.columns
+    assert "rainfall_accumulation_3h_mm" in wide.columns
+    assert len(wide) == len(flood_wide)
+
+
+def test_to_wide_air_round_trip(air_wide: pd.DataFrame) -> None:
+    narrow = melt_to_narrow(air_wide, "air", _CITY, _FETCHED_AT)
+    wide = to_wide(narrow)
+    assert "pm25_ugm3" in wide.columns
+    assert "pm10_ugm3" in wide.columns
+    assert "european_aqi" in wide.columns
+
+
+def test_to_wide_heat_round_trip(heat_wide: pd.DataFrame) -> None:
+    narrow = melt_to_narrow(heat_wide, "heat", _CITY, _FETCHED_AT)
+    wide = to_wide(narrow)
+    assert "temperature_c" in wide.columns
+    assert "apparent_temperature_c" in wide.columns
+    assert "relative_humidity_pct" in wide.columns
+
+
+def test_to_wide_empty_returns_empty() -> None:
+    assert to_wide(pd.DataFrame()).empty
+
+
+def test_cache_first_returns_store_data_not_api(
+    root: Path, flood_wide: pd.DataFrame
+) -> None:
+    """read_recent returns store data; to_wide converts it back to pipeline-ready format."""
+    ObservationStoreWriter(root).write(flood_wide, "flood", _CITY, _FETCHED_AT)
+    reader = ObservationStoreReader(root)
+    cached = reader.read_recent("flood", _CITY, max_age_hours=1)
+    assert not cached.empty
+    wide = to_wide(cached)
+    assert "rainfall_intensity_mm_per_hr" in wide.columns
+    # Values preserved
+    assert abs(wide["rainfall_intensity_mm_per_hr"].iloc[0] - 18.0) < 0.01
