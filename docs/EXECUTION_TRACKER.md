@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `agentic/core/qa.py`, `tests/test_agentic_qa.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
 | **Verification** | `python -m pytest -q`: **492 passed** (32 new). All three outcome paths (approved, rejected, needs_human_decision) tested. |
-| **Commit hash** | pending |
+| **Commit hash** | `ab2afd3` |
 | **Current next task** | `agentic-phase3-dashboard` — write `agentic/core/dashboard.py` |
 
 ---
