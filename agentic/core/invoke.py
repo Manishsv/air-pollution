@@ -35,21 +35,33 @@ def invoke_claude(
     prompt: str,
     timeout: int = 600,
     claude_bin: str = "claude",
+    debug_output_path: Optional[Path] = None,
 ) -> str:
     """
     Invoke `claude -p` (non-interactive print mode) with the prompt piped to stdin.
+
+    --tools default ensures the agent has access to Bash, Read, Edit, Write etc.
+    --output-format text gives clean text output for completion record parsing.
 
     Returns the raw stdout string.
     Raises subprocess.CalledProcessError on non-zero exit.
     Raises FileNotFoundError if the claude binary is not on PATH.
     """
     result = subprocess.run(
-        [claude_bin, "-p"],
+        [claude_bin, "-p", "--tools", "default", "--output-format", "text"],
         input=prompt,
         capture_output=True,
         text=True,
         timeout=timeout,
     )
+
+    if debug_output_path:
+        debug_output_path.write_text(
+            f"=== returncode: {result.returncode} ===\n"
+            f"=== stdout ===\n{result.stdout}\n"
+            f"=== stderr ===\n{result.stderr}\n"
+        )
+
     if result.returncode != 0:
         raise subprocess.CalledProcessError(
             result.returncode,

@@ -169,10 +169,12 @@ def run_loop(
 
     # Invoke agent
     timeout = get_claude_timeout(config)
+    debug_path = state_dir / f"debug_agent_output_{task_id}.txt"
     print(f"Invoking implementation agent (timeout: {timeout}s)…")
+    print(f"  Debug output: {debug_path}")
 
     try:
-        output = invoke_claude(prompt, timeout=timeout)
+        output = invoke_claude(prompt, timeout=timeout, debug_output_path=debug_path)
     except FileNotFoundError:
         msg = "claude CLI not found on PATH"
         print(f"ERROR: {msg}", file=sys.stderr)
