@@ -41,12 +41,14 @@ _CITIES = {
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
 def _city_selector() -> tuple[str, dict, int, bool]:
-    with st.sidebar:
-        st.markdown("### Flood Risk Settings")
+    c1, c2, c3 = st.columns([2, 2, 2])
+    with c1:
         city_label = st.selectbox("City", list(_CITIES.keys()), key="flood_city_selector")
+    with c2:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="flood_h3_res",
                            help="Higher = smaller cells, more detail, slower")
-        live = st.toggle("Fetch live data from OpenMeteo", value=False, key="flood_live_toggle",
+    with c3:
+        live = st.toggle("Live data (OpenMeteo)", value=False, key="flood_live_toggle",
                          help="Real HTTP call to api.open-meteo.com — no API key needed")
     city_id, bbox = _CITIES[city_label]
     return city_id, bbox, h3_res, live
@@ -393,11 +395,7 @@ def render_flood_panel() -> None:
             "Per-H3-cell flood risk scores combining IDW-interpolated rainfall intensity, "
             "waterlogging incidents, and drainage asset coverage. Review-support only."
         ),
-        primary_alert=(
-            "**Decision support only.** Flood risk scores are IDW-interpolated estimates. "
-            "Field verification and human protocol required before any emergency response."
-        ),
-        primary_alert_kind="error",
+        primary_alert=None,
     )
 
     # ── Load data ──────────────────────────────────────────────────────────

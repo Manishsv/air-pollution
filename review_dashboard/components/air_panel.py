@@ -41,12 +41,14 @@ _CITIES = {
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
 def _city_selector() -> tuple[str, dict, int, bool]:
-    with st.sidebar:
-        st.markdown("### Air Quality Settings")
+    c1, c2, c3 = st.columns([2, 2, 2])
+    with c1:
         city_label = st.selectbox("City", list(_CITIES.keys()), key="air_city_selector")
+    with c2:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="air_h3_res",
                            help="Higher = smaller cells, more detail, slower")
-        live = st.toggle("Fetch live data from OpenMeteo AQ", value=False, key="air_live_toggle",
+    with c3:
+        live = st.toggle("Live data (OpenMeteo AQ)", value=False, key="air_live_toggle",
                          help="Real HTTP call to air-quality-api.open-meteo.com — no API key needed")
     city_id, bbox = _CITIES[city_label]
     return city_id, bbox, h3_res, live
@@ -332,11 +334,7 @@ def render_air_panel() -> None:
             "Per-H3-cell India AQI scores based on IDW-interpolated PM2.5 from "
             "OpenMeteo Air Quality API. Review-support only."
         ),
-        primary_alert=(
-            "**Decision support only.** AQI scores are IDW-interpolated estimates. "
-            "Human review required before any public health communications or emergency response."
-        ),
-        primary_alert_kind="error",
+        primary_alert=None,
     )
 
     # ── Load data ──────────────────────────────────────────────────────────
