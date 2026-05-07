@@ -912,9 +912,9 @@ Officer raises appeal (if attribution disputed):
                           reviewed by AIROS_ZONAL_OFFICER
                           upheld → feeds back into ruleset review cycle
 
-AirOS → AirNexus (separate service, see AIRNEXUS_COORDINATION_SPEC.md):
+AirOS → AIRNet (separate service, see AIRNET_COORDINATION_SPEC.md):
         Entity graph, event trail, and cross-system traces are managed by
-        AirNexus, not DIGIT3. AirOS calls AirNexus APIs in parallel with
+        AIRNet, not DIGIT3. AirOS calls AIRNet APIs in parallel with
         the DIGIT3 calls above.
 ```
 
@@ -1049,8 +1049,8 @@ Deliverables:
 ### Phase 4 — Governance + Registry (accountability layer)
 Publish decision rulesets to Governance service. Register AirOS Registry
 schemas. Ingest DIGIT3 platform data (PGR complaints, officer assignments).
-AirNexus entity graph integration is a parallel track (see
-`AIRNEXUS_COORDINATION_SPEC.md`).
+AIRNet entity graph integration is a parallel track (see
+`AIRNET_COORDINATION_SPEC.md`).
 
 Deliverables:
 - Governance rulesets: `airos_air_decisions_v1`, `airos_flood_decisions_v1`, `airos_heat_decisions_v1`, `airos_cross_domain_v1`
@@ -1117,9 +1117,9 @@ Step 9 — Register Notification templates
   POST /notification/v1/template  ×3
   AIROS_DECISION_EMAIL, AIROS_DECISION_SMS, AIROS_DIGEST_EMAIL
 
-Step 10 — Seed AirNexus entities (separate service)
-  POST /airnexus/v1/entities  (one per ward — see AIRNEXUS_COORDINATION_SPEC.md)
-  This step is skipped if AirNexus is not deployed in this environment.
+Step 10 — Seed AIRNet entities (separate service)
+  POST /airnet/v1/entities  (one per ward — see AIRNET_COORDINATION_SPEC.md)
+  This step is skipped if AIRNet is not deployed in this environment.
 
 Step 11 — Smoke test
   POST /airos/v1/ward/{any_ward}/snapshot  → expect QoL scores
