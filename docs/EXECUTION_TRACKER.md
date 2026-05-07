@@ -3,6 +3,18 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – Urban heat risk use case: task queue written
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Define 5-task queue for urban heat risk use case (specs → connectors → pipeline → SDK walkthrough). |
+| **Status** | **Done** (planning only; tasks are now `ready` in queue) |
+| **Files changed** | `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Current track** | `urban-heat-risk` |
+| **Next task** | `heat-phase0-specs` — run `python agentic/core/loop.py` to start |
+
+---
+
 ### 2026-05-07 – f13-github-actions-ci
 
 | Field | Value |

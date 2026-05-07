@@ -5,7 +5,7 @@
 # Status values: ready | in_progress | blocked | done | rejected | deferred
 # The loop executes the first task with status: ready.
 
-current_track: agentic-framework-build
+current_track: urban-heat-risk
 
 tasks:
 
@@ -276,3 +276,188 @@ tasks:
       - agentic-phase1-validate
     status: done
     commit: 6df1e5d
+
+  # ── Urban Heat Risk use case ──────────────────────────────────────────────
+
+  - task_id: heat-phase0-specs
+    type: spec_edit
+    scope_description: >
+      Write provider contracts, consumer contracts, domain spec, and app
+      descriptor for the urban heat risk use case; register all in manifest.json.
+    allowed_files:
+      - specifications/provider_contracts/temperature_observation_feed.v1.schema.json
+      - specifications/provider_contracts/green_cover_feed.v1.schema.json
+      - specifications/consumer_contracts/heat_risk_dashboard.v1.schema.json
+      - specifications/consumer_contracts/heat_intervention_candidates.v1.schema.json
+      - specifications/app_descriptors/urban_heat_risk_review.v1.yaml
+      - specifications/domain_specs/urban_heat.v1.yaml
+      - specifications/examples/heat/temperature_observation_feed.sample.json
+      - specifications/examples/heat/green_cover_feed.sample.json
+      - specifications/examples/heat/heat_risk_dashboard.sample.json
+      - specifications/examples/heat/heat_intervention_candidates.sample.json
+      - specifications/manifest.json
+      - docs/EXECUTION_TRACKER.md
+    forbidden_actions:
+      - modify existing provider or consumer contracts
+      - modify runtime code
+      - modify tests
+    success_criteria:
+      - temperature_observation_feed.v1.schema.json exists and is valid JSON Schema
+      - green_cover_feed.v1.schema.json exists and is valid JSON Schema
+      - heat_risk_dashboard.v1.schema.json exists with required fields (generated_at,
+        city_id, heat_cells, summary, data_quality_flag, provenance_summary)
+      - heat_intervention_candidates.v1.schema.json exists with required fields
+        (generated_at, city_id, candidates list with h3_id, risk_score, green_deficit)
+      - urban_heat_risk_review.v1.yaml app descriptor exists with safety gates
+        (review_support_only true, human_review_required true, blocked_uses populated)
+      - urban_heat.v1.yaml domain spec exists
+      - all four contracts registered in specifications/manifest.json
+      - sample JSON files validate against their schemas
+      - conformance passes (148+ checks)
+      - tracker updated
+    escalation_conditions:
+      - manifest.json structure is incompatible with new entries
+      - existing schema conventions cannot express heat-specific fields
+    status: ready
+
+  - task_id: heat-phase1-openmeteo-connector
+    type: code_edit
+    scope_description: >
+      Write an OpenMeteo connector fetching hourly temperature, apparent temperature,
+      and relative humidity for a city bbox; returns a DataFrame matching the
+      temperature_observation_feed provider contract.
+    allowed_files:
+      - urban_platform/connectors/heat/__init__.py
+      - urban_platform/connectors/heat/openmeteo.py
+      - tests/test_heat_openmeteo_connector.py
+      - docs/EXECUTION_TRACKER.md
+    forbidden_actions:
+      - modify specification contracts
+      - modify existing connectors
+      - require an API key (OpenMeteo is free and keyless)
+    success_criteria:
+      - openmeteo.py fetches from https://api.open-meteo.com/v1/forecast
+      - connector accepts city_name, bbox (lat_min, lon_min, lat_max, lon_max),
+        and lookback_days parameters
+      - returns a pandas DataFrame with columns (station_id, latitude, longitude,
+        timestamp, temperature_c, apparent_temperature_c, relative_humidity_pct,
+        data_source)
+      - data_source column is always "openmeteo"
+      - connector returns empty DataFrame on network failure (no exception raised)
+      - at least one test mocks the HTTP response and validates DataFrame schema
+      - at least one test covers the empty-on-failure path
+      - pytest passes (537+ tests)
+      - tracker updated
+    escalation_conditions:
+      - OpenMeteo API schema differs from documented endpoint
+      - verification fails after two attempts
+    depends_on:
+      - heat-phase0-specs
+    status: ready
+
+  - task_id: heat-phase2-osm-green-cover
+    type: code_edit
+    scope_description: >
+      Write an OSM green cover connector using osmnx that pulls parks, trees,
+      and water bodies for a city boundary and computes green cover fraction
+      and water proximity score per H3 cell.
+    allowed_files:
+      - urban_platform/connectors/heat/osm_green_cover.py
+      - tests/test_heat_osm_green_cover.py
+      - docs/EXECUTION_TRACKER.md
+    forbidden_actions:
+      - modify specification contracts
+      - modify existing connectors
+      - make live OSM network calls in tests (mock osmnx)
+    success_criteria:
+      - osm_green_cover.py accepts a boundary polygon (shapely) and h3_resolution
+      - fetches parks and green spaces using osmnx.features_from_polygon with
+        tags for parks, forests, grass, trees
+      - fetches water bodies with tags for water, wetland, reservoir
+      - computes green_cover_fraction per H3 cell (0.0–1.0)
+      - computes water_proximity_score per H3 cell (1.0 if water in cell, 0.0 if
+        no water within 500m, interpolated in between)
+      - returns a DataFrame with columns (h3_id, green_cover_fraction,
+        water_proximity_score, osm_feature_count)
+      - tests mock osmnx calls; at least one test covers a cell with full green
+        cover and one with zero
+      - pytest passes (537+ tests)
+      - tracker updated
+    escalation_conditions:
+      - osmnx API for features_from_polygon has changed
+      - H3 cell geometry computation requires a library not in requirements.txt
+      - verification fails after two attempts
+    depends_on:
+      - heat-phase0-specs
+    status: ready
+
+  - task_id: heat-phase3-pipeline
+    type: code_edit
+    scope_description: >
+      Write the urban heat risk scoring pipeline that combines temperature
+      observations and green cover to produce an H3 heat risk grid and ranked
+      intervention candidates matching the consumer contracts.
+    allowed_files:
+      - urban_platform/applications/heat/__init__.py
+      - urban_platform/applications/heat/heat_pipeline.py
+      - tests/test_heat_pipeline.py
+      - docs/EXECUTION_TRACKER.md
+    forbidden_actions:
+      - modify specification contracts
+      - modify existing AQ or flood pipeline code
+      - claim production readiness
+    success_criteria:
+      - heat_pipeline.py accepts (temperature_df, green_cover_df, h3_resolution,
+        city_id) parameters
+      - computes heat_index per H3 cell using IDW interpolation of temperature
+        observations (reuse pattern from aq_data.py build_aq_panel)
+      - computes uhi_intensity as cell heat_index minus city-wide median
+      - computes heat_risk_score per cell (0.0–1.0) combining uhi_intensity and
+        green_cover_fraction deficit
+      - build_heat_risk_dashboard() returns a dict conforming to
+        heat_risk_dashboard.v1.schema.json
+      - build_intervention_candidates() returns a dict conforming to
+        heat_intervention_candidates.v1.schema.json with top-10 cells ranked
+        by risk_score descending
+      - data_quality_flag is "synthetic" if temperature data_source is synthetic
+      - pytest passes (537+ tests)
+      - conformance passes (148+ checks)
+      - tracker updated
+    escalation_conditions:
+      - IDW interpolation produces NaN for all cells (insufficient temperature points)
+      - consumer contract fields cannot be populated from available data
+      - verification fails after two attempts
+    depends_on:
+      - heat-phase1-openmeteo-connector
+      - heat-phase2-osm-green-cover
+    status: ready
+
+  - task_id: heat-phase4-sdk-walkthrough
+    type: docs_edit
+    scope_description: >
+      Write an SDK walkthrough doc and read-only example script for the urban
+      heat risk use case using only urban_platform.sdk public surface.
+    allowed_files:
+      - docs/URBAN_HEAT_RISK_SDK_WALKTHROUGH.md
+      - examples/sdk/heat_risk_walkthrough.py
+      - tests/test_sdk_heat_risk_walkthrough.py
+      - docs/EXECUTION_TRACKER.md
+    forbidden_actions:
+      - modify runtime code
+      - modify specification contracts
+      - use internal SDK imports (only urban_platform.sdk.__all__ symbols)
+    success_criteria:
+      - walkthrough doc covers (inventory, app descriptor, contracts, pipeline
+        outputs, intervention candidates, safety gates)
+      - example script runs without error from repo root
+      - example script uses only urban_platform.sdk public imports
+      - example script is read-only (no store writes)
+      - at least 10 new tests covering the walkthrough fixture assertions
+      - pytest passes (537+ tests)
+      - tracker updated
+    escalation_conditions:
+      - SDK public surface is insufficient to demonstrate the heat use case
+      - verification fails after two attempts
+    depends_on:
+      - heat-phase3-pipeline
+    status: ready
