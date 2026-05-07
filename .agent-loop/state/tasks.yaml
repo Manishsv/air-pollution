@@ -144,7 +144,7 @@ tasks:
       - loop.py reads config.yaml and tasks.yaml
       - loop.py validates the current task before invoking any agent
       - loop.py checks for dirty working tree before invoking any agent
-      - loop.py invokes Claude Code via subprocess (claude --print)
+      - loop.py invokes Claude Code via subprocess (claude -p)
       - loop.py writes a task completion record after implementation
       - loop.py writes an escalation record on preflight failure
       - tests cover preflight pass, preflight fail (dirty tree), and escalation write

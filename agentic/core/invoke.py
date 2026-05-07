@@ -37,14 +37,14 @@ def invoke_claude(
     claude_bin: str = "claude",
 ) -> str:
     """
-    Invoke `claude --print` with the given prompt piped to stdin.
+    Invoke `claude -p` (non-interactive print mode) with the prompt piped to stdin.
 
     Returns the raw stdout string.
     Raises subprocess.CalledProcessError on non-zero exit.
     Raises FileNotFoundError if the claude binary is not on PATH.
     """
     result = subprocess.run(
-        [claude_bin, "--print"],
+        [claude_bin, "-p"],
         input=prompt,
         capture_output=True,
         text=True,
