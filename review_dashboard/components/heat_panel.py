@@ -89,7 +89,7 @@ def _synthetic_temperature(bbox: dict) -> pd.DataFrame:
                 "apparent_temperature_c": round(t + 2.5, 1),
                 "relative_humidity_pct": 70.0,
                 "data_source": "openmeteo",
-                "quality_flag": "real",
+                "quality_flag": "synthetic",
             })
     return pd.DataFrame(rows)
 

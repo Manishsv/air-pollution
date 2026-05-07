@@ -90,7 +90,7 @@ def _synthetic_aq(bbox: dict) -> pd.DataFrame:
                 "pm10_ugm3": round(pm25 * 1.6, 1),
                 "european_aqi": None,
                 "data_source": "openmeteo_aq",
-                "quality_flag": "real",
+                "quality_flag": "synthetic",
             })
     return pd.DataFrame(rows)
 

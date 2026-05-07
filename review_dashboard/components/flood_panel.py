@@ -90,7 +90,7 @@ def _synthetic_rainfall(bbox: dict) -> pd.DataFrame:
                 "rainfall_intensity_mm_per_hr": r,
                 "rainfall_accumulation_3h_mm": round(r * 3, 1),
                 "data_source": "openmeteo",
-                "quality_flag": "real",
+                "quality_flag": "synthetic",
             })
     return pd.DataFrame(rows)
 
