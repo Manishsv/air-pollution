@@ -25,6 +25,7 @@ from review_dashboard.components.flood_panel import render_flood_panel
 from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
 from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
 from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
+from review_dashboard.components.heat_panel import render_heat_panel
 from review_dashboard.design_system import apply_airos_design_system
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -480,16 +481,7 @@ def main():
         render_runtime_trace_panel()
 
     with t_heat:
-        render_domain_header(
-            title="Heat Risk Review",
-            caption="Placeholder tab until heat risk consumer contracts and payloads are wired.",
-            primary_alert=None,
-        )
-        render_empty_state(
-            "Heat risk review is not implemented in this build.",
-            hint="Follow `docs/UI_GUIDELINES.md` and extend specs before adding live heat data.",
-        )
-        render_technical_json_expander(title="Technical: Placeholder", payload={"status": "not_implemented"})
+        render_heat_panel()
 
     with t_crowd:
         render_domain_header(
