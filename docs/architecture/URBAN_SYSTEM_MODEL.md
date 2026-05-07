@@ -29,6 +29,20 @@ school access, prevents disease, and builds citizen trust in government.
 AirOS should always be able to trace from a technical signal to a citizen
 outcome. If it cannot, the signal should be questioned.
 
+The **economic domain** maps directly to `affordability`, `opportunity`, and
+`resilience` in the equation above. It is distinct from environmental domains
+in a critical way: it operates **bidirectionally**.
+
+- **Inward:** economic conditions determine how badly environmental risk hurts
+  citizens. The same flood risk hits an informal market vendor far harder than
+  a salaried professional.
+- **Outward:** environmental interventions unlock economic potential. Fixing
+  flood risk in a market ward is not just hazard mitigation — it is urban
+  development investment with a calculable economic return.
+
+This makes the economic lens a cross-cutting multiplier, not just another
+domain column.
+
 ---
 
 ## 3. Layered city model
@@ -154,20 +168,40 @@ regulatory workflows not yet modelled.
 
 ### Layer 5 — People, households, firms, and institutions
 
-The demand and vulnerability layer.
+The demand, vulnerability, and opportunity layer.
 
 Population, households, density, age groups, income, vulnerable groups,
 migrants, informal workers, businesses, schools, hospitals, community
 institutions, government departments, parastatals, utilities.
 
-This layer turns infrastructure analysis into **equity analysis**.
+This layer turns infrastructure analysis into **equity analysis** and
+environmental risk analysis into **economic impact analysis**.
 
 A drain failure is not just a hydraulic event. It becomes a citizen issue when
 it affects school access, health risk, livelihood loss, property damage,
 mobility, dignity, and trust in government.
 
-**Status in AirOS:** Not yet modelled. Population data and vulnerability
-overlays are deferred.
+**Economic vulnerability signals** (who gets hurt more when risk materialises):
+- Housing type — kutcha / informal structures vs permanent construction
+- Livelihood exposure — outdoor workers, daily-wage, agricultural, street
+  vendors who cannot work when flooded, heat-stressed, or air-quality-impaired
+- Market dependency — households relying on local informal markets for food,
+  income, and credit
+- Income proxy — nighttime light intensity per ward as a relative economic
+  activity measure
+- Distance from formal employment, banking, and healthcare (isolation index)
+
+**Economic opportunity signals** (where intervention creates the most growth):
+- Commercial and market density — OSM shops, markets, hawker zones, mandis
+- Employment zone classification — industrial, commercial, residential, informal
+- Connectivity to economic corridors — transit access, arterial road quality
+- Underutilised land with high accessibility — latent development potential
+- Green economy potential — rooftop area for solar, urban forestry canopy
+  deficit as job-creation opportunity, waste-to-value zones
+
+**Status in AirOS:** Not yet modelled. Economic vulnerability and opportunity
+signals are the next planned domain after the environmental trio (air, flood,
+heat) is stable.
 
 ### Layer 6 — Governance, finance, regulation, and trust
 
@@ -296,6 +330,36 @@ Rainfall event (Layer 0)
 → Inspection and repair decision (Layer 4/6)
 ```
 
+**Environmental risk → economic suppression → missed opportunity:**
+```
+Flood risk in informal market ward (Layer 0/3)
+→ Vendors cannot operate during monsoon (Layer 5)
+→ Daily-wage income lost; household debt pressure (economic outcome)
+→ Market abandonment; land value decline (Layer 1)
+→ Tax base erosion; reduced maintenance budget (Layer 6)
+→ Infrastructure degrades further → risk worsens (feedback loop)
+```
+
+**Environmental intervention → economic unlock:**
+```
+Flood mitigation investment in Ward X (Layer 4/6)
+→ Informal market operates year-round (Layer 5)
+→ Vendor incomes stabilise; 400 livelihoods secured (economic outcome)
+→ Property values recover; new businesses enter (Layer 1/5)
+→ Property tax and trade licence revenue increases (Layer 6)
+→ City can fund next ward's drain upgrade (reinvestment cycle)
+```
+
+**Heat → outdoor worker productivity → economic exclusion:**
+```
+Urban heat island intensifies (Layer 0/3)
+→ Outdoor workers (construction, street vending) lose productive hours
+→ Heat-related illness increases; healthcare cost rises (Layer 5/7)
+→ Low-income households disproportionately affected (equity gap widens)
+→ Green cover intervention + cool zone creation (Layer 1/4)
+→ Productivity restored; economic inclusion improves (Layer 7)
+```
+
 ---
 
 ## 8. Urban metabolism view
@@ -319,7 +383,105 @@ Property tax → revenue → maintenance → service quality
 
 ---
 
-## 9. Urban ontology (top level)
+## 9. Economic domain model
+
+### 9.1 Purpose
+
+The economic domain answers three questions that no other domain answers:
+
+1. **Who is most harmed?** Economic vulnerability determines how environmental
+   risk translates into citizen hardship. Equal risk ≠ equal harm.
+2. **Where is the highest return on intervention?** Economic opportunity signals
+   show which wards will generate the most livelihood benefit from a given
+   environmental fix.
+3. **What is the intervention ROI?** Combining risk reduction with economic
+   opportunity produces a ward-level investment prioritisation score.
+
+### 9.2 Two-index model
+
+**Economic Vulnerability Index (EVI)**
+
+Measures how exposed a ward's population is to economic harm when
+environmental risk materialises. A high EVI ward suffers more from the same
+flood or heat level than a low EVI ward.
+
+```
+EVI = f(
+  housing_informality,       # share of kutcha / non-permanent structures
+  livelihood_outdoor_share,  # share of outdoor / daily-wage / informal workers
+  market_dependency,         # reliance on local informal markets
+  income_proxy,              # nighttime light intensity (relative)
+  isolation_index,           # distance from formal employment, healthcare, banking
+)
+```
+
+EVI acts as a multiplier on environmental risk scores when computing ward
+priority for intervention. A ward with `flood_risk = 0.5` and `EVI = high`
+should rank higher for intervention than one with `flood_risk = 0.7` and
+`EVI = low`.
+
+**Economic Opportunity Index (EOI)**
+
+Measures the latent economic potential that gets unlocked when environmental
+risk in a ward is reduced. A high EOI ward has more to gain from intervention.
+
+```
+EOI = f(
+  commercial_density,        # shops, markets, vendors, mandis per km²
+  employment_zone_class,     # industrial / commercial / mixed / residential / informal
+  corridor_connectivity,     # transit and road access to economic hubs
+  land_activation_potential, # underutilised accessible land
+  green_economy_potential,   # rooftop solar area, urban forestry opportunity,
+                             #   waste-to-value zones
+)
+```
+
+### 9.3 Intervention ROI score
+
+```
+Intervention ROI (ward) = risk_severity × EVI × EOI
+```
+
+This ranks wards not just by how bad conditions are, but by how much
+improvement in citizen lives and economic activity a unit of intervention
+investment would produce.
+
+### 9.4 Integration with Ward QoL index
+
+The current QoL formula:
+```
+QoL = 0.40 × (1 − flood_risk) + 0.35 × (1 − aqi_score) + 0.25 × (1 − heat_risk)
+```
+
+With economic domain added:
+```
+Adjusted QoL = QoL × (1 − EVI_weight)    # vulnerability-corrected outcome
+Economic Opportunity Score = EOI          # separate output, not folded into QoL
+Intervention Priority Score = (1 − QoL) × EVI × EOI
+```
+
+The economic scores surface as additional columns in the ward aggregation
+output and as a separate dashboard view: **Ward Investment Prioritisation**,
+ranking wards by intervention priority score rather than QoL index alone.
+
+### 9.5 Data sources (planned)
+
+| Signal | Source |
+|--------|--------|
+| Housing informality | GHSL built-up surface type (formal vs informal) |
+| Nighttime lights | VIIRS/NPP monthly composites (NASA LAADS) |
+| Commercial density | OpenStreetMap amenity/shop/market features |
+| Road / transit access | OSM road network + GTFS transit feeds |
+| Employment zones | City master plan land-use layer (GeoJSON) |
+| Rooftop solar potential | DSM + sun angle computation or Google Solar API |
+| Urban forestry gaps | NDVI raster (Sentinel-2) vs. ward canopy targets |
+
+All economic signals will be ingested through the same observation store →
+feature store pipeline as environmental domains, keyed by H3 cell.
+
+---
+
+## 10. Urban ontology (top level)
 
 ```
 Urban Area
@@ -333,14 +495,18 @@ Urban Area
     Civic · Utility · Regulatory · Welfare · Emergency
   Actor
     Citizen · Household · Business · Department · Utility · Vendor · Community
+  Economic Unit
+    Informal Market · Employment Zone · Business Cluster · Green Economy Asset
+    Livelihood Group · Supply Chain Node
   Event
     Complaint · Failure · Payment · Inspection · Rainfall · Pollution Spike
-    Construction · Permit Application
+    Construction · Permit Application · Market Disruption · Livelihood Loss
   Decision
     Approve · Reject · Inspect · Repair · Prioritise · Notify
-    Allocate Budget · Issue Warning
+    Allocate Budget · Issue Warning · Invest · Unlock Zone
   Outcome
     Health · Safety · Access · Affordability · Environment · Trust · Resilience
+    Economic Opportunity · Livelihood Stability · Intervention ROI
 ```
 
 ---
@@ -383,9 +549,16 @@ Use the score to decide whether something is:
 - Observation store, feature store, ward quality-of-life index
 - H3 → ward spatial hierarchy
 
+**Next domain (planned):**
+- Economic domain: Economic Vulnerability Index (EVI) + Economic Opportunity
+  Index (EOI) per ward
+- Ward Investment Prioritisation view: ranks wards by intervention ROI
+- Data sources: GHSL (housing informality), VIIRS nighttime lights, OSM
+  commercial density, Sentinel-2 NDVI (green economy potential)
+
 **Deferred:**
 - Drainage network topology (Layer 2 graph model)
-- Population and vulnerability overlay (Layer 5)
+- Population and vulnerability overlay (Layer 5 — demographic detail)
 - Governance and fiscal modelling (Layer 6)
 - Water supply, sewerage, electricity networks
 - Complaints and permit workflows (Layer 4)
@@ -404,3 +577,8 @@ Use the score to decide whether something is:
 6. **H3 for computation, ward for governance.** Fine-grained grids for pipelines; named places for people.
 7. **Local-first, cloud-ready.** Every component runs offline; nothing assumes a network.
 8. **Domain-first, then cross-domain.** Build one vertical slice fully before joining domains.
+9. **Economic lens is bidirectional.** Measure who is made more vulnerable by risk (inward),
+   and where interventions create the most economic opportunity (outward). Environmental
+   action is urban development investment with a calculable return.
+10. **Equal risk ≠ equal harm.** Always weight environmental risk by economic vulnerability.
+    A flood-risk score without an EVI multiplier understates harm to informal market wards.
