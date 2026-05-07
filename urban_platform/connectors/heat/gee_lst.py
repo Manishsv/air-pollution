@@ -25,10 +25,26 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import os
+
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def _gee_init(project: str | None) -> None:
+    import ee
+    key_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    sa_email = os.environ.get("GEE_SERVICE_ACCOUNT", "").strip()
+    if key_file and sa_email:
+        creds = ee.ServiceAccountCredentials(email=sa_email, key_file=key_file)
+        ee.Initialize(credentials=creds, project=project)
+    else:
+        try:
+            ee.Initialize(project=project)
+        except Exception:
+            ee.Initialize()
 
 _COLUMNS = [
     "station_id", "latitude", "longitude", "timestamp",
@@ -96,10 +112,7 @@ def fetch_lst_observations(
         return empty
 
     try:
-        try:
-            ee.Initialize(project=project)
-        except Exception:
-            ee.Initialize()
+        _gee_init(project)
     except Exception as exc:
         logger.error("GEE authentication failed: %s", exc)
         return empty
