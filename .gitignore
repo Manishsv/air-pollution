@@ -34,3 +34,4 @@ data/edge/*.jsonl
 # Local agent-loop + Node artifacts (dev only)
 .agent-loop/
 node_modules/
+.claude/
