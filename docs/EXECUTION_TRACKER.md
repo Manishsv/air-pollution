@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `urban_platform/applications/air_pollution/aq_data.py`, `tests/test_aq_data_synthetic_fallback.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
 | **Verification** | `python -m pytest -q`: **537 passed** (19 new). `python main.py --step conformance`: **148 checks**. |
-| **Commit hash** | pending |
+| **Commit hash** | `3abde9b` |
 | **Current next task** | `f13-github-actions-ci` |
 
 ---
