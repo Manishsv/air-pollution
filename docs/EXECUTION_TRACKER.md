@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `agentic/core/loop.py`, `agentic/core/config.py`, `agentic/core/state.py`, `agentic/core/invoke.py`, `tests/test_agentic_loop.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
 | **Verification** | `python -m pytest -q`: **460 passed** (34 new). |
-| **Commit hash** | pending |
+| **Commit hash** | `a10ea1d` |
 | **Current next task** | `agentic-phase2-qa` — write `agentic/core/qa.py` |
 
 ---
