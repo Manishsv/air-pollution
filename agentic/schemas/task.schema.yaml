@@ -1,0 +1,121 @@
+# Task Schema — agentic framework
+#
+# Every task the loop executes must conform to this schema.
+# The loop validates this before invoking any agent.
+# If validation fails, an escalation is written and the loop stops.
+#
+# See agentic/schemas/examples/task.example.yaml for a concrete instance.
+
+schema_version: "1.0"
+schema_id: agentic.task.v1
+
+required_fields:
+
+  task_id:
+    type: string
+    description: >
+      Unique identifier for this task. Use kebab-case.
+      Must be unique within tasks.yaml.
+    example: "sdk-program-reporting-walkthrough"
+
+  type:
+    type: enum
+    values:
+      - docs_edit       # Add or edit documentation files only
+      - code_edit       # Add or edit code, tests, or scripts
+      - spec_edit       # Add or edit specification contracts or schemas
+      - research        # Read-only investigation; produces a findings doc
+      - review          # Assess an artifact against criteria; produces a review record
+      - verify_commit   # Run verification trio and commit if green
+    description: >
+      Task type constrains what the agent is allowed to do.
+      The loop uses this to select context files from config.yaml.
+
+  scope_description:
+    type: string
+    max_length: 200
+    description: >
+      One sentence describing what this task produces.
+      Must be specific enough that a reviewer can confirm it is done.
+    example: "Add docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md covering all five SDK sections."
+
+  allowed_files:
+    type: list[string]
+    description: >
+      Explicit list of file paths or glob patterns the agent may modify.
+      The QA agent checks the git diff against this list.
+      Any file changed outside this list is a review failure.
+    example:
+      - "docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md"
+      - "docs/EXECUTION_TRACKER.md"
+
+  forbidden_actions:
+    type: list[string]
+    description: >
+      Actions the agent must not take regardless of task type.
+      Written in plain language; the QA agent checks for evidence of these
+      in the diff and the task record.
+    example:
+      - "modify runtime code"
+      - "modify specification contracts"
+      - "commit without running verification"
+      - "claim production readiness"
+
+  success_criteria:
+    type: list[string]
+    description: >
+      Explicit, checkable conditions that must all be true for the task
+      to be considered complete. The QA agent checks each one.
+      Write these so a reviewer can answer yes/no without ambiguity.
+    example:
+      - "docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md exists and covers all five sections"
+      - "all code snippets use only urban_platform.sdk.__all__ imports"
+      - "docs/EXECUTION_TRACKER.md updated with this task as Done"
+      - "commit hash recorded in tracker"
+
+  escalation_conditions:
+    type: list[string]
+    description: >
+      Conditions under which the agent must stop and write an escalation
+      instead of continuing. The agent does not resolve these itself.
+    example:
+      - "success criteria are ambiguous or contradictory"
+      - "allowed_files are insufficient to complete the task"
+      - "verification fails after two attempts"
+      - "a safety gate or governance rule is unclear"
+
+optional_fields:
+
+  depends_on:
+    type: list[string]
+    description: >
+      task_ids that must be in status=done before this task can start.
+      The loop checks this before invoking the agent.
+    default: []
+
+  owner_agent:
+    type: enum
+    values: [implementation_agent, qa_agent]
+    default: implementation_agent
+    description: Which agent role handles this task.
+
+  context_hint:
+    type: list[string]
+    description: >
+      Additional file paths to include in agent context beyond what
+      config.yaml specifies for this task type.
+    default: []
+
+  notes:
+    type: string
+    description: >
+      Free-text notes for the human. Not parsed by the loop.
+    default: ""
+
+task_status_values:
+  - ready           # All depends_on tasks are done; loop may execute
+  - in_progress     # Currently being executed by an agent
+  - blocked         # Escalation is open; waiting for human decision
+  - done            # All success criteria confirmed by QA agent
+  - rejected        # QA agent rejected; requires revision or new task
+  - deferred        # Deliberately postponed; not in active queue

@@ -1,0 +1,112 @@
+# Decision Schema — agentic framework
+#
+# Represents a question requiring human input before the loop can continue.
+# Decisions may be raised by the loop (e.g. task queue is empty),
+# by an escalation that resolves to a strategic choice, or directly
+# by the human steering dashboard.
+# Written to .agent-loop/state/decisions.yaml.
+#
+# See agentic/schemas/examples/decision.example.yaml for a concrete instance.
+
+schema_version: "1.0"
+schema_id: agentic.decision.v1
+
+required_fields:
+
+  decision_id:
+    type: string
+    description: >
+      Unique identifier. Convention: dec-{topic}-{YYYYMMDD}.
+    example: "dec-next-track-20260507"
+
+  question:
+    type: string
+    description: >
+      The specific question the human must answer to unblock the loop.
+      Must be answerable by choosing one of the listed options.
+    example: "Which track should follow the SDK use case?"
+
+  options:
+    type: list[option]
+    description: >
+      The choices available to the human. Each option must produce
+      a deterministic next state in the loop when chosen.
+    min_items: 2
+
+  status:
+    type: enum
+    values:
+      - pending     # Waiting for human input; loop is stopped
+      - resolved    # Human has chosen; loop may resume
+      - dismissed   # Human dismissed; loop treats as deferred
+    default: pending
+
+option_schema:
+
+  label:
+    type: string
+    description: The option name as it appears in the dashboard.
+    example: "F-04 synthetic fallback audit event"
+
+  consequence:
+    type: string
+    description: >
+      What the loop does if this option is chosen.
+      Should describe the next task that will be queued.
+    example: >
+      Sets current task to: add provider_failure audit event in aq_data.py.
+      Small scope; does not require architecture review.
+
+  effort:
+    type: enum
+    values: [small, medium, large]
+    description: Rough effort estimate for the human's situational awareness.
+
+optional_fields:
+
+  recommendation:
+    type: string
+    description: >
+      The loop's recommended option, with one sentence explaining why.
+      Shown in the dashboard. Human is not required to follow it.
+
+  why_now:
+    type: string
+    description: >
+      Why this decision is needed now rather than later.
+      Helps the human prioritise if multiple decisions are pending.
+
+  impact_if_delayed:
+    type: string
+    description: >
+      What gets blocked or degrades if this decision is not made promptly.
+      Used by the dashboard to surface urgency.
+
+  raised_by:
+    type: string
+    description: >
+      What triggered this decision (escalation_id, task_id, or 'loop').
+    default: loop
+
+  raised_at:
+    type: string
+    format: ISO 8601 datetime
+
+  chosen_option:
+    type: string
+    description: >
+      Required when status is resolved.
+      The label of the option the human selected.
+
+  resolved_by:
+    type: string
+    description: Who resolved this decision.
+    default: human
+
+  resolved_at:
+    type: string
+    format: ISO 8601 datetime
+
+  notes:
+    type: string
+    description: Free-text notes added by the human at resolution time.

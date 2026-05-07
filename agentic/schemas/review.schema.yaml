@@ -1,0 +1,108 @@
+# Review Schema — agentic framework
+#
+# Produced by the QA agent after every implementation task.
+# Written to .agent-loop/state/reviews.yaml.
+# The loop reads the outcome to decide whether to advance, escalate, or stop.
+#
+# See agentic/schemas/examples/review.example.yaml for a concrete instance.
+
+schema_version: "1.0"
+schema_id: agentic.review.v1
+
+required_fields:
+
+  review_id:
+    type: string
+    description: >
+      Unique identifier. Convention: review-{task_id}-{YYYYMMDD}.
+    example: "review-sdk-walkthrough-20260507"
+
+  task_id:
+    type: string
+    description: The task_id this review corresponds to.
+
+  reviewer:
+    type: enum
+    values: [qa_agent, human]
+    description: Who produced this review record.
+
+  outcome:
+    type: enum
+    values:
+      - approved
+        # All success criteria passed. Loop may advance to next task.
+      - rejected
+        # One or more criteria failed. Loop writes escalation and stops.
+      - needs_human_decision
+        # QA agent cannot determine pass/fail without human input.
+        # Loop writes a decision record and waits.
+    description: >
+      The only three valid outcomes. Nothing else.
+      The loop branches entirely on this field.
+
+  checks:
+    type: list[check]
+    description: >
+      One entry per success criterion from the task definition.
+      QA agent must address every criterion; none may be skipped
+      without a note explaining why.
+
+  timestamp:
+    type: string
+    format: ISO 8601 datetime
+    description: When this review was produced.
+
+check_schema:
+
+  criterion:
+    type: string
+    description: Copied verbatim from the task's success_criteria list.
+
+  result:
+    type: enum
+    values:
+      - pass    # Criterion confirmed satisfied
+      - fail    # Criterion not satisfied; see note
+      - skip    # Cannot be checked automatically; see note
+    description: >
+      'skip' is permitted only with an explicit note explaining why and
+      only when the criterion requires human judgement (e.g. "content
+      is accurate"). A skipped criterion does not count as a failure
+      but triggers needs_human_decision if any are present.
+
+  note:
+    type: string
+    description: >
+      Required when result is fail or skip.
+      For fail: what was found instead of what was expected.
+      For skip: why automated checking is not possible.
+
+optional_fields:
+
+  reason:
+    type: string
+    description: >
+      Required when outcome is rejected or needs_human_decision.
+      One-paragraph summary of what failed or what decision is needed.
+
+  evidence:
+    type: list[string]
+    description: >
+      File paths, line numbers, or diff excerpts supporting the review.
+      Useful for rejected outcomes so the human can see exactly what
+      the QA agent found.
+    default: []
+
+  diff_files_checked:
+    type: list[string]
+    description: >
+      Files that appeared in the git diff for this task.
+      QA agent records these to confirm allowed_files constraint.
+    default: []
+
+  diff_files_outside_allowed:
+    type: list[string]
+    description: >
+      Files in the diff that were NOT in the task's allowed_files.
+      Any entry here is an automatic fail.
+    default: []

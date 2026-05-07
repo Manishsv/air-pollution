@@ -1,0 +1,120 @@
+# Escalation Schema — agentic framework
+#
+# Written by an agent when it hits a stop condition it cannot resolve.
+# Written to .agent-loop/state/escalations.yaml.
+# The loop stops and the dashboard presents this to the human.
+# The loop resumes only after status is set to resolved or dismissed.
+#
+# See agentic/schemas/examples/escalation.example.yaml for a concrete instance.
+
+schema_version: "1.0"
+schema_id: agentic.escalation.v1
+
+required_fields:
+
+  escalation_id:
+    type: string
+    description: >
+      Unique identifier. Convention: esc-{YYYYMMDD}-{sequence}.
+    example: "esc-20260507-001"
+
+  task_id:
+    type: string
+    description: The task that raised this escalation.
+
+  raised_by:
+    type: enum
+    values: [implementation_agent, qa_agent, loop]
+    description: >
+      Which component raised the escalation.
+      'loop' is used for pre-flight failures (dirty tree, invalid task schema,
+      missing dependency) that occur before any agent runs.
+
+  stop_condition:
+    type: string
+    description: >
+      The specific escalation condition from the task definition that was hit,
+      or a pre-flight condition name (dirty_tree, schema_invalid, dependency_not_done).
+      Copied verbatim where possible.
+    example: "allowed_files are insufficient to complete the task"
+
+  context:
+    type: string
+    description: >
+      Factual description of what the agent found that triggered the escalation.
+      No recommendations here — those go in options and recommendation.
+      Should be specific enough for the human to understand without re-reading
+      the full agent output.
+    example: >
+      The task requires adding a sys.path entry to the script so it can be run
+      directly. This is a code change, but the task type is docs_edit and
+      the script file is not in allowed_files.
+
+  options:
+    type: list[option]
+    description: >
+      Two to four concrete options for the human to choose from.
+      Each option must be actionable — something the loop can do
+      after the human chooses.
+    min_items: 2
+    max_items: 4
+
+  recommendation:
+    type: string
+    description: >
+      The agent's recommended option, with one sentence explaining why.
+      The human is not required to follow it.
+
+  status:
+    type: enum
+    values:
+      - pending_human_decision   # Waiting; loop is stopped
+      - resolved                 # Human chose an option; loop may resume
+      - dismissed                # Human dismissed without acting; task deferred
+    default: pending_human_decision
+
+option_schema:
+
+  label:
+    type: string
+    description: Short description of this option (one sentence).
+    example: "Expand allowed_files to include the script and change task type to code_edit"
+
+  consequence:
+    type: string
+    description: >
+      What happens if this option is chosen. One sentence.
+      Focus on second-order effects, not just the immediate action.
+    example: "Script runs cleanly but this task now touches code, requiring verification."
+
+optional_fields:
+
+  resolution:
+    type: string
+    description: >
+      Required when status is resolved.
+      Records which option was chosen and any additional human notes.
+
+  resolved_by:
+    type: string
+    description: Who resolved this escalation.
+    default: human
+
+  resolved_at:
+    type: string
+    format: ISO 8601 datetime
+
+  raised_at:
+    type: string
+    format: ISO 8601 datetime
+    description: When the escalation was written.
+
+  loop_state_at_raise:
+    type: object
+    description: >
+      Snapshot of relevant loop state when the escalation was raised.
+      Useful for diagnosing systematic problems.
+    fields:
+      head_commit: string
+      dirty_files: list[string]
+      tasks_done_count: integer

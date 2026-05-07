@@ -398,13 +398,13 @@ AirOS remains a **review-oriented Decision Support Operating System**, not a pro
 
 ## Current active track
 
-Current active track: **SDK-driven Program Reporting use case**.
+Current active track: **Agentic framework build**.
 
-Current next task: **Run the SDK example script manually and record its output summary in the tracker; then close the SDK use case track if walkthrough, example, tests, docs, and verification are all complete.**
+Current next task: **agentic-phase1-validate — write agentic/core/validate.py to validate tasks.yaml against task.schema.yaml.**
 
 Requires human decision: **no**
 
-Goal: Demonstrate how an AirOS developer or operator can use the supported SDK surface to understand an existing pilot app without relying on Core internals, unsafe plugin loading, or runtime mutation.
+Goal: Build a reusable, protocol-driven multi-agent framework in `agentic/` that coordinates Claude Code agents through explicit task, review, escalation, and decision schemas. Phase 0 (schemas, protocols, role templates, AirOS config) is complete. Phase 1 (validation script) is next.
 
 ## Current verification baseline
 
@@ -437,8 +437,12 @@ Notes:
 | Agent loop guardrails | **Done** | `tools/agent-loop/agent-step.ts`, `tools/agent-loop/agent-loop.ts`, tracker gate | Improve streaming/timeout later if needed |
 | Runtime smoke validation | **Done** | Core API + dashboard API mode + evidence + store lifecycle smoke passed | Maintain as milestone gate |
 | SDK stabilization | **Done** | `docs/SDK_SURFACE.md`, SDK README, internal helper labels, `07bf7f2` | Use documented SDK surface in examples |
-| SDK-driven Program Reporting use case | **In progress** | Current active track | Create docs-only walkthrough, then read-only SDK example and tests |
-| Code review triage (2026-05-06) | **Done** | `docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md` | Classification only; no code changes; F-04 is first recommended fix after SDK track |
+| SDK-driven Program Reporting use case | **Done** | `e860b89` | Walkthrough, example script, 18 tests; 403 passed / 148 checks / supervisor pass |
+| Code review triage (2026-05-06) | **Done** | `b7c21ee` | Classification only; no code changes; F-04 is first recommended fix after SDK track |
+| Agentic framework build — Phase 0 | **Done** | pending commit | Schemas, protocols, role templates, AirOS config, tasks.yaml |
+| Agentic framework build — Phase 1 | **Not started** | `agentic/core/validate.py` | Validate tasks.yaml against task.schema.yaml |
+| Agentic framework build — Phase 2 | **Not started** | `agentic/core/loop.py`, `qa.py` | Main loop and QA agent invocation |
+| Agentic framework build — Phase 3 | **Not started** | `agentic/core/dashboard.py` | Human steering CLI |
 | Physical repo restructuring | **Deferred** | `docs/REPO_RESTRUCTURING_PLAN.md` | Do not start large moves yet |
 | Identity & Trust | **Deferred** | Product model / docs only | Future |
 | Network Layer | **Deferred** | Product model / docs only | Future |
@@ -463,10 +467,8 @@ Notes:
 
 | Date/order | Task | Status | Evidence / commit | Notes |
 | --- | --- | --- | --- | --- |
-| 2026-05-07 | Review/commit docs-only tracker (Cursor verification gate) | **Done (tracker); commit pending human** | **not committed** / **not pushed** | Shell **Rejected**; trio **not re-run**; baseline **403**/**148**/supervisor per walkthrough row; **`git`** + optional trio on maintainer machine before push |
-| 2026-05-07 | Repair: Program Reporting SDK manual-run task report sync | **Done** | **not committed** / **not pushed** | Tracker-only; verification trio **not run**; manual run still **pending** on maintainer machine |
-| 2026-05-07 | Program Reporting SDK walkthrough manual run | **Blocked (agent)** | n/a — shell **Rejected** | Entrypoint `python examples/sdk/program_reporting_walkthrough.py`; output summary deferred to maintainer-run; inferred behavior documented in **Recent Sessions** |
-| 2026-05-06 | Program Reporting SDK walkthrough, example, and tests | **Done** | pending commit | `docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md`, `examples/sdk/program_reporting_walkthrough.py`, `tests/test_sdk_program_reporting_walkthrough.py`; 403 passed / 148 checks / supervisor pass |
+| 2026-05-07 | Agentic framework Phase 0 — schemas, protocols, config | **Done** | `716d8c8` | `agentic/` folder; 4 schemas, 4 examples, PROTOCOLS.md, SETUP.md, role templates, AirOS config, tasks.yaml |
+| 2026-05-06 | Program Reporting SDK walkthrough, example, and tests | **Done** | `e860b89` | `docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md`, `examples/sdk/program_reporting_walkthrough.py`, `tests/test_sdk_program_reporting_walkthrough.py`; 403 passed / 148 checks / supervisor pass |
 | 2026-05-06 | Code review triage document | **Done** | `b7c21ee` | Classifies F-01–F-20; records owner decisions on Q1–Q10; no code changes |
 | 2026-05-06 | SDK docs/examples import audit | **Done** | Audit-only; no files changed | Public-facing docs use documented SDK surface; no internal imports found |
 | 2026-05-06 | SDK guardrails verified and committed | **Done** | `07bf7f2` | SDK public surface documented; internal helpers labeled; verified and synchronized |

@@ -1,0 +1,53 @@
+# Example escalation record — conforms to agentic/schemas/escalation.schema.yaml
+# Illustrates the sys.path problem encountered during the walkthrough task.
+
+escalation_id: esc-20260507-001
+task_id: sdk-program-reporting-walkthrough
+raised_by: implementation_agent
+raised_at: "2026-05-07T09:15:00Z"
+
+stop_condition: >
+  allowed_files are insufficient to complete the task
+
+context: >
+  The walkthrough script at examples/sdk/program_reporting_walkthrough.py
+  fails with ModuleNotFoundError when run as `python examples/sdk/...` from
+  the repo root, because the script's directory is added to sys.path instead
+  of the repo root. Fixing this requires adding a sys.path.insert() at the
+  top of the script. The script file is in allowed_files (the task type is
+  code_edit), so this is resolvable — but the fix means the script now
+  contains a path manipulation that may be considered non-idiomatic.
+  Flagging for awareness before proceeding.
+
+options:
+  - label: "Add sys.path.insert to the script (match existing repo pattern)"
+    consequence: >
+      Script runs cleanly from repo root without PYTHONPATH override.
+      Consistent with how tools/airos_cli.py handles the same problem.
+      Slightly less clean than a proper package install.
+
+  - label: "Require PYTHONPATH=. from the caller; document in README"
+    consequence: >
+      Keeps the script clean but breaks naive `python examples/sdk/...`
+      invocation. Users must know to set PYTHONPATH or use the Makefile.
+
+  - label: "Add an examples/sdk/__init__.py and run as a module"
+    consequence: >
+      Correct Python packaging approach but adds a file not in allowed_files.
+      Would require task scope expansion.
+
+recommendation: >
+  Option 1. The sys.path.insert pattern already exists in this repo and
+  the cost of the path hack is lower than the UX cost of requiring PYTHONPATH.
+
+status: resolved
+resolution: >
+  Chose option 1. Added sys.path.insert at top of script. Verified that
+  `python examples/sdk/program_reporting_walkthrough.py` works from repo root.
+resolved_by: human
+resolved_at: "2026-05-07T09:20:00Z"
+
+loop_state_at_raise:
+  head_commit: b7c21ee
+  dirty_files: []
+  tasks_done_count: 1

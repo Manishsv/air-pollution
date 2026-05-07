@@ -1,0 +1,52 @@
+# Example decision record — conforms to agentic/schemas/decision.schema.yaml
+# The kind of decision the dashboard presents when the task queue is empty.
+
+decision_id: dec-next-track-20260507
+question: >
+  The SDK-driven Program Reporting use case track is complete.
+  Which track should the loop run next?
+
+raised_by: loop
+raised_at: "2026-05-07T11:00:00Z"
+
+why_now: >
+  The task queue is empty. The loop cannot start a new task until
+  the human selects the next track.
+
+impact_if_delayed: >
+  No implementation work proceeds. The agentic framework build
+  and the review-triage fixes both wait.
+
+options:
+  - label: "Build the agentic framework (Phase 0 — schemas and protocols)"
+    consequence: >
+      Creates agentic/ folder with four schemas, role templates, protocol docs,
+      and AirOS config. Docs-only; no runtime code. Enables Phase 1 (loop rewrite).
+    effort: small
+
+  - label: "F-04 synthetic fallback audit event"
+    consequence: >
+      Adds provider_failure audit event to aq_data.py when synthetic fallback fires.
+      Small code change; directly strengthens governance/safety posture.
+    effort: small
+
+  - label: "F-13 GitHub Actions CI workflow"
+    consequence: >
+      Adds .github/workflows/ci.yml running pytest, conformance, and schema lint.
+      One-day investment; prevents regression from unreviewed merges.
+    effort: small
+
+  - label: "Needs human decision — none of the above"
+    consequence: >
+      Loop stays stopped. Human redirects to a different track entirely.
+    effort: small
+
+recommendation: >
+  Build the agentic framework first. It is the foundation for all subsequent
+  agent-loop work and its Phase 0 is docs-only with no risk to the codebase.
+
+status: resolved
+chosen_option: "Build the agentic framework (Phase 0 — schemas and protocols)"
+resolved_by: human
+resolved_at: "2026-05-07T11:05:00Z"
+notes: "Proceeding with agentic/ folder. Name confirmed as 'agentic'."

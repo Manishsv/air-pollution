@@ -1,0 +1,51 @@
+# Example review record — conforms to agentic/schemas/review.schema.yaml
+# Illustrates a successful QA review of the SDK walkthrough task.
+
+review_id: review-sdk-program-reporting-walkthrough-20260507
+task_id: sdk-program-reporting-walkthrough
+reviewer: qa_agent
+outcome: approved
+timestamp: "2026-05-07T10:30:00Z"
+
+checks:
+  - criterion: >
+      docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md exists and covers all five
+      SDK sections (inventory, app descriptor, contracts, deployment, catalogs)
+    result: pass
+    note: ""
+
+  - criterion: >
+      all code snippets use only urban_platform.sdk.__all__ imports
+    result: pass
+    note: ""
+
+  - criterion: >
+      examples/sdk/program_reporting_walkthrough.py runs without error
+      and produces output for all five sections
+    result: pass
+    note: "Script verified with python examples/sdk/program_reporting_walkthrough.py"
+
+  - criterion: >
+      18 new tests in tests/test_sdk_program_reporting_walkthrough.py
+      all pass
+    result: pass
+    note: "403 total tests passed (up from 385)"
+
+  - criterion: >
+      docs/EXECUTION_TRACKER.md updated with commit hash
+    result: pass
+    note: "Commit e860b89 recorded in tracker"
+
+diff_files_checked:
+  - docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md
+  - examples/sdk/program_reporting_walkthrough.py
+  - tests/test_sdk_program_reporting_walkthrough.py
+  - docs/EXECUTION_TRACKER.md
+
+diff_files_outside_allowed: []
+
+evidence:
+  - "pytest: 403 passed"
+  - "conformance: 148 checks"
+  - "supervisor: exit 0"
+  - "commit: e860b89"

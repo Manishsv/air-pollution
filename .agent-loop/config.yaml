@@ -1,0 +1,49 @@
+# AirOS project configuration for the agentic framework.
+# Points the framework at AirOS-specific files and verification commands.
+# Generic framework code lives in agentic/; project-specific config lives here.
+
+project_name: AirOS
+project_root: .
+agents_dir: agents/roles
+state_dir: .agent-loop/state
+
+# Files always included in agent context regardless of task type
+context:
+  always_include:
+    - docs/AGENTS.md
+    - docs/EXECUTION_TRACKER.md
+
+  # Additional context loaded by task type
+  by_task_type:
+    docs_edit:
+      - docs/SDK_SURFACE.md
+    code_edit:
+      - specifications/manifest.json
+      - docs/AGENTS.md
+    spec_edit:
+      - specifications/manifest.json
+      - docs/SPECS_FIRST_APPROACH.md
+    review:
+      - agentic/schemas/review.schema.yaml
+    verify_commit:
+      - docs/EXECUTION_TRACKER.md
+
+# Verification commands run by the implementation agent after code changes.
+# The QA agent checks reported output against the baseline below.
+verification:
+  commands:
+    - python -m pytest -q
+    - python main.py --step conformance
+    - python tools/ai_dev_supervisor/run_review.py --run-conformance
+  baseline:
+    pytest_passed: 403
+    conformance_checks: 148
+    supervisor_exit_code: 0
+
+# Claude Code invocation settings
+claude:
+  timeout_seconds: 600
+  max_retries: 2
+  # Implementation agent role definition (project-specific override of template)
+  implementation_agent_role: agents/roles/implementation_agent.md
+  qa_agent_role: agents/roles/qa_agent.md

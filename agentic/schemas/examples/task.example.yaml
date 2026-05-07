@@ -1,0 +1,45 @@
+# Example task — conforms to agentic/schemas/task.schema.yaml
+# Based on a real AirOS task (F-04: synthetic fallback audit event)
+
+task_id: f04-synthetic-fallback-audit-event
+type: code_edit
+scope_description: >
+  Emit a structured provider_failure audit event and ERROR log in
+  urban_platform/applications/air_pollution/aq_data.py when the synthetic
+  data fallback fires, so operators can detect silent provider failures.
+
+allowed_files:
+  - urban_platform/applications/air_pollution/aq_data.py
+  - tests/test_aq_data_synthetic_fallback.py
+  - docs/EXECUTION_TRACKER.md
+
+forbidden_actions:
+  - modify specification contracts
+  - modify quality gate thresholds
+  - change synthetic data generation logic
+  - claim production readiness
+  - commit without running the verification trio
+
+success_criteria:
+  - aq_data.py emits logging.error() when synthetic fallback fires
+  - aq_data.py writes a provider_failure audit event record
+  - the audit event contains: timestamp, connector_id, reason, fallback_used
+  - a test covers the fallback path and asserts the audit event is present
+  - pytest passes (403+ tests)
+  - conformance passes (148 checks)
+  - docs/EXECUTION_TRACKER.md updated with commit hash
+
+escalation_conditions:
+  - the audit event schema does not support provider_failure events
+  - writing the audit event requires importing storage modules that
+    create circular dependencies
+  - verification fails after two attempts
+
+depends_on: []
+owner_agent: implementation_agent
+context_hint:
+  - specifications/platform_objects/
+  - urban_platform/storage/models.py
+notes: >
+  First recommended fix from the 2026-05-06 code review triage.
+  See docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md, finding F-04.
