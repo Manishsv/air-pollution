@@ -21,10 +21,10 @@ programme teams evaluating AirOS for deployment on UPYOG.
 | **Module type** | `GOVERNANCE` |
 | **Version** | `1.0.0` |
 | **API base path** | `/airos/v1` |
-| **Dependencies** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `account` |
+| **Dependencies** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `coordination`, `governance`, `account` |
 | **Publisher** | AirOS / NIUA partner |
 
-**Studio service registration** (called once per city deployment):
+**Studio service registration** — full `serviceDefinition` (called once per city deployment):
 
 ```json
 POST /studio/v1/services
@@ -41,9 +41,52 @@ X-Client-ID: airos-admin
     "description": "Climate risk monitoring, ward-level quality-of-life scoring, and decision support for ward engineers and city administrators.",
     "apiBaseUrl": "http://airos:8200",
     "domains": ["air", "flood", "heat"],
-    "dependencies": ["boundary", "workflow", "notification", "registry", "idgen", "account"]
+    "dependencies": ["boundary", "workflow", "notification", "registry", "idgen", "coordination", "governance", "account"]
+  },
+  "serviceDefinition": {
+    "caseModel": {
+      "fields": [
+        {"name": "packetId",           "type": "string",  "required": true},
+        {"name": "domain",             "type": "string",  "required": true},
+        {"name": "wardCode",           "type": "string",  "required": true},
+        {"name": "urgency",            "type": "string",  "required": true},
+        {"name": "sourceAttribution",  "type": "string",  "required": false},
+        {"name": "rulesetVersion",     "type": "integer", "required": true}
+      ]
+    },
+    "governance": {
+      "rulesetBindings": [
+        "airos_air_decisions_v1",
+        "airos_flood_decisions_v1",
+        "airos_heat_decisions_v1",
+        "airos_cross_domain_v1"
+      ]
+    },
+    "workflow": {
+      "verificationProcessCode": "AIROS_DECISION"
+    },
+    "audit": {
+      "coordinationTraceEnabled": true,
+      "coordinationEntityType":  "airos.decision"
+    },
+    "appeals": {
+      "enabled":        true,
+      "appellateRole":  "AIROS_ZONAL_OFFICER"
+    }
   }
 }
+```
+
+After creation, run two Studio jobs to activate:
+
+```json
+// Bind governance rulesets
+POST /studio/v1/jobs
+{ "jobType": "APPLY_RULESETS", "serviceCode": "airos", "tenantId": "{city_code}" }
+
+// Publish service (makes it live)
+POST /studio/v1/jobs
+{ "jobType": "PUBLISH_SERVICE", "serviceCode": "airos", "tenantId": "{city_code}" }
 ```
 
 ---
@@ -431,6 +474,38 @@ X-Tenant-ID: {city_code}
 }
 ```
 
+**Registry `as_of` gap and resolver wrapper:**
+
+Registry records carry `effectiveFrom`/`effectiveTo` per version but expose no
+endpoint that accepts a timestamp and returns the version active at that moment.
+GCP requires that AirOS can reconstruct which sensor or drain record was in
+effect when a decision was made.
+
+AirOS ships a thin `RegistryResolver` utility (~25 lines):
+
+```python
+def resolve_as_of(schema_code: str, entity_id: str, as_of: str, tenant_id: str) -> dict:
+    """Return the Registry record version active at as_of (ISO-8601 timestamp)."""
+    resp = registry_client.get(
+        f"/registry/v1/data/{schema_code}/{entity_id}",
+        params={"history": "true"},
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    versions = resp.json().get("records", [])
+    # Filter to versions where effectiveFrom <= as_of and (effectiveTo is null or > as_of)
+    active = [
+        v for v in versions
+        if v.get("effectiveFrom", "") <= as_of
+        and (not v.get("effectiveTo") or v["effectiveTo"] > as_of)
+    ]
+    if not active:
+        raise RegistryVersionNotFound(schema_code, entity_id, as_of)
+    return max(active, key=lambda v: v["effectiveFrom"])
+```
+
+This wrapper is invoked by the Governance receipt builder to snapshot the exact
+sensor state that fed a decision, enabling full reconstruction.
+
 #### Schema 4 — Officer subscription preferences
 
 ```json
@@ -489,6 +564,284 @@ Response:
 | Decision packet | `AIROS-[CITY]-[YYYY]-[SEQ]` | `AIROS-BLR-2026-000042` |
 | Sensor station | `SEN-[DOMAIN]-[CITY]-[SEQ]` | `SEN-AIR-BLR-0019` |
 | Drain asset | `DRN-[CITY]-[SEQ]` | `DRN-BLR-1042` |
+
+---
+
+### 4.6 Coordination service — event graph and entity links
+
+The Coordination service (Python FastAPI, backed by Registry + IDGen + SQLite
+local index) provides entity resolution, typed links between entities, domain
+events, and execution traces. AirOS uses it to build a queryable graph of
+wards → sensors → decisions, and to emit a reconstructable event trail.
+
+**Consumed at:** decision packet generation and sensor registration.
+
+#### 4.6.1 Register a ward as a coordination entity (once per ward at startup)
+
+```json
+POST /coordination/v1/entities
+X-Tenant-ID: {city_code}
+
+{
+  "entityType": "airos.ward",
+  "entityId":   "BBMP_WARD_007",
+  "tenantId":   "{city_code}",
+  "data": {
+    "wardName": "Ward 7 — Shivajinagar",
+    "cityId":   "bangalore"
+  }
+}
+```
+
+#### 4.6.2 Link sensor to ward (once per sensor registration)
+
+```json
+POST /coordination/v1/links
+X-Tenant-ID: {city_code}
+
+{
+  "fromEntityType": "airos.sensor",
+  "fromEntityId":   "SEN-AIR-BLR-0019",
+  "toEntityType":   "airos.ward",
+  "toEntityId":     "BBMP_WARD_007",
+  "linkType":       "SERVES_WARD",
+  "tenantId":       "{city_code}"
+}
+```
+
+#### 4.6.3 Emit event when a decision packet is generated
+
+```json
+POST /coordination/v1/events
+X-Tenant-ID: {city_code}
+
+{
+  "entityType": "airos.decision",
+  "entityId":   "AIROS-BLR-2026-000042",
+  "eventType":  "DECISION_GENERATED",
+  "tenantId":   "{city_code}",
+  "payload": {
+    "domain":        "air",
+    "urgency":       "within_4h",
+    "wardCode":      "BBMP_WARD_007",
+    "rulesetId":     "airos_air_decisions_v1",
+    "rulesetVersion": 1
+  }
+}
+```
+
+#### 4.6.4 Link ward to decision (so the graph is traversable)
+
+```json
+POST /coordination/v1/links
+X-Tenant-ID: {city_code}
+
+{
+  "fromEntityType": "airos.ward",
+  "fromEntityId":   "BBMP_WARD_007",
+  "toEntityType":   "airos.decision",
+  "toEntityId":     "AIROS-BLR-2026-000042",
+  "linkType":       "HAS_DECISION",
+  "tenantId":       "{city_code}"
+}
+```
+
+#### 4.6.5 Record execution trace when Governance emits a receipt
+
+```json
+POST /coordination/v1/traces
+X-Tenant-ID: {city_code}
+
+{
+  "caseId":    "AIROS-BLR-2026-000042",
+  "stepId":    "governance-receipt",
+  "actor":     "airos-system",
+  "action":    "GOVERNANCE_RECEIPT_ISSUED",
+  "payload": {
+    "receiptHash": "{sha256_of_receipt}",
+    "rulesetId":   "airos_air_decisions_v1",
+    "rulesetVersion": 1
+  },
+  "tenantId":  "{city_code}"
+}
+```
+
+#### 4.6.6 Query: all decisions for a ward
+
+```
+GET /coordination/v1/cases/BBMP_WARD_007?entityType=airos.ward
+X-Tenant-ID: {city_code}
+
+Response: entity graph with all linked airos.decision nodes, events, traces
+```
+
+**Governance bridge** — Coordination also proxies decisions to the Governance
+service, so the graph and the governance receipt are linked by the same case ID:
+
+```json
+POST /coordination/v1/cases/{case_id}/governance:decide
+{
+  "rulesetId": "airos_air_decisions_v1",
+  "facts": {...},
+  "outcome": {...}
+}
+```
+
+---
+
+### 4.7 Governance service — decision rules, traces, and receipts
+
+The Governance service stores versioned YAML rulesets, validates facts against
+a JSON Schema contract, emits hash-chained decision traces, and manages an
+appeals/orders lifecycle. AirOS publishes its attribution and triage rules here
+so that every climate decision is backed by a contestable, auditable rule.
+
+This is the GCP alignment point: source attribution logic moves from hard-coded
+Python into governed, versioned rulesets with published limitations.
+
+#### 4.7.1 Ruleset structure (YAML, stored in Governance service)
+
+**Air quality decisions ruleset** (`airos_air_decisions_v1`):
+
+```yaml
+rulesetId: airos_air_decisions_v1
+version: 1
+description: >
+  Triage rules for ward-level air quality decision packets.
+  Source attribution is based on time-of-day patterns and AQI magnitude.
+  Limitations: no direct emission source data; inference is probabilistic.
+factsContract:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [avg_aqi_score, timestamp_bucket, hour_of_day]
+  properties:
+    avg_aqi_score:    {type: number, minimum: 0, maximum: 1}
+    timestamp_bucket: {type: string, format: date-time}
+    hour_of_day:      {type: integer, minimum: 0, maximum: 23}
+    cell_count:       {type: integer}
+rules:
+  - ruleId: AQ-R1
+    description: "High AQI + early morning (05–08h) → waste burning probable"
+    condition:
+      and:
+        - {field: avg_aqi_score, op: gte, value: 0.60}
+        - {field: hour_of_day,   op: gte, value: 5}
+        - {field: hour_of_day,   op: lte, value: 8}
+    outcome:
+      decision_id:        AQ-D1
+      urgency:            within_4h
+      source_attribution: waste_burning
+      confidence:         medium
+  - ruleId: AQ-R2
+    description: "Immediate AQI (≥0.80) → immediate urgency"
+    condition:
+      {field: avg_aqi_score, op: gte, value: 0.80}
+    outcome:
+      decision_id:        AQ-D2
+      urgency:            immediate
+      source_attribution: traffic_or_industrial
+      confidence:         medium
+  - ruleId: AQ-R3
+    description: "Moderate AQI (0.40–0.60) outside morning → mixed sources"
+    condition:
+      and:
+        - {field: avg_aqi_score, op: gte, value: 0.40}
+        - {field: avg_aqi_score, op: lt,  value: 0.60}
+    outcome:
+      decision_id:        AQ-D4
+      urgency:            within_24h
+      source_attribution: mixed_sources
+      confidence:         low
+```
+
+**Flood decisions ruleset** and **heat decisions ruleset** follow the same
+structure (see `docs/architecture/WARD_DECISION_CATALOGUE.md` for thresholds).
+
+#### 4.7.2 Publishing a ruleset (called during provisioning)
+
+```json
+POST /governance/v1/rulesets
+X-Tenant-ID: {city_code}
+
+{
+  "rulesetId": "airos_air_decisions_v1",
+  "version": 1,
+  "content": "<base64-encoded YAML above>",
+  "tenantId": "{city_code}"
+}
+```
+
+#### 4.7.3 Emitting a decision trace (called by AirOS on every packet)
+
+```json
+POST /governance/v1/decisions
+X-Tenant-ID: {city_code}
+
+{
+  "rulesetId":      "airos_air_decisions_v1",
+  "rulesetVersion": 1,
+  "entityType":     "airos.decision",
+  "entityId":       "AIROS-BLR-2026-000042",
+  "facts": {
+    "avg_aqi_score":    0.72,
+    "timestamp_bucket": "2026-05-07T06:00:00Z",
+    "hour_of_day":      6,
+    "cell_count":       18
+  },
+  "outcome": {
+    "decision_id":        "AQ-D1",
+    "urgency":            "within_4h",
+    "source_attribution": "waste_burning",
+    "confidence":         "medium"
+  },
+  "tenantId": "{city_code}"
+}
+```
+
+The Governance service responds with a `decisionReceipt`:
+
+```json
+{
+  "receiptId":       "gov-rcpt-8f3a9c",
+  "entityId":        "AIROS-BLR-2026-000042",
+  "rulesetId":       "airos_air_decisions_v1",
+  "rulesetVersion":  1,
+  "factsHash":       "sha256:a1b2c3...",
+  "outcomeHash":     "sha256:d4e5f6...",
+  "chainHash":       "sha256:g7h8i9...",
+  "issuedAt":        "2026-05-07T06:12:05Z",
+  "contestationUrl": "/governance/v1/appeals?entityId=AIROS-BLR-2026-000042"
+}
+```
+
+The `chainHash` links this receipt to the previous receipt in the sequence,
+providing tamper-evident continuity (GCP audit trail).
+
+#### 4.7.4 Appeals lifecycle
+
+If a ward engineer believes the decision is incorrect (e.g. wrong source
+attribution), they can raise an appeal:
+
+```json
+POST /governance/v1/appeals
+X-Tenant-ID: {city_code}
+Authorization: Bearer {officer_jwt}
+
+{
+  "entityId":   "AIROS-BLR-2026-000042",
+  "rulesetId":  "airos_air_decisions_v1",
+  "reason":     "INCORRECT_ATTRIBUTION",
+  "evidence":   "Field inspection found no burning; spike likely from passing vehicle convoy.",
+  "tenantId":   "{city_code}"
+}
+```
+
+Appeals are reviewed by `AIROS_ZONAL_OFFICER` role and can result in:
+- `UPHELD` → source attribution corrected; ruleset limitation noted for next review cycle
+- `DISMISSED` → original decision stands; reason logged
+
+Every upheld appeal feeds back into the ruleset review process, closing the
+governance loop.
 
 ---
 
@@ -651,23 +1004,46 @@ AirOS feature store (DuckDB, H3 cells)
 Ward aggregation (QoL index per ward)
         ↓
 Decision packet generation (trigger → attribution → action)
-        ↓ ── DIGIT3 boundary ──
-        ├─→ IDGen:     generate AIROS-{CITY}-{YEAR}-{SEQ} packet ID
-        ├─→ Registry:  POST /registry/v1/data/airos.decision
-        ├─→ Workflow:  POST /workflow/v1/transition  (action: OPEN, assignees: [ward_engineer_id])
+        ↓ ── DIGIT3 boundary ──────────────────────────────────────────────
+        │
+        ├─→ IDGen:        generate AIROS-{CITY}-{YEAR}-{SEQ} packet ID
+        │
+        ├─→ Governance:   POST /governance/v1/decisions
+        │                   facts + ruleset → decisionReceipt (hash chain)
+        │
+        ├─→ Coordination: POST /coordination/v1/events  (DECISION_GENERATED)
+        │                 POST /coordination/v1/links    (ward → decision)
+        │                 POST /coordination/v1/traces   (governance receipt ref)
+        │
+        ├─→ Registry:     POST /registry/v1/data/airos.decision
+        │
+        ├─→ Workflow:     POST /workflow/v1/transition
+        │                   (action: OPEN, assignees: [ward_engineer_id])
+        │
         └─→ Notification: POST /notification/v1/notification/email + /sms
                                         ↓
                               Officer receives email/SMS
                                         ↓
                               Officer acknowledges (web inbox or one-click link)
                                         ↓
-                        ── DIGIT3 boundary ──
-                        ├─→ Workflow:   POST /workflow/v1/transition (action: ACTION_TAKEN)
+                        ── DIGIT3 boundary ──────────────────────────────────
+                        │
+                        ├─→ Workflow:     POST /workflow/v1/transition
+                        │                  (action: ACTION_TAKEN)
+                        │
+                        ├─→ Coordination: POST /coordination/v1/events
+                        │                  (DECISION_ACTIONED by officer)
+                        │
                         └─→ AirOS webhook: /airos/v1/webhooks/decision-updated
                                         ↓
                               AirOS updates packet status + outcome observation
                                         ↓
                               SLA job: POST /workflow/v1/auto/AIROS_DECISION/_escalate
+
+Officer raises appeal (if attribution disputed):
+        └─→ Governance: POST /governance/v1/appeals
+                          reviewed by AIROS_ZONAL_OFFICER
+                          upheld → feeds back into ruleset review cycle
 ```
 
 ---
@@ -798,14 +1174,19 @@ Deliverables:
 - Email and SMS templates registered per tenant
 - Daily digest job
 
-### Phase 4 — Registry + UPYOG data reuse
-Register AirOS schemas. Ingest real ward boundaries, officer assignments,
-and PGR complaints from the UPYOG deployment.
+### Phase 4 — Governance + Coordination + Registry (accountability layer)
+Publish decision rulesets to Governance service. Emit coordination events and
+entity links on every decision packet. Register AirOS Registry schemas. Ingest
+UPYOG data (PGR complaints, ward boundaries, officer assignments).
 
 Deliverables:
-- Schema registration scripts for `airos.sensor`, `airos.drain`, `airos.decision`, `airos.subscription`
+- Governance rulesets: `airos_air_decisions_v1`, `airos_flood_decisions_v1`, `airos_heat_decisions_v1`, `airos_cross_domain_v1`
+- `RegistryResolver` utility for `as_of` record resolution (GCP reconstruction)
+- `ward_decisions.py` → emit Governance `decisionReceipt` + Coordination events on every packet
+- Schema registration scripts: `airos.sensor`, `airos.drain`, `airos.decision`, `airos.subscription`
 - PGR complaint Kafka consumer → AirOS observation store
 - Property flood/heat risk API for building permit service
+- `provision_city.py` script (full 11-step idempotent provisioning)
 
 ### Phase 5 — WhatsApp + production hardening
 WhatsApp delivery adapter. Multi-city production deployment. Kubernetes
@@ -813,21 +1194,141 @@ manifests (pending DIGIT3 K8s support).
 
 ---
 
-## 12. Open questions for eGov / NIUA
+## 12. Provisioning sequence
+
+A complete AirOS deployment on a new city tenant follows this exact sequence.
+Steps that are DIGIT3-native (Account, Registry, IDGen, Studio, Governance,
+Workflow, Notification) are idempotent and can be re-run safely.
+
+```
+Step 1 — Create tenant (Account service)
+  POST /account/v1/tenant
+  { "tenantId": "bangalore", "name": "Bruhat Bengaluru Mahanagara Palike" }
+  → Keycloak realm created, shared PostgreSQL tenant schema provisioned
+
+Step 2 — Register Registry schemas
+  POST /registry/v1/schema  ×4
+  airos.sensor, airos.drain, airos.decision, airos.subscription
+  (see §4.4 for schema definitions)
+
+Step 3 — Register IDGen templates
+  POST /idgen/v1/format  ×3
+  airos.decision  → AIROS-[CITY]-[YYYY]-[SEQ]
+  airos.sensor    → SEN-[DOMAIN]-[CITY]-[SEQ]
+  airos.drain     → DRN-[CITY]-[SEQ]
+
+Step 4 — Publish Governance rulesets
+  POST /governance/v1/rulesets  ×4
+  airos_air_decisions_v1, airos_flood_decisions_v1,
+  airos_heat_decisions_v1, airos_cross_domain_v1
+  (rulesets must be published BEFORE service goes live — GCP requirement)
+
+Step 5 — Register Studio service definition
+  POST /studio/v1/services
+  (full serviceDefinition from §2, including rulesetBindings + workflow code)
+
+Step 6 — Activate via Studio jobs
+  POST /studio/v1/jobs  { jobType: APPLY_RULESETS, serviceCode: airos }
+  POST /studio/v1/jobs  { jobType: PUBLISH_SERVICE, serviceCode: airos }
+
+Step 7 — Create Keycloak roles in city realm
+  AIROS_WARD_ENGINEER, AIROS_ZONAL_OFFICER, AIROS_CITY_ADMIN,
+  AIROS_VIEWER, AIROS_SYSTEM
+
+Step 8 — Create Workflow process
+  POST /workflow/v1/process    (AIROS_DECISION)
+  POST /workflow/v1/process/{id}/state  ×6  (OPEN → RESOLVED lifecycle)
+  POST /workflow/v1/state/{id}/action   ×6  (ACKNOWLEDGE, ACTION_TAKEN, …)
+
+Step 9 — Register Notification templates
+  POST /notification/v1/template  ×3
+  AIROS_DECISION_EMAIL, AIROS_DECISION_SMS, AIROS_DIGEST_EMAIL
+
+Step 10 — Seed Coordination entities
+  POST /coordination/v1/entities  (one per ward, called by airos-pipeline at startup)
+
+Step 11 — Smoke test
+  POST /airos/v1/ward/{any_ward}/snapshot  → expect QoL scores
+  POST /governance/v1/decisions  (synthetic facts) → expect decisionReceipt
+  Check Notification service queue for test email delivery
+```
+
+A `scripts/provision_city.py` script in the AirOS repo wraps these steps
+with idempotency checks and rolls back on any failure.
+
+---
+
+## 13. GCP alignment — Inference Objects and contested attribution
+
+The Government Coordination Protocol (GCP) requires that every public decision
+that uses inference or discretion must reference a **published, versioned
+Inference Object** that existed *before* the inference was applied.
+
+In AirOS, source attribution (e.g. "early morning AQI spike → waste burning")
+is discretionary inference. Under GCP:
+
+**Before DIGIT3 integration:** this logic is embedded in Python code in
+`urban_platform/place/ward_decisions.py:_attribute_air()`. It is correct but
+not independently published, versioned, or contestable.
+
+**After DIGIT3/GCP integration:** the same logic becomes a Governance ruleset
+(`airos_air_decisions_v1`) published before any decision is made. Each
+ruleset:
+
+| GCP requirement | DIGIT3 / AirOS implementation |
+|-----------------|-------------------------------|
+| Published before use | Ruleset published in Step 4 of provisioning, before service goes live (Step 6) |
+| Versioned | `rulesetVersion` incremented on every rule change; old versions remain queryable |
+| Independently contestable | `POST /governance/v1/appeals?entityId={packet}` available to any AIROS_WARD_ENGINEER |
+| Limitations declared | `description` and `confidence` fields in each rule outcome |
+| Auditable receipt | `decisionReceipt` with `factsHash`, `outcomeHash`, `chainHash` |
+| Reconstructable | `RegistryResolver.resolve_as_of()` recreates sensor state at decision time |
+
+**Decision Object anatomy** (the GCP atomic unit, as emitted by AirOS):
+
+```
+AirOS decision packet
+  ├── rule_reference:      airos_air_decisions_v1, version 1, rule AQ-R1
+  ├── evidence_snapshot:   avg_aqi_score=0.72, hour_of_day=6, timestamp=…
+  │                        (Registry record version, retrieved via RegistryResolver)
+  ├── inference_reference: airos_air_decisions_v1 (published before use)
+  ├── reasoning_trace:     "AQI 0.72 ≥ 0.60, hour 6 in [5,8] → waste_burning (medium)"
+  ├── outcome:             decision_id=AQ-D1, urgency=within_4h
+  ├── governance_receipt:  receiptId=gov-rcpt-8f3a9c, chainHash=sha256:…
+  └── contestation_path:   /governance/v1/appeals?entityId=AIROS-BLR-2026-000042
+```
+
+**Key constraint:** when a ruleset changes (e.g. the waste burning time window
+is adjusted from 05–08h to 04–09h based on field data), the old version is
+preserved. Decisions made under v1 are always reconstructable against v1 rules,
+not silently re-evaluated against v2. This prevents retroactive change of
+official decisions — a hard GCP requirement.
+
+---
+
+## 14. Open questions for eGov / NIUA
 
 1. **DIGIT3 release timeline** — when will DIGIT3 services be production-ready
    (versioned releases, not `develop-*` images)? This gates Phase 2 deployment.
+   Particularly: Governance, Coordination, and Studio are on the
+   `coordination-integration-20260408` branch and not yet in upstream master.
 
 2. **UPYOG HRMS migration** — does UPYOG HRMS data (officer assignments to
    wards) migrate to DIGIT3 HRMS, or will it live in MDMS for the near term?
+   AirOS Workflow assignees need officer user IDs.
 
 3. **PGR Kafka integration** — is there a standard Kafka topic schema for
    DIGIT3 PGR complaint events that AirOS should conform to?
 
 4. **WhatsApp plan** — is eGov planning native WhatsApp support in the
-   Notification service? If so, AirOS's adapter should be designed to swap
-   out without re-engineering the dispatcher.
+   Notification service? AirOS's adapter is designed to swap out cleanly
+   without re-engineering the dispatcher.
 
 5. **Multi-city SaaS model** — does eGov have a preferred multi-tenant hosting
-   model for DIGIT3 (shared cluster per state, per city, or national)? AirOS
-   deployment topology follows this answer.
+   model for DIGIT3 (shared cluster per state, per city, or national)?
+
+6. **Governance service DSL extension** — the current Governance service YAML
+   DSL supports `eq` and `present` predicates. AirOS attribution rules require
+   `gte`/`lte` numeric comparisons. Does eGov plan to extend the predicate set,
+   or should AirOS pre-evaluate numeric thresholds and pass boolean results into
+   the Governance service as enriched facts?
