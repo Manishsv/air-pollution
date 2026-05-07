@@ -210,10 +210,31 @@ def _render_heat_map(
         layers.append(candidate_layer)
 
     # ── Layer 3: IDW sample points (NOT physical weather stations) ────────
-    # OpenMeteo is a forecast API — we query it at a 3×3 virtual grid.
-    # Both synthetic and live data show the same 9 grid positions.
     if not temp_df.empty and "latitude" in temp_df.columns:
-        station_df = temp_df[["latitude", "longitude", "temperature_c", "station_id"]].copy()
+        cell_lookup = {c["h3_id"]: c for c in cells}
+        try:
+            def _srow(row):
+                cell = _h3.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                ci = cell_lookup.get(cell, {})
+                return {
+                    "latitude":       row["latitude"],
+                    "longitude":      row["longitude"],
+                    "station_id":     row.get("station_id", ""),
+                    "temperature_c":  f"{row['temperature_c']:.1f}" if row.get("temperature_c") == row.get("temperature_c") else "N/A",
+                    "h3_id":          cell,
+                    "heat_risk_score": f"{ci.get('heat_risk_score', 0):.3f}",
+                    "heat_index_c":   ci.get("heat_index_c", ""),
+                    "uhi_intensity":  ci.get("uhi_intensity", ""),
+                    "green_cover":    ci.get("green_cover_fraction", ""),
+                    "rank":           "",
+                    "interventions":  "",
+                }
+            station_df = pd.DataFrame([_srow(r) for _, r in temp_df.iterrows()])
+        except Exception:
+            station_df = temp_df[["latitude", "longitude", "temperature_c", "station_id"]].copy()
+            for f in ["h3_id", "heat_risk_score", "heat_index_c", "uhi_intensity", "green_cover", "rank", "interventions"]:
+                station_df[f] = ""
+
         station_layer = pdk.Layer(
             "ScatterplotLayer",
             data=station_df,
@@ -229,6 +250,17 @@ def _render_heat_map(
             id="stations",
         )
         layers.append(station_layer)
+
+    # Add placeholder fields to H3 grid layer for station tooltip fields
+    grid_df["station_id"] = ""
+    grid_df["temperature_c"] = ""
+    grid_df["rank"] = ""
+    grid_df["interventions"] = ""
+
+    # Add missing tooltip fields to candidate scatter layer
+    for f in ["heat_risk_score", "heat_index_c", "green_cover", "station_id", "temperature_c"]:
+        if f not in cand_scatter_df.columns:
+            cand_scatter_df[f] = ""
 
     # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2

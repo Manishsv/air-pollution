@@ -274,12 +274,34 @@ def _render_flood_map(
     layers = [risk_layer]
 
     # ── Layer 2: Rainfall IDW sample points (blue circles) ────────────────
-    # OpenMeteo is a forecast API queried at a 3×3 virtual grid — not rain gauges.
+    cell_lookup = {c["h3_id"]: c for c in cells}
     if not rainfall_df.empty and "latitude" in rainfall_df.columns:
+        try:
+            import h3 as _h3f
+            def _rrow(row):
+                cell = _h3f.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                ci = cell_lookup.get(cell, {})
+                intens = row.get("rainfall_intensity_mm_per_hr", 0) or 0
+                return {
+                    "latitude":                    row["latitude"],
+                    "longitude":                   row["longitude"],
+                    "station_id":                  row.get("station_id", ""),
+                    "rainfall_intensity_mm_per_hr": f"{intens:.2f}",
+                    "h3_id":                       cell,
+                    "flood_risk_score":            f"{ci.get('flood_risk_score', 0):.3f}",
+                    "risk_level":                  ci.get("risk_level", ""),
+                    "rainfall_mm_per_hr":          ci.get("rainfall_mm_per_hr", ""),
+                    "incident_count":              ci.get("incident_count", ""),
+                }
+            rain_pts = pd.DataFrame([_rrow(r) for _, r in rainfall_df.iterrows()])
+        except Exception:
+            rain_pts = rainfall_df[["latitude", "longitude", "rainfall_intensity_mm_per_hr", "station_id"]].copy()
+            for f in ["h3_id", "flood_risk_score", "risk_level", "rainfall_mm_per_hr", "incident_count"]:
+                rain_pts[f] = ""
+
         rain_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=rainfall_df[["latitude", "longitude",
-                               "rainfall_intensity_mm_per_hr", "station_id"]].copy(),
+            data=rain_pts,
             get_position=["longitude", "latitude"],
             get_radius=400,
             radius_min_pixels=5,
@@ -291,6 +313,14 @@ def _render_flood_map(
         )
         layers.append(rain_layer)
 
+    # Add placeholder fields to H3 grid layer for station tooltip fields
+    grid_df["station_id"] = ""
+    grid_df["rainfall_intensity_mm_per_hr"] = ""
+
+    _tooltip_placeholders = ["h3_id", "flood_risk_score", "risk_level",
+                              "rainfall_mm_per_hr", "incident_count",
+                              "station_id", "rainfall_intensity_mm_per_hr"]
+
     # ── Layer 3: Waterlogging incidents (red/orange circles) ──────────────
     if not incidents_df.empty and "latitude" in incidents_df.columns:
         _sev_color = {"high": [220, 40, 20, 220], "moderate": [240, 140, 20, 200]}
@@ -298,6 +328,9 @@ def _render_flood_map(
         inc_df["color"] = inc_df["severity"].apply(
             lambda s: _sev_color.get(str(s).lower(), [200, 100, 20, 180])
         )
+        for f in _tooltip_placeholders:
+            if f not in inc_df.columns:
+                inc_df[f] = ""
         inc_layer = pdk.Layer(
             "ScatterplotLayer",
             data=inc_df,
@@ -314,6 +347,10 @@ def _render_flood_map(
 
     # ── Layer 4: Drainage assets (green circles) ──────────────────────────
     if not assets_df.empty and "latitude" in assets_df.columns:
+        assets_df = assets_df.copy()
+        for f in _tooltip_placeholders:
+            if f not in assets_df.columns:
+                assets_df[f] = ""
         asset_layer = pdk.Layer(
             "ScatterplotLayer",
             data=assets_df,
