@@ -6,6 +6,7 @@ h3
 pandas
 numpy
 requests
+earthengine-api
 scikit-learn
 xgboost
 folium
