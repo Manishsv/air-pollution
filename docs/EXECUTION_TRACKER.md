@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `agentic/core/validate.py`, `agentic/core/__init__.py`, `tests/test_agentic_validate.py`, `.agent-loop/state/tasks.yaml` (fixed 3 missing `escalation_conditions` fields, 1 scope too long — caught by the new validator), `docs/EXECUTION_TRACKER.md` |
 | **Verification** | `python -m pytest -q`: **426 passed** (403 baseline + 23 new). `python agentic/core/validate.py`: **exit 0** on real `tasks.yaml`. |
-| **Commit hash** | pending |
+| **Commit hash** | `22b9155` |
 | **Current next task** | `agentic-phase2-loop` — write `agentic/core/loop.py` |
 
 ---
