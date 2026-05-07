@@ -1,27 +1,20 @@
 """
-AIR Climate Suite — Decision Object emitter (GCP-aligned).
+AIR Climate Suite — GCP Decision Object emitter.
 
-The decision packets produced by the air/heat/flood pipelines already conform
-to urban_decision_packet_core.v1.schema.json. This module:
+Produces Decision Objects that conform to:
+  Digital Statecraft GCP decision-object.schema.json
 
-  1. Extracts the GCP decision trace (rulesetId, facts, outcome) from each packet
-  2. POSTs to DIGIT3 Governance service to obtain a decisionReceipt
-     (stub: writes locally when DIGIT3_GOVERNANCE_URL is not set)
-  3. Attaches the receipt to packet["audit_context"]["governance_receipt"]
-  4. Emits the complete, receipt-stamped packet to the event transport
+Required fields:
+  decision_id, case_id, timestamp, jurisdiction, service_domain,
+  decision_authority, rule_reference, evidence_snapshot, inference,
+  decision_outcome, reasoning_trace, contestation, audit
 
-AIR only ever emits "proposed" status. Ward routing, workflow assignment,
-notification, and lifecycle (proposed → assigned → resolved) are downstream.
+AIR always emits outcome_type "flagged" — downstream systems (DIGIT3
+Workflow, AIRNet) decide routing, assignment, and lifecycle.
 
-GCP governance receipt schema (from AIROS_DIGIT3_INFRASTRUCTURE_SPEC §4.7.3):
-  receiptId, entityId, rulesetId, rulesetVersion,
-  factsHash, outcomeHash, chainHash, issuedAt, contestationUrl
-
-Transport
-─────────
-  DIGIT3_GOVERNANCE_URL set → POST /governance/v1/decisions (real GCP receipt)
-  AIRNET_EVENTS_URL set     → POST /airnet/v1/events (AIRNet event bus)
-  fallback                  → append to data/events/decisions.jsonl
+Transport (in priority order):
+  AIRNET_EVENTS_URL set → POST to AIRNet /airnet/v1/events
+  fallback              → append to data/events/decisions.jsonl
 """
 from __future__ import annotations
 
@@ -35,99 +28,165 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Ruleset IDs — must match rulesets published during AIROS provisioning
-_RULESET = {
+# ── Constants ────────────────────────────────────────────────────────────────
+
+_SYSTEM_VERSION   = "air-climate-suite-v0.1"
+_METHOD_AUTHORITY = "AIR Climate Suite — Anthropic / Urban Platform"
+
+_SERVICE_CODES = {
+    "air":   "air_quality_monitoring",
+    "heat":  "urban_heat_risk",
+    "flood": "flood_risk_monitoring",
+}
+
+_RULE_IDS = {
     "air":   "airos_air_decisions_v1",
     "heat":  "airos_heat_decisions_v1",
     "flood": "airos_flood_decisions_v1",
 }
-_RULESET_VERSION = 1
-_ENTITY_TYPE = "airos.decision"
 
-# Thresholds — decisions are only emitted for packets above these
+# Packets below these thresholds are not emitted
 _AIR_ALERT_CATEGORIES = {"poor", "very_poor", "severe"}
 _HEAT_RISK_THRESHOLD  = 0.65
 _FLOOD_RISK_THRESHOLD = 0.55
 
 
-# ── GCP governance receipt ────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _sha256(obj: dict) -> str:
-    return "sha256:" + hashlib.sha256(
-        json.dumps(obj, sort_keys=True, default=str).encode()
-    ).hexdigest()[:16]
+def _sha256(obj) -> str:
+    raw = json.dumps(obj, sort_keys=True, default=str).encode()
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def _get_governance_receipt(
-    domain: str,
-    entity_id: str,
-    facts: dict,
-    outcome: dict,
-    city_id: str,
-) -> dict:
-    """
-    Obtain a GCP governance receipt.
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    When DIGIT3_GOVERNANCE_URL is set, POSTs to the Governance service and
-    returns its receipt. Otherwise builds a local stub receipt for audit trail.
-    """
-    ruleset_id = _RULESET[domain]
-    payload = {
-        "rulesetId":      ruleset_id,
-        "rulesetVersion": _RULESET_VERSION,
-        "entityType":     _ENTITY_TYPE,
-        "entityId":       entity_id,
-        "facts":          facts,
-        "outcome":        outcome,
-        "tenantId":       city_id,
-    }
 
-    gov_url = os.environ.get("DIGIT3_GOVERNANCE_URL", "").strip()
-    if gov_url:
-        try:
-            import requests
-            resp = requests.post(
-                f"{gov_url}/governance/v1/decisions",
-                json=payload,
-                headers={"X-Tenant-ID": city_id},
-                timeout=5,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as exc:
-            logger.warning("Governance service unavailable (%s) — using stub receipt", exc)
-
-    # Stub receipt — same shape as DIGIT3 response
-    now = datetime.now(timezone.utc).isoformat()
-    facts_hash   = _sha256(facts)
-    outcome_hash = _sha256(outcome)
+def _evidence_source(source_name: str, source_type: str, data: dict) -> dict:
     return {
-        "receiptId":       f"stub-{uuid.uuid4().hex[:8]}",
-        "entityId":        entity_id,
-        "rulesetId":       ruleset_id,
-        "rulesetVersion":  _RULESET_VERSION,
-        "factsHash":       facts_hash,
-        "outcomeHash":     outcome_hash,
-        "chainHash":       _sha256({"factsHash": facts_hash, "outcomeHash": outcome_hash}),
-        "issuedAt":        now,
-        "contestationUrl": f"/governance/v1/appeals?entityId={entity_id}",
-        "_stub":           True,
+        "source_ref":     source_name,
+        "source_type":    source_type,
+        "record_version": "1",
+        "as_of":          _now(),
+        "record_hash":    _sha256(data),
     }
+
+
+# ── GCP Decision Object builder ───────────────────────────────────────────────
+
+def _build_decision_object(
+    domain: str,
+    city_id: str,
+    h3_cell: str,
+    case_id: str,
+    rule_id: str,
+    key_facts: list,
+    structured_reasoning: list[dict],
+    outcome_code: str,
+    outcome_value: str,
+    evidence_sources: list[dict],
+    evidence_data: dict,
+) -> dict:
+    now = _now()
+    decision_id   = str(uuid.uuid4())
+    service_code  = _SERVICE_CODES[domain]
+    snapshot_id   = str(uuid.uuid4())
+    evidence_hash = _sha256(evidence_data)
+
+    decision = {
+        "decision_id": decision_id,
+        "case_id":     case_id,
+        "timestamp":   now,
+
+        "jurisdiction": {
+            "boundary_type":         "h3_cell",      # upgraded to "ward" when Boundary service available
+            "boundary_code":         h3_cell,
+            "boundary_registry_ref": f"airos://boundary/{city_id}/h3/{h3_cell}",
+            "as_of":                 now,
+        },
+
+        "service_domain": {
+            "service_code":        service_code,
+            "service_registry_ref": f"airos://services/{service_code}",
+            "service_version":     "1",
+            "as_of":               now,
+        },
+
+        "decision_authority": {
+            "authority_id":       f"airos-{domain}-engine",
+            "responsible_entity": "AIR Climate Suite",
+            "decision_mode":      "ai_assisted_system",
+            "authority_version":  "1",
+            "as_of":              now,
+        },
+
+        "rule_reference": {
+            "rule_id":             rule_id,
+            "rule_version":        "1",
+            "publication_reference": f"airos://governance/rulesets/{rule_id}",
+            "effective_from":      "2026-01-01T00:00:00+00:00",
+        },
+
+        "evidence_snapshot": {
+            "snapshot_id":      snapshot_id,
+            "timestamp":        now,
+            "evidence_sources": evidence_sources,
+            "evidence_hash":    evidence_hash,
+        },
+
+        "inference": {
+            "inference_method_id":      f"{rule_id}_threshold_engine",
+            "inference_method_version": "1",
+            "execution_mode":           "rule_based",
+            "publication_reference":    f"airos://inference/{rule_id}",
+            "method_authority":         _METHOD_AUTHORITY,
+            "as_of":                    now,
+        },
+
+        "decision_outcome": {
+            "outcome_type":  "flagged",   # AIR flags; downstream routes/assigns
+            "outcome_code":  outcome_code,
+            "outcome_value": outcome_value,
+        },
+
+        "reasoning_trace": {
+            "rule_applied":       rule_id,
+            "key_facts_used":     key_facts,
+            "inference_applied":  "Threshold-based rule evaluation with IDW spatial interpolation",
+            "structured_reasoning": structured_reasoning,
+        },
+
+        "contestation": {
+            "appellate_authority":    "DIGIT3 Governance Service",
+            "contestation_deadline":  None,
+            "contestation_channel":   f"airos://governance/v1/appeals?case_id={case_id}",
+        },
+
+        "audit": {
+            "system_version": _SYSTEM_VERSION,
+            "decision_hash":  "",           # filled after object is complete
+            "log_reference":  f"airos://events/decisions/{decision_id}",
+        },
+    }
+
+    # Hash the complete decision (excluding audit.decision_hash itself)
+    decision["audit"]["decision_hash"] = _sha256({
+        k: v for k, v in decision.items() if k != "audit"
+    })
+
+    return decision
 
 
 # ── Transport ─────────────────────────────────────────────────────────────────
 
-def _emit(domain: str, city_id: str, packet: dict) -> None:
-    """Emit the receipt-stamped decision packet to the configured transport."""
+def _emit(decision: dict, domain: str, city_id: str) -> None:
     event = {
-        "event_id":   str(uuid.uuid4()),
-        "event_type": "decision_proposed",
-        "domain":     domain,
-        "city_id":    city_id,
-        "ward_id":    None,        # populated by Boundary service downstream
-        "status":     "proposed",  # AIR only ever emits "proposed"
-        "emitted_at": datetime.now(timezone.utc).isoformat(),
-        "decision_packet": packet,
+        "event_id":        str(uuid.uuid4()),
+        "event_type":      "decision_proposed",
+        "domain":          domain,
+        "city_id":         city_id,
+        "emitted_at":      _now(),
+        "decision_object": decision,
     }
 
     airnet_url = os.environ.get("AIRNET_EVENTS_URL", "").strip()
@@ -135,7 +194,7 @@ def _emit(domain: str, city_id: str, packet: dict) -> None:
         try:
             import requests
             requests.post(airnet_url, json=event, timeout=5).raise_for_status()
-            logger.info("Decision emitted to AIRNet: %s", packet.get("packet_id"))
+            logger.info("Decision emitted to AIRNet: %s", decision["decision_id"])
             return
         except Exception as exc:
             logger.warning("AIRNet emit failed (%s) — falling back to local log", exc)
@@ -144,13 +203,13 @@ def _emit(domain: str, city_id: str, packet: dict) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a") as f:
         f.write(json.dumps(event, default=str) + "\n")
-    logger.info("Decision logged: %s [%s]", packet.get("packet_id"), domain)
+    logger.info("Decision logged: %s [%s/%s]",
+                decision["decision_id"], domain, decision["decision_outcome"]["outcome_code"])
 
 
 # ── Per-domain emitters ───────────────────────────────────────────────────────
 
 def emit_air_decisions(packets: list[dict], city_id: str) -> int:
-    """Emit GCP-receipted Decision Objects for air quality packets above threshold."""
     emitted = 0
     for packet in packets:
         aa  = packet.get("aqi_assessment") or {}
@@ -158,59 +217,101 @@ def emit_air_decisions(packets: list[dict], city_id: str) -> int:
         if cat not in _AIR_ALERT_CATEGORIES:
             continue
 
-        entity_id = f"AIROS-{city_id.upper()[:3]}-{packet.get('packet_id', uuid.uuid4().hex)[:12]}"
-        facts = {
-            "aqi_category":  cat,
-            "aqi_score":     aa.get("aqi_score"),
-            "h3_id":         packet.get("h3_id"),
-            "timestamp":     packet.get("timestamp"),
-            "cell_count":    1,
-        }
-        outcome = {
-            "decision_id":   entity_id,
-            "urgency":       "within_4h" if cat == "poor" else "immediate",
-            "confidence":    (packet.get("confidence") or {}).get("driver_confidence", "medium"),
-        }
+        score   = aa.get("aqi_score") or 0.0
+        h3_cell = packet.get("h3_id", "")
+        case_id = f"{city_id}-air-{h3_cell[:12]}"
 
-        receipt = _get_governance_receipt("air", entity_id, facts, outcome, city_id)
-        packet.setdefault("audit_context", {})["governance_receipt"] = receipt
+        sources = packet.get("data_sources") or []
+        evidence_sources = [
+            _evidence_source(
+                s.get("source_name", "unknown"),
+                s.get("source_type", "sensor_api"),
+                s,
+            )
+            for s in sources
+        ] or [_evidence_source("air_quality_connector", "sensor_api", aa)]
 
-        _emit("air", city_id, packet)
+        key_facts = [
+            {"aqi_category": cat},
+            {"aqi_score": score},
+            {"h3_cell": h3_cell},
+            {"city": city_id},
+        ]
+        reasoning = [
+            {
+                "criterion":   f"AQI category threshold (alert if: {', '.join(_AIR_ALERT_CATEGORIES)})",
+                "observation": f"AQI category is '{cat}' with score {score:.3f}",
+                "conclusion":  "Threshold exceeded — flagging for field investigation",
+            }
+        ]
+
+        decision = _build_decision_object(
+            domain="air", city_id=city_id, h3_cell=h3_cell,
+            case_id=case_id, rule_id=_RULE_IDS["air"],
+            key_facts=key_facts,
+            structured_reasoning=reasoning,
+            outcome_code=f"AQ_{cat.upper()}",
+            outcome_value=f"AQI category {cat.replace('_', ' ')} — score {score:.3f}",
+            evidence_sources=evidence_sources,
+            evidence_data=aa,
+        )
+        _emit(decision, "air", city_id)
         emitted += 1
     return emitted
 
 
 def emit_heat_decisions(candidates: list[dict], city_id: str) -> int:
-    """Emit GCP-receipted Decision Objects for heat intervention candidates above threshold."""
     emitted = 0
     for candidate in candidates:
         score = candidate.get("risk_score") or 0.0
         if score < _HEAT_RISK_THRESHOLD:
             continue
 
-        entity_id = f"AIROS-{city_id.upper()[:3]}-{candidate.get('h3_id', uuid.uuid4().hex)[:12]}"
-        facts = {
-            "risk_score":    score,
-            "uhi_intensity": candidate.get("uhi_intensity"),
-            "green_deficit": candidate.get("green_deficit"),
-            "h3_id":         candidate.get("h3_id"),
-        }
-        outcome = {
-            "decision_id":          entity_id,
-            "urgency":              "within_24h",
-            "suggested_interventions": candidate.get("suggested_interventions", []),
-        }
+        h3_cell = candidate.get("h3_id", "")
+        case_id = f"{city_id}-heat-{h3_cell[:12]}"
+        uhi     = candidate.get("uhi_intensity")
+        interventions = ", ".join(candidate.get("suggested_interventions", []))
 
-        receipt = _get_governance_receipt("heat", entity_id, facts, outcome, city_id)
-        candidate.setdefault("audit_context", {})["governance_receipt"] = receipt
+        key_facts = [
+            {"heat_risk_score": score},
+            {"uhi_intensity_c": uhi},
+            {"green_deficit": candidate.get("green_deficit")},
+            {"h3_cell": h3_cell},
+        ]
+        reasoning = [
+            {
+                "criterion":   f"Heat risk score threshold (≥ {_HEAT_RISK_THRESHOLD})",
+                "observation": f"Heat risk score is {score:.3f}, UHI intensity {uhi}°C",
+                "conclusion":  "High urban heat risk — flagging for intervention planning",
+            }
+        ]
+        if interventions:
+            reasoning.append({
+                "criterion":   "Intervention recommendations",
+                "observation": f"Green deficit identified, suggested: {interventions}",
+                "conclusion":  "Refer to urban greening / heat mitigation team",
+            })
 
-        _emit("heat", city_id, candidate)
+        evidence_sources = [
+            _evidence_source("gee_modis_lst", "satellite_observation", candidate)
+        ]
+
+        decision = _build_decision_object(
+            domain="heat", city_id=city_id, h3_cell=h3_cell,
+            case_id=case_id, rule_id=_RULE_IDS["heat"],
+            key_facts=key_facts,
+            structured_reasoning=reasoning,
+            outcome_code=f"HEAT_RISK_{int(score * 100)}",
+            outcome_value=f"Heat risk score {score:.3f} — UHI {uhi}°C",
+            evidence_sources=evidence_sources,
+            evidence_data=candidate,
+        )
+        _emit(decision, "heat", city_id)
         emitted += 1
     return emitted
 
 
 def emit_flood_decisions(packets: list[dict], city_id: str) -> int:
-    """Emit GCP-receipted Decision Objects for flood packets above threshold."""
     emitted = 0
     for packet in packets:
         fra   = packet.get("flood_risk_assessment") or {}
@@ -218,23 +319,45 @@ def emit_flood_decisions(packets: list[dict], city_id: str) -> int:
         if score < _FLOOD_RISK_THRESHOLD:
             continue
 
-        entity_id = f"AIROS-{city_id.upper()[:3]}-{packet.get('packet_id', uuid.uuid4().hex)[:12]}"
-        facts = {
-            "flood_risk_score": score,
-            "risk_level":       fra.get("risk_level"),
-            "rainfall_mm_3h":   fra.get("rainfall_accumulation_3h_mm"),
-            "h3_id":            packet.get("h3_id"),
-            "timestamp":        packet.get("timestamp"),
-        }
-        outcome = {
-            "decision_id": entity_id,
-            "urgency":     "immediate" if fra.get("risk_level") == "high" else "within_4h",
-            "confidence":  (packet.get("confidence") or {}).get("driver_confidence", "medium"),
-        }
+        h3_cell  = packet.get("h3_id", "")
+        case_id  = f"{city_id}-flood-{h3_cell[:12]}"
+        level    = fra.get("risk_level", "moderate")
+        rain_3h  = fra.get("rainfall_accumulation_3h_mm", 0)
 
-        receipt = _get_governance_receipt("flood", entity_id, facts, outcome, city_id)
-        packet.setdefault("audit_context", {})["governance_receipt"] = receipt
+        key_facts = [
+            {"flood_risk_score": score},
+            {"risk_level": level},
+            {"rainfall_accumulation_3h_mm": rain_3h},
+            {"h3_cell": h3_cell},
+        ]
+        reasoning = [
+            {
+                "criterion":   f"Flood risk score threshold (≥ {_FLOOD_RISK_THRESHOLD})",
+                "observation": f"Flood risk score {score:.3f}, level '{level}', rainfall {rain_3h} mm/3h",
+                "conclusion":  f"Flood risk level '{level}' — flagging for drainage and response team",
+            }
+        ]
 
-        _emit("flood", city_id, packet)
+        sources = packet.get("data_sources") or []
+        evidence_sources = [
+            _evidence_source(
+                s.get("source_name", "gee_gpm_srtm"),
+                s.get("source_type", "satellite_observation"),
+                s,
+            )
+            for s in sources
+        ] or [_evidence_source("gee_gpm_srtm", "satellite_observation", fra)]
+
+        decision = _build_decision_object(
+            domain="flood", city_id=city_id, h3_cell=h3_cell,
+            case_id=case_id, rule_id=_RULE_IDS["flood"],
+            key_facts=key_facts,
+            structured_reasoning=reasoning,
+            outcome_code=f"FLOOD_{level.upper()}",
+            outcome_value=f"Flood risk score {score:.3f} — {level} risk",
+            evidence_sources=evidence_sources,
+            evidence_data=fra,
+        )
+        _emit(decision, "flood", city_id)
         emitted += 1
     return emitted
