@@ -27,26 +27,24 @@ from review_dashboard.formatters import humanize_warning_id
 
 _LOOKBACK_DAYS = 1
 
-_CITIES = {
-    "Bangalore (demo)": ("bangalore_demo", dict(lat_min=12.87, lon_min=77.49, lat_max=13.07, lon_max=77.69)),
-    "Delhi (demo)":     ("delhi_demo",     dict(lat_min=28.50, lon_min=76.90, lat_max=28.80, lon_max=77.30)),
-    "Mumbai (demo)":    ("mumbai_demo",    dict(lat_min=18.90, lon_min=72.75, lat_max=19.20, lon_max=73.00)),
-}
+from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
 def _city_selector() -> tuple[str, dict, int, bool]:
     c1, c2, c3 = st.columns([2, 2, 2])
+    city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
-        city_label = st.selectbox("City", list(_CITIES.keys()), key="heat_city_selector")
+        city_label = st.selectbox("City", list(city_options.keys()), key="heat_city_selector")
     with c2:
         h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="heat_h3_res",
                            help="Higher = smaller cells, more detail, slower")
     with c3:
         live = st.toggle("Live data (cached ≤1h)", value=False, key="heat_live_toggle",
-                         help="Uses observation store cache if data is <1h old, otherwise calls OpenMeteo")
-    city_id, bbox = _CITIES[city_label]
+                         help="Uses GEE MODIS LST if GEE_PROJECT is set, otherwise OpenMeteo")
+    city_id = city_options[city_label]
+    bbox    = get_bbox(city_id)
     return city_id, bbox, h3_res, live
 
 
