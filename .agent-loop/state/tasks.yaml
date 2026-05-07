@@ -219,7 +219,8 @@ tasks:
       - decisions.yaml schema changes required
     depends_on:
       - agentic-phase2-qa
-    status: ready
+    status: done
+    commit: pending
 
   # ── Post-agentic: review triage fixes ────────────────────────────────────
 

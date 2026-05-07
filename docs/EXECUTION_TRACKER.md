@@ -3,6 +3,19 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – agentic-phase3-dashboard: write dashboard.py
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Write `agentic/core/dashboard.py` — terminal dashboard for current task, baseline, escalations, and decision resolution with write-back to `decisions.yaml`. |
+| **Status** | **Done** |
+| **Files changed** | `agentic/core/dashboard.py`, `tests/test_agentic_dashboard.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **518 passed** (26 new). Display, resolve, skip, invalid input, and write-back paths all tested. |
+| **Commit hash** | pending |
+| **Current next task** | `f04-synthetic-fallback-audit-event` or `f13-github-actions-ci` (both ready; agentic track complete) |
+
+---
+
 ### 2026-05-07 – agentic-phase2-qa: write qa.py
 
 | Field | Value |
