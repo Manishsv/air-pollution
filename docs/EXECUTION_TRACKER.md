@@ -3,6 +3,62 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – Review and commit docs-only tracker (Cursor — **shell unavailable**)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Review `docs/EXECUTION_TRACKER.md` for SDK Program Reporting track alignment; run verification trio if possible; stage/commit docs-only tracker updates when appropriate. |
+| **Status** | **Done (documentation)** — tracker reviewed and this session recorded; **`git commit` not performed here** (agent shell returned **Rejected**). |
+| **Files changed (task)** | `docs/EXECUTION_TRACKER.md` only (this entry + **Recent sessions summary** row). |
+| **Documentation sync status** | Active track stays **SDK-driven Program Reporting use case**. **Current next task** unchanged: maintainer workstation manual run of `python examples/sdk/program_reporting_walkthrough.py`, stdout summary captured in tracker, then close SDK use case track if all criteria met. |
+| **Verification** | **Not re-run** — `python -m pytest -q`, `python main.py --step conformance`, `python tools/ai_dev_supervisor/run_review.py --run-conformance` were **not executed** (cannot run shell in this agent environment). **Baseline:** docs-only changes rely on prior recorded **403 passed** / **148 checks** / supervisor **pass** for Program Reporting SDK walkthrough + tests (see **Recent sessions summary**); maintainer may re-run trio around commit if desired. |
+| **Commit hash** | **not committed** |
+| **Push status** | **not pushed** |
+| **Current next task before this task** | Run SDK example manually and record output; commit pending tracker edits per prior repair row. |
+| **Current next task after this task** | **Unchanged** — manual SDK walkthrough execution on maintainer hardware; optional `git add docs/EXECUTION_TRACKER.md` + **`docs: sync execution tracker for SDK walkthrough manual run`** once ready. |
+| **Blockers / drift** | **Blocker:** no shell/`git`/Python trio in agent session—**recommended human follow-up:** `git status` → optional verification trio → commit pushed tracker edits. |
+
+---
+
+### 2026-05-07 – Program Reporting SDK walkthrough manual run (agent session — **blocked**: shell unavailable)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Run the Program Reporting SDK example/walkthrough script manually, capture output, and record a summary in this tracker. |
+| **Status** | **Blocked in agent environment** — attempted shell execution returned **Rejected**; script **not executed** here. Confirmed entrypoint and behavior **by code inspection** only. |
+| **Command attempted** | `python examples/sdk/program_reporting_walkthrough.py` (from repository root; matches docstring in `examples/sdk/program_reporting_walkthrough.py`). |
+| **Observed output** | *n/a* (no successful run in this environment). |
+| **Inferred output (from `examples/sdk/program_reporting_walkthrough.py`)** | Prints header: `AirOS SDK walkthrough — Program Reporting (read-only)` and `No Core API required. No state mutations.` Five sections: (1) platform inventory counts (contracts, apps, adapters, catalogs, deployments); (2) Program Reporting app descriptor for `program_reporting_review` (name, status, app type, execution model, input/output contracts, safety gates / blocked uses); (3) filtered Program Reporting–related contract keys plus schema titles/field counts for `consumer_city_program_submission` and `consumer_fund_release_review_packet`, fixture validation result for the sample JSON; (4) deployment `program_reporting_state_demo` profile (name, type, environment, domains, app count, notes); (5) reference catalogs including `program_catalog_demo_in` entries. Closing line: all calls used `urban_platform.sdk` public surface only. |
+| **Behavior confirmation** | **Not confirmed by execution** (shell blocked). **From code:** imports only from `urban_platform.sdk` public symbols in `__all__` (no `UrbanPlatformClient`, no internal modules); file I/O is reading fixture JSON via `load_json_fixture`; no store writes or API calls. **Inferred:** read-only discovery/inspection; does not start or require Core API. |
+| **Files changed (task)** | `docs/EXECUTION_TRACKER.md` only. |
+| **Documentation sync status** | Records manual-run blocker and entrypoint (`program_reporting_walkthrough.py` — the repo’s Program Reporting SDK example script). SDK track stays **open** until a maintainer runs the command locally and optionally appends captured output to this session or a follow-up tracker row. |
+| **Verification** | **Not run** in this task (docs-only manual-run step); prior baseline cited elsewhere in this tracker (e.g. **403 passed** / **148 checks** / supervisor **pass** for the walkthrough+tests work). |
+| **Commit hash** | n/a — no commit requested. |
+| **Push status** | n/a |
+| **Current next task before this task** | Run the SDK example script manually and record its output summary in the tracker; then close the SDK track if complete. |
+| **Current next task after this task** | Unchanged — same as before (manual run still pending on a machine with working shell; then close SDK track if all criteria met). |
+| **Blockers / drift** | **Blocker:** agent shell unavailable (**Rejected**). **Drift:** “Manual SDK run + output summary” step not yet evidenced by a successful execution log in this file. |
+
+---
+
+### 2026-05-07 – Repair: execution tracker sync (Program Reporting SDK manual-run task report)
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Repair: update `docs/EXECUTION_TRACKER.md` with the Program Reporting SDK manual-run task report fields (task name, status, files changed, documentation sync, verification from task report, commit/push, next tasks before/after, blockers/drift). **Scope:** tracker file only — no runtime code, schemas, or tests. |
+| **Status** | **Done** (documentation-only repair; reconciles the prior Cursor task report with this tracker). |
+| **Files changed (repair)** | `docs/EXECUTION_TRACKER.md` only. |
+| **Documentation sync status** | Tracker records the repair pass so the blocked 2026-05-07 manual-run session has an explicit task-report-shaped row (command `python examples/sdk/program_reporting_walkthrough.py`, shell **Rejected**, inferred behavior from `examples/sdk/program_reporting_walkthrough.py`, SDK track **left open**). |
+| **Verification (from task report)** | `python -m pytest -q`: **not run** (task scope excluded re-verification). `python main.py --step conformance`: **not run** (task scope). `python tools/ai_dev_supervisor/run_review.py --run-conformance`: **not run** (task scope). Manual example execution: **not completed in agent environment** (shell **Rejected**). |
+| **Commit hash** | **not committed** |
+| **Push status** | **not pushed** |
+| **Current next task before this task** | Run the Program Reporting SDK example/walkthrough script manually, capture output, and record summary in the tracker (same as **Current next task** on the SDK track; repair requested after tracker lagged the task report). |
+| **Current next task after this task** | Unchanged — **Run the SDK example script manually and record its output summary in the tracker; then close the SDK use case track if walkthrough, example, tests, docs, and verification are all complete.** Manual run with live stdout remains **pending** on a workstation where the command succeeds. |
+| **Blockers / drift** | **Blocker:** prior agent block on shell execution (**Rejected**); repair does not substitute for a successful local run. **Drift:** tracker still lacks captured live stdout from `program_reporting_walkthrough.py` until a maintainer runs it. |
+| **Requires human decision** | no |
+
+---
+
 ### 2026-05-06 – SDK docs/examples import audit
 
 | Field | Value |
@@ -393,18 +449,23 @@ Notes:
 1. **Create Program Reporting SDK walkthrough (docs-only).** Add or update a short guide showing how to use the documented SDK surface to list contracts, inspect the Program Reporting app descriptor, list deployments, inspect inventory, and understand evidence/store touchpoints. No runtime code changes.
 2. **Add a small SDK example script.** Create a minimal read-only example, likely under `examples/sdk/`, that prints Program Reporting contracts, app metadata, deployment metadata, and inventory using supported SDK imports only. No app execution, no dynamic imports, no store mutation.
 3. **Add tests for the SDK example.** Add a lightweight test that imports/runs the example in read-only mode and asserts stable output shape or key sections. Keep it fast and deterministic.
-4. **Update developer-facing docs.** Link the walkthrough/example from `docs/SDK_SURFACE.md`, `docs/DEVELOPER_GUIDE.md`, and/or `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md` only where appropriate. Keep examples aligned with the supported SDK surface.
-5. **Run full verification and commit.** Run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance`; commit the walkthrough/example/test/doc updates if green.
-6. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
-7. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
-8. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
-9. **[Post-SDK track] Implement F-04: structured synthetic-fallback audit event.** Emit a `provider_failure` audit event and ERROR log in `aq_data.py` when synthetic fallback fires. First recommended fix from the 2026-05-06 code review triage (`docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md`). Small scope; aligns with governance/safety posture. Do not start until the SDK track is closed.
-10. **[Post-SDK track] Implement F-13: minimal GitHub Actions CI workflow.** Add `.github/workflows/ci.yml` running `pytest -q`, conformance check, and schema lint. Do not start until F-04 is complete and verified.
+4. **Create and commit code-review triage document.** Write `docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md` and commit it with the next docs batch. *(Docs-only; do not start implementation fixes in the triage step.)*
+5. **Update developer-facing docs.** Link the walkthrough/example from `docs/SDK_SURFACE.md`, `docs/DEVELOPER_GUIDE.md`, and/or `docs/BUILD_YOUR_FIRST_AIR_OS_APP.md` only where appropriate. Keep examples aligned with the supported SDK surface.
+6. **Run full verification and commit.** Run `python -m pytest -q`, `python main.py --step conformance`, and `python tools/ai_dev_supervisor/run_review.py --run-conformance`; commit the walkthrough/example/test/doc updates if green.
+7. **Run the SDK use case manually.** Execute the example script and record its output summary in this tracker; confirm it does not mutate runtime state or require Core API to be running.
+   - **2026-05-07 (agent env):** Shell execution **Rejected** — could not capture live output here. **Pending on maintainer workstation:** run `python examples/sdk/program_reporting_walkthrough.py` from repo root and add a brief captured-output summary to **Recent Sessions** (or supersede this note).
+8. **Optional follow-up: Program Reporting API-backed variant.** If the read-only SDK example is clean, consider a separate task for an API-backed variant using `UrbanPlatformClient`; keep it explicitly marked advanced and do not mix it with the read-only SDK walkthrough.
+9. **Close the SDK use case track.** If the walkthrough, example, tests, docs, and verification are complete, set `Current active track` to **Milestone selection**, set `Current next task` to **Needs human decision: choose next milestone**, and set `Requires human decision` to **yes**.
+10. **[Post-SDK track] Implement F-04: structured synthetic-fallback audit event.** Emit a `provider_failure` audit event and ERROR log in `aq_data.py` when synthetic fallback fires. First recommended fix from the 2026-05-06 code review triage (`docs/reviews/AIR_OS_CODE_REVIEW_TRIAGE_2026_05_06.md`). Small scope; aligns with governance/safety posture. Do not start until the SDK track is closed.
+11. **[Post-SDK track] Implement F-13: minimal GitHub Actions CI workflow.** Add `.github/workflows/ci.yml` running `pytest -q`, conformance check, and schema lint. Do not start until F-04 is complete and verified.
 
 ## Recent sessions summary
 
 | Date/order | Task | Status | Evidence / commit | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-05-07 | Review/commit docs-only tracker (Cursor verification gate) | **Done (tracker); commit pending human** | **not committed** / **not pushed** | Shell **Rejected**; trio **not re-run**; baseline **403**/**148**/supervisor per walkthrough row; **`git`** + optional trio on maintainer machine before push |
+| 2026-05-07 | Repair: Program Reporting SDK manual-run task report sync | **Done** | **not committed** / **not pushed** | Tracker-only; verification trio **not run**; manual run still **pending** on maintainer machine |
+| 2026-05-07 | Program Reporting SDK walkthrough manual run | **Blocked (agent)** | n/a — shell **Rejected** | Entrypoint `python examples/sdk/program_reporting_walkthrough.py`; output summary deferred to maintainer-run; inferred behavior documented in **Recent Sessions** |
 | 2026-05-06 | Program Reporting SDK walkthrough, example, and tests | **Done** | pending commit | `docs/PROGRAM_REPORTING_SDK_WALKTHROUGH.md`, `examples/sdk/program_reporting_walkthrough.py`, `tests/test_sdk_program_reporting_walkthrough.py`; 403 passed / 148 checks / supervisor pass |
 | 2026-05-06 | Code review triage document | **Done** | `b7c21ee` | Classifies F-01–F-20; records owner decisions on Q1–Q10; no code changes |
 | 2026-05-06 | SDK docs/examples import audit | **Done** | Audit-only; no files changed | Public-facing docs use documented SDK surface; no internal imports found |
