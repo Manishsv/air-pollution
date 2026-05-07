@@ -19,6 +19,7 @@ from review_dashboard.components.flood_panel import render_flood_panel
 from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
 from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
 from review_dashboard.components.cross_domain_panel import render_cross_domain_panel
+from review_dashboard.components.ward_panel import render_ward_panel
 from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
 from review_dashboard.components.heat_panel import render_heat_panel
 from review_dashboard.components.air_panel import render_air_panel
@@ -115,8 +116,8 @@ def main():
 
     _render_system_sidebar(client, audit=audit, metrics=metrics)
 
-    t_aq, t_flood, t_heat, t_cross, t_property, t_program, t_trace, t_crowd, t_events = st.tabs([
-        "Air Quality", "Flood", "Heat", "Cross-Domain",
+    t_aq, t_flood, t_heat, t_cross, t_ward, t_property, t_program, t_trace, t_crowd, t_events = st.tabs([
+        "Air Quality", "Flood", "Heat", "Cross-Domain", "Ward QoL",
         "Property & Buildings", "Program Reporting", "Runtime Trace",
         "Crowd", "Events",
     ])
@@ -132,6 +133,9 @@ def main():
 
     with t_cross:
         render_cross_domain_panel()
+
+    with t_ward:
+        render_ward_panel()
 
     with t_property:
         render_property_buildings_panel()
