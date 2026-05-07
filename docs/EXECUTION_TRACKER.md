@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `agentic/core/dashboard.py`, `tests/test_agentic_dashboard.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
 | **Verification** | `python -m pytest -q`: **518 passed** (26 new). Display, resolve, skip, invalid input, and write-back paths all tested. |
-| **Commit hash** | pending |
+| **Commit hash** | `ab2f551` |
 | **Current next task** | `f04-synthetic-fallback-audit-event` or `f13-github-actions-ci` (both ready; agentic track complete) |
 
 ---

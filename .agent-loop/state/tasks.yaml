@@ -220,7 +220,7 @@ tasks:
     depends_on:
       - agentic-phase2-qa
     status: done
-    commit: pending
+    commit: ab2f551
 
   # ── Post-agentic: review triage fixes ────────────────────────────────────
 
