@@ -103,7 +103,7 @@ def _render_combined_map(cells_df: pd.DataFrame, city_id: str) -> None:
             layers=[layer],
             initial_view_state=view,
             tooltip={"text": "{tooltip_text}"},
-            map_style="mapbox://styles/mapbox/light-v10",
+            map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         ),
         use_container_width=True,
     )

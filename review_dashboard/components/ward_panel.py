@@ -143,7 +143,7 @@ def _render_ward_map(result, city_id: str) -> None:
                 ),
                 "style": {"backgroundColor": "#1e293b", "color": "white", "fontSize": "12px"},
             },
-            map_style="mapbox://styles/mapbox/light-v10",
+            map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         ),
         use_container_width=True,
     )

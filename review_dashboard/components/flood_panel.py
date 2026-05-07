@@ -353,7 +353,7 @@ def _render_flood_map(
     deck = pdk.Deck(
         layers=layers,
         initial_view_state=view,
-        map_style="light",
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         tooltip=tooltip,
     )
 
