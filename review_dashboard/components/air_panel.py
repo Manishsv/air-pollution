@@ -397,6 +397,12 @@ def render_air_panel() -> None:
             **bbox,
             top_n=10,
         )
+        if live:
+            try:
+                from urban_platform.notifications import dispatcher
+                dispatcher.dispatch_air(packets, city_id=city_id)
+            except Exception:
+                pass
 
     # Schema validation
     validator_for_schema_file(

@@ -476,6 +476,12 @@ def render_flood_panel() -> None:
             **bbox,
             top_n=10,
         )
+        if live:
+            try:
+                from urban_platform.notifications import dispatcher
+                dispatcher.dispatch_flood(packets, city_id=city_id)
+            except Exception:
+                pass
 
     # Schema validation
     validator_for_schema_file(

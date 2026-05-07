@@ -360,6 +360,12 @@ def render_heat_panel() -> None:
             city_id=city_id,
             **bbox,
         )
+        if live:
+            try:
+                from urban_platform.notifications import dispatcher
+                dispatcher.dispatch_heat(candidates, city_id=city_id)
+            except Exception:
+                pass
 
     # Schema validation
     validator_for_schema_file(
