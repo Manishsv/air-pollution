@@ -61,3 +61,6 @@ jobs:
 
       - name: AI dev supervisor (conformance)
         run: python tools/ai_dev_supervisor/run_review.py --run-conformance
+
+      - name: Agentic schema lint
+        run: python agentic/core/validate.py

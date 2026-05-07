@@ -274,4 +274,5 @@ tasks:
       - required GitHub Actions runners or secrets are unclear
     depends_on:
       - agentic-phase1-validate
-    status: ready
+    status: done
+    commit: pending

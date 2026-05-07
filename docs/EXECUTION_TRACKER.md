@@ -3,6 +3,19 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – f13-github-actions-ci
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Add agentic schema lint step to `.github/workflows/ci.yml` (`python agentic/core/validate.py`). |
+| **Status** | **Done** |
+| **Files changed** | `.github/workflows/ci.yml`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | YAML valid. `python agentic/core/validate.py`: exit 0 (9 tasks valid). Workflow triggers: push + pull_request on main. Steps: pytest, conformance, supervisor, schema lint. |
+| **Commit hash** | pending |
+| **Current next task** | All planned tasks complete. |
+
+---
+
 ### 2026-05-07 – f04-synthetic-fallback-audit-event
 
 | Field | Value |
