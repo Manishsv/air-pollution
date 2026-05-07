@@ -155,7 +155,8 @@ tasks:
       - verification fails after two attempts
     depends_on:
       - agentic-phase1-validate
-    status: ready
+    status: done
+    commit: pending
 
   - task_id: agentic-phase2-qa
     type: code_edit
