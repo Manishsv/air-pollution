@@ -11,7 +11,7 @@
 | **Status** | **Done** |
 | **Files changed** | `.github/workflows/ci.yml`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
 | **Verification** | YAML valid. `python agentic/core/validate.py`: exit 0 (9 tasks valid). Workflow triggers: push + pull_request on main. Steps: pytest, conformance, supervisor, schema lint. |
-| **Commit hash** | pending |
+| **Commit hash** | `6df1e5d` |
 | **Current next task** | All planned tasks complete. |
 
 ---
