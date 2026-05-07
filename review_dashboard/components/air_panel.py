@@ -399,8 +399,8 @@ def render_air_panel() -> None:
         )
         if live:
             try:
-                from urban_platform.notifications import dispatcher
-                dispatcher.dispatch_air(packets, city_id=city_id)
+                from urban_platform.decision_events import emit_air_decisions
+                emit_air_decisions(packets, city_id=city_id)
             except Exception:
                 pass
 

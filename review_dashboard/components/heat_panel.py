@@ -362,8 +362,8 @@ def render_heat_panel() -> None:
         )
         if live:
             try:
-                from urban_platform.notifications import dispatcher
-                dispatcher.dispatch_heat(candidates, city_id=city_id)
+                from urban_platform.decision_events import emit_heat_decisions
+                emit_heat_decisions(candidates, city_id=city_id)
             except Exception:
                 pass
 

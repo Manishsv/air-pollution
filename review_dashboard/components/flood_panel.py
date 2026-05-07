@@ -478,8 +478,8 @@ def render_flood_panel() -> None:
         )
         if live:
             try:
-                from urban_platform.notifications import dispatcher
-                dispatcher.dispatch_flood(packets, city_id=city_id)
+                from urban_platform.decision_events import emit_flood_decisions
+                emit_flood_decisions(packets, city_id=city_id)
             except Exception:
                 pass
 
