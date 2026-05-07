@@ -13,7 +13,7 @@ from urban_platform.applications.heat.heat_pipeline import (
     build_heat_risk_dashboard,
     build_intervention_candidates,
 )
-from urban_platform.connectors.heat.openmeteo import fetch_temperature_observations
+from urban_platform.connectors.heat import fetch_temperature_observations
 
 from review_dashboard.ui_shell import (
     render_browse_detail_layout,
@@ -60,6 +60,7 @@ def _load_live_temperature(city_id: str, lat_min: float, lon_min: float,
         lat_min=lat_min, lon_min=lon_min,
         lat_max=lat_max, lon_max=lon_max,
         lookback_days=lookback_days,
+        city_id=city_id,
     )
 
 

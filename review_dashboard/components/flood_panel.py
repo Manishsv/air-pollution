@@ -13,7 +13,7 @@ from urban_platform.applications.flood.flood_pipeline import (
     build_flood_risk_dashboard,
     build_flood_decision_packets,
 )
-from urban_platform.connectors.flood.openmeteo_rainfall import fetch_rainfall_observations
+from urban_platform.connectors.flood import fetch_rainfall_observations
 
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -64,6 +64,7 @@ def _load_live_rainfall(city_id: str, lat_min: float, lon_min: float,
         lat_min=lat_min, lon_min=lon_min,
         lat_max=lat_max, lon_max=lon_max,
         lookback_hours=lookback_hours,
+        city_id=city_id,
     )
 
 
