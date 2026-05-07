@@ -3,6 +3,19 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – agentic-phase1-validate: write validate.py and tests
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Write `agentic/core/validate.py` — validates `tasks.yaml` against `task.schema.yaml` rules; write `tests/test_agentic_validate.py` with 23 tests covering valid tasks, invalid tasks, file-level errors, and CLI. |
+| **Status** | **Done** |
+| **Files changed** | `agentic/core/validate.py`, `agentic/core/__init__.py`, `tests/test_agentic_validate.py`, `.agent-loop/state/tasks.yaml` (fixed 3 missing `escalation_conditions` fields, 1 scope too long — caught by the new validator), `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **426 passed** (403 baseline + 23 new). `python agentic/core/validate.py`: **exit 0** on real `tasks.yaml`. |
+| **Commit hash** | pending |
+| **Current next task** | `agentic-phase2-loop` — write `agentic/core/loop.py` |
+
+---
+
 ### 2026-05-07 – Review and commit docs-only tracker (Cursor — **shell unavailable**)
 
 | Field | Value |
