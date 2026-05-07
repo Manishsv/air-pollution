@@ -255,6 +255,8 @@ def _render_flood_map(
             "rainfall_mm_per_hr": c.get("rainfall_mm_per_hr"),
             "incident_count": c.get("incident_count", 0),
             "color": _FLOOD_COLOR_MAP.get(c.get("risk_level", "low"), [30, 120, 220, 160]),
+            "station_id": "",
+            "rainfall_intensity_mm_per_hr": "",
         }
         for c in cells
     ])
@@ -312,10 +314,6 @@ def _render_flood_map(
             id="rainfall_points",
         )
         layers.append(rain_layer)
-
-    # Add placeholder fields to H3 grid layer for station tooltip fields
-    grid_df["station_id"] = ""
-    grid_df["rainfall_intensity_mm_per_hr"] = ""
 
     _tooltip_placeholders = ["h3_id", "flood_risk_score", "risk_level",
                               "rainfall_mm_per_hr", "incident_count",

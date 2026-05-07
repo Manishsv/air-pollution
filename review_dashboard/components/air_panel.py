@@ -233,6 +233,8 @@ def _render_aq_map(
             "aqi_score": c.get("aqi_score") or 0.0,
             "aqi_category": c.get("aqi_category", "good"),
             "color": _AQI_COLOR_MAP.get(c.get("aqi_category", "good"), [128, 128, 128, 150]),
+            "station_id": "",
+            "pm25_ugm3": "",
         }
         for c in cells
     ])
@@ -264,7 +266,7 @@ def _render_aq_map(
                     "latitude":     row["latitude"],
                     "longitude":    row["longitude"],
                     "station_id":   row.get("station_id", ""),
-                    "pm25_ugm3":    f"{row['pm25_ugm3']:.1f}" if row.get("pm25_ugm3") == row.get("pm25_ugm3") else "N/A",
+                    "pm25_ugm3":    "N/A" if pd.isna(row.get("pm25_ugm3")) else f"{row['pm25_ugm3']:.1f}",
                     "h3_id":        cell,
                     "aqi_category": ci.get("aqi_category", ""),
                     "aqi_score":    f"{ci.get('aqi_score', 0):.3f}",
@@ -289,10 +291,6 @@ def _render_aq_map(
             id="aq_sample_points",
         )
         layers.append(sample_layer)
-
-    # Add station placeholder fields to H3 grid layer so tooltip renders cleanly
-    grid_df["station_id"] = ""
-    grid_df["pm25_ugm3"] = ""
 
     # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2

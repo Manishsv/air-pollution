@@ -157,6 +157,10 @@ def _render_heat_map(
             "uhi_intensity": c.get("uhi_intensity"),
             "green_cover": c.get("green_cover_fraction", 0.0),
             "color": _risk_score_to_rgb(c.get("heat_risk_score") or 0.0),
+            "station_id": "",
+            "temperature_c": "",
+            "rank": "",
+            "interventions": "",
         }
         for c in cells
     ])
@@ -190,6 +194,11 @@ def _render_heat_map(
                 "green_deficit": round(c.get("green_deficit", 0.0), 3),
                 "uhi_intensity": c.get("uhi_intensity"),
                 "interventions": ", ".join(c.get("suggested_interventions", [])),
+                "heat_risk_score": round(c.get("heat_risk_score") or c.get("risk_score", 0.0), 4),
+                "heat_index_c": c.get("heat_index_c", ""),
+                "green_cover": c.get("green_cover_fraction", ""),
+                "station_id": "",
+                "temperature_c": "",
             }
             for i, c in enumerate(cands)
         ])
@@ -250,17 +259,6 @@ def _render_heat_map(
             id="stations",
         )
         layers.append(station_layer)
-
-    # Add placeholder fields to H3 grid layer for station tooltip fields
-    grid_df["station_id"] = ""
-    grid_df["temperature_c"] = ""
-    grid_df["rank"] = ""
-    grid_df["interventions"] = ""
-
-    # Add missing tooltip fields to candidate scatter layer
-    for f in ["heat_risk_score", "heat_index_c", "green_cover", "station_id", "temperature_c"]:
-        if f not in cand_scatter_df.columns:
-            cand_scatter_df[f] = ""
 
     # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
