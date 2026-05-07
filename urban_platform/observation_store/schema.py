@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Tuple
 
-RAW_DATA_ROOT: Path = Path(__file__).resolve().parents[3] / "data" / "raw"
+RAW_DATA_ROOT: Path = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 # Canonical narrow column order
 OBSERVATION_COLUMNS = [

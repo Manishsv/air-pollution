@@ -4,7 +4,7 @@ from pathlib import Path
 
 import duckdb
 
-DB_PATH: Path = Path(__file__).resolve().parents[3] / "data" / "feature_store.duckdb"
+DB_PATH: Path = Path(__file__).resolve().parents[2] / "data" / "feature_store.duckdb"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS flood_features (

@@ -29,17 +29,20 @@ _CITY_CENTRES = {
 # ── Controls ───────────────────────────────────────────────────────────────
 
 def _city_selector() -> tuple[str, dict]:
-    c1, c2 = st.columns([3, 3])
+    c1, c2 = st.columns([3, 1])
     with c1:
         city_label = st.selectbox("City", list(_CITIES.keys()), key="cross_city_selector")
+    with c2:
+        st.button("↻ Refresh", key="cross_refresh", help="Re-read from feature store", use_container_width=True)
     city_id, bbox = _CITIES[city_label]
     return city_id, bbox
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=120, show_spinner="Reading cross-domain features from store…")
 def _load_cross_domain(city_id: str):
+    """Read cross-domain features from store. Not cached — DuckDB reads are fast and
+    we need up-to-date results immediately after a pipeline runs in another tab."""
     try:
         from urban_platform.feature_store.reader import FeatureStoreReader
         reader = FeatureStoreReader()
@@ -48,7 +51,7 @@ def _load_cross_domain(city_id: str):
         return result
     except FileNotFoundError:
         return None
-    except Exception as e:
+    except Exception:
         return None
 
 
