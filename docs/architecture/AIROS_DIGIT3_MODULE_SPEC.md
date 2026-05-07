@@ -7,8 +7,8 @@ It defines: which DIGIT3 services AirOS consumes, which APIs AirOS exposes back
 to the platform, the data contracts at each boundary, and the integration
 roadmap.
 
-The target audience is AirOS engineers, DIGIT3/eGov collaborators, and NIUA
-programme teams evaluating AirOS for deployment on UPYOG.
+The target audience is AirOS engineers and DIGIT3 platform teams evaluating
+AirOS for deployment on city urban platforms.
 
 ---
 
@@ -21,8 +21,8 @@ programme teams evaluating AirOS for deployment on UPYOG.
 | **Module type** | `GOVERNANCE` |
 | **Version** | `1.0.0` |
 | **API base path** | `/airos/v1` |
-| **Dependencies** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `coordination`, `governance`, `account` |
-| **Publisher** | AirOS / NIUA partner |
+| **Dependencies** | `boundary`, `workflow`, `notification`, `registry`, `idgen`, `governance`, `account` |
+| **Publisher** | AirOS |
 
 **Studio service registration** — full `serviceDefinition` (called once per city deployment):
 
@@ -41,7 +41,7 @@ X-Client-ID: airos-admin
     "description": "Climate risk monitoring, ward-level quality-of-life scoring, and decision support for ward engineers and city administrators.",
     "apiBaseUrl": "http://airos:8200",
     "domains": ["air", "flood", "heat"],
-    "dependencies": ["boundary", "workflow", "notification", "registry", "idgen", "coordination", "governance", "account"]
+    "dependencies": ["boundary", "workflow", "notification", "registry", "idgen", "governance", "account"]
   },
   "serviceDefinition": {
     "caseModel": {
@@ -64,10 +64,6 @@ X-Client-ID: airos-admin
     },
     "workflow": {
       "verificationProcessCode": "AIROS_DECISION"
-    },
-    "audit": {
-      "coordinationTraceEnabled": true,
-      "coordinationEntityType":  "airos.decision"
     },
     "appeals": {
       "enabled":        true,
@@ -567,129 +563,7 @@ Response:
 
 ---
 
-### 4.6 Coordination service — event graph and entity links
-
-The Coordination service (Python FastAPI, backed by Registry + IDGen + SQLite
-local index) provides entity resolution, typed links between entities, domain
-events, and execution traces. AirOS uses it to build a queryable graph of
-wards → sensors → decisions, and to emit a reconstructable event trail.
-
-**Consumed at:** decision packet generation and sensor registration.
-
-#### 4.6.1 Register a ward as a coordination entity (once per ward at startup)
-
-```json
-POST /coordination/v1/entities
-X-Tenant-ID: {city_code}
-
-{
-  "entityType": "airos.ward",
-  "entityId":   "BBMP_WARD_007",
-  "tenantId":   "{city_code}",
-  "data": {
-    "wardName": "Ward 7 — Shivajinagar",
-    "cityId":   "bangalore"
-  }
-}
-```
-
-#### 4.6.2 Link sensor to ward (once per sensor registration)
-
-```json
-POST /coordination/v1/links
-X-Tenant-ID: {city_code}
-
-{
-  "fromEntityType": "airos.sensor",
-  "fromEntityId":   "SEN-AIR-BLR-0019",
-  "toEntityType":   "airos.ward",
-  "toEntityId":     "BBMP_WARD_007",
-  "linkType":       "SERVES_WARD",
-  "tenantId":       "{city_code}"
-}
-```
-
-#### 4.6.3 Emit event when a decision packet is generated
-
-```json
-POST /coordination/v1/events
-X-Tenant-ID: {city_code}
-
-{
-  "entityType": "airos.decision",
-  "entityId":   "AIROS-BLR-2026-000042",
-  "eventType":  "DECISION_GENERATED",
-  "tenantId":   "{city_code}",
-  "payload": {
-    "domain":        "air",
-    "urgency":       "within_4h",
-    "wardCode":      "BBMP_WARD_007",
-    "rulesetId":     "airos_air_decisions_v1",
-    "rulesetVersion": 1
-  }
-}
-```
-
-#### 4.6.4 Link ward to decision (so the graph is traversable)
-
-```json
-POST /coordination/v1/links
-X-Tenant-ID: {city_code}
-
-{
-  "fromEntityType": "airos.ward",
-  "fromEntityId":   "BBMP_WARD_007",
-  "toEntityType":   "airos.decision",
-  "toEntityId":     "AIROS-BLR-2026-000042",
-  "linkType":       "HAS_DECISION",
-  "tenantId":       "{city_code}"
-}
-```
-
-#### 4.6.5 Record execution trace when Governance emits a receipt
-
-```json
-POST /coordination/v1/traces
-X-Tenant-ID: {city_code}
-
-{
-  "caseId":    "AIROS-BLR-2026-000042",
-  "stepId":    "governance-receipt",
-  "actor":     "airos-system",
-  "action":    "GOVERNANCE_RECEIPT_ISSUED",
-  "payload": {
-    "receiptHash": "{sha256_of_receipt}",
-    "rulesetId":   "airos_air_decisions_v1",
-    "rulesetVersion": 1
-  },
-  "tenantId":  "{city_code}"
-}
-```
-
-#### 4.6.6 Query: all decisions for a ward
-
-```
-GET /coordination/v1/cases/BBMP_WARD_007?entityType=airos.ward
-X-Tenant-ID: {city_code}
-
-Response: entity graph with all linked airos.decision nodes, events, traces
-```
-
-**Governance bridge** — Coordination also proxies decisions to the Governance
-service, so the graph and the governance receipt are linked by the same case ID:
-
-```json
-POST /coordination/v1/cases/{case_id}/governance:decide
-{
-  "rulesetId": "airos_air_decisions_v1",
-  "facts": {...},
-  "outcome": {...}
-}
-```
-
----
-
-### 4.7 Governance service — decision rules, traces, and receipts
+### 4.6 Governance service — decision rules, traces, and receipts
 
 The Governance service stores versioned YAML rulesets, validates facts against
 a JSON Schema contract, emits hash-chained decision traces, and manages an
@@ -1011,10 +885,6 @@ Decision packet generation (trigger → attribution → action)
         ├─→ Governance:   POST /governance/v1/decisions
         │                   facts + ruleset → decisionReceipt (hash chain)
         │
-        ├─→ Coordination: POST /coordination/v1/events  (DECISION_GENERATED)
-        │                 POST /coordination/v1/links    (ward → decision)
-        │                 POST /coordination/v1/traces   (governance receipt ref)
-        │
         ├─→ Registry:     POST /registry/v1/data/airos.decision
         │
         ├─→ Workflow:     POST /workflow/v1/transition
@@ -1031,9 +901,6 @@ Decision packet generation (trigger → attribution → action)
                         ├─→ Workflow:     POST /workflow/v1/transition
                         │                  (action: ACTION_TAKEN)
                         │
-                        ├─→ Coordination: POST /coordination/v1/events
-                        │                  (DECISION_ACTIONED by officer)
-                        │
                         └─→ AirOS webhook: /airos/v1/webhooks/decision-updated
                                         ↓
                               AirOS updates packet status + outcome observation
@@ -1044,17 +911,22 @@ Officer raises appeal (if attribution disputed):
         └─→ Governance: POST /governance/v1/appeals
                           reviewed by AIROS_ZONAL_OFFICER
                           upheld → feeds back into ruleset review cycle
+
+AirOS → AirNexus (separate service, see AIRNEXUS_COORDINATION_SPEC.md):
+        Entity graph, event trail, and cross-system traces are managed by
+        AirNexus, not DIGIT3. AirOS calls AirNexus APIs in parallel with
+        the DIGIT3 calls above.
 ```
 
 ---
 
-## 8. UPYOG / existing data reuse
+## 8. DIGIT3 platform data reuse
 
-When deployed on a UPYOG city (DIGIT 2.x → DIGIT 3.x migration), AirOS can
-consume data already present in the platform without re-collection.
+When deployed alongside a city's DIGIT3 installation, AirOS can consume data
+already present in the platform without re-collection.
 
-| UPYOG data | How AirOS uses it |
-|-----------|------------------|
+| DIGIT3 data | How AirOS uses it |
+|------------|------------------|
 | Ward boundaries (Boundary service) | Replaces synthetic ward grid |
 | Officer/employee list (HRMS) | Assignees in Workflow; recipients in Notification |
 | Property and buildings (PT module) | Cross-reference flood/heat risk per property |
@@ -1064,9 +936,9 @@ consume data already present in the platform without re-collection.
 
 **Grievance → observation ingestion:**
 When a PGR complaint is filed with category `WATERLOGGING` or `WASTE_BURNING`,
-UPYOG can publish to a shared Kafka topic. AirOS subscribes and ingests the
-complaint location + timestamp as a weighted observation in the feature store.
-This closes the loop: citizen complaints improve the accuracy of the risk model.
+the DIGIT3 platform can publish to a shared Kafka topic. AirOS subscribes and
+ingests the complaint location + timestamp as a weighted observation in the
+feature store. Citizen complaints improve the accuracy of the risk model.
 
 ---
 
@@ -1100,7 +972,7 @@ AirOS dispatcher
 ```
 
 The WhatsApp adapter is designed to be replaceable with a DIGIT3 native
-WhatsApp channel when eGov adds it to the Notification service.
+WhatsApp channel if it is added to the Notification service in a future release.
 
 ---
 
@@ -1147,8 +1019,8 @@ services share the same Keycloak realm and PostgreSQL instance.
 
 ### Phase 1 — Boundary + Auth (immediate)
 Replace synthetic ward grid with Boundary service data. Implement Keycloak
-JWT authentication on AirOS APIs. Officers log in once via UPYOG; AirOS
-inherits their session.
+JWT authentication on AirOS APIs. Officers log in once via DIGIT3/Keycloak;
+AirOS inherits their session.
 
 Deliverables:
 - `urban_platform/place/ward_registry.py` → calls Boundary service when available, falls back to synthetic
@@ -1174,15 +1046,16 @@ Deliverables:
 - Email and SMS templates registered per tenant
 - Daily digest job
 
-### Phase 4 — Governance + Coordination + Registry (accountability layer)
-Publish decision rulesets to Governance service. Emit coordination events and
-entity links on every decision packet. Register AirOS Registry schemas. Ingest
-UPYOG data (PGR complaints, ward boundaries, officer assignments).
+### Phase 4 — Governance + Registry (accountability layer)
+Publish decision rulesets to Governance service. Register AirOS Registry
+schemas. Ingest DIGIT3 platform data (PGR complaints, officer assignments).
+AirNexus entity graph integration is a parallel track (see
+`AIRNEXUS_COORDINATION_SPEC.md`).
 
 Deliverables:
 - Governance rulesets: `airos_air_decisions_v1`, `airos_flood_decisions_v1`, `airos_heat_decisions_v1`, `airos_cross_domain_v1`
 - `RegistryResolver` utility for `as_of` record resolution (GCP reconstruction)
-- `ward_decisions.py` → emit Governance `decisionReceipt` + Coordination events on every packet
+- `ward_decisions.py` → emit Governance `decisionReceipt` on every packet
 - Schema registration scripts: `airos.sensor`, `airos.drain`, `airos.decision`, `airos.subscription`
 - PGR complaint Kafka consumer → AirOS observation store
 - Property flood/heat risk API for building permit service
@@ -1244,8 +1117,9 @@ Step 9 — Register Notification templates
   POST /notification/v1/template  ×3
   AIROS_DECISION_EMAIL, AIROS_DECISION_SMS, AIROS_DIGEST_EMAIL
 
-Step 10 — Seed Coordination entities
-  POST /coordination/v1/entities  (one per ward, called by airos-pipeline at startup)
+Step 10 — Seed AirNexus entities (separate service)
+  POST /airnexus/v1/entities  (one per ward — see AIRNEXUS_COORDINATION_SPEC.md)
+  This step is skipped if AirNexus is not deployed in this environment.
 
 Step 11 — Smoke test
   POST /airos/v1/ward/{any_ward}/snapshot  → expect QoL scores
@@ -1306,29 +1180,28 @@ official decisions — a hard GCP requirement.
 
 ---
 
-## 14. Open questions for eGov / NIUA
+## 14. Open questions for DIGIT3 platform teams
 
 1. **DIGIT3 release timeline** — when will DIGIT3 services be production-ready
    (versioned releases, not `develop-*` images)? This gates Phase 2 deployment.
-   Particularly: Governance, Coordination, and Studio are on the
-   `coordination-integration-20260408` branch and not yet in upstream master.
+   Governance and Studio are on the `coordination-integration-20260408` branch
+   and not yet in upstream master.
 
-2. **UPYOG HRMS migration** — does UPYOG HRMS data (officer assignments to
-   wards) migrate to DIGIT3 HRMS, or will it live in MDMS for the near term?
-   AirOS Workflow assignees need officer user IDs.
+2. **HRMS officer data** — does DIGIT3 HRMS carry officer-to-ward assignment
+   data, or does this live in MDMS for the near term? AirOS Workflow assignees
+   need officer user IDs at packet creation time.
 
 3. **PGR Kafka integration** — is there a standard Kafka topic schema for
    DIGIT3 PGR complaint events that AirOS should conform to?
 
-4. **WhatsApp plan** — is eGov planning native WhatsApp support in the
-   Notification service? AirOS's adapter is designed to swap out cleanly
-   without re-engineering the dispatcher.
+4. **WhatsApp in Notification service** — is native WhatsApp support planned
+   for the Notification service? AirOS's Meta Cloud API adapter is designed to
+   swap out without re-engineering the dispatcher.
 
-5. **Multi-city SaaS model** — does eGov have a preferred multi-tenant hosting
-   model for DIGIT3 (shared cluster per state, per city, or national)?
+5. **Multi-city hosting model** — is there a preferred multi-tenant hosting
+   topology for DIGIT3 (shared cluster per state, per city, or national)?
 
-6. **Governance service DSL extension** — the current Governance service YAML
-   DSL supports `eq` and `present` predicates. AirOS attribution rules require
-   `gte`/`lte` numeric comparisons. Does eGov plan to extend the predicate set,
-   or should AirOS pre-evaluate numeric thresholds and pass boolean results into
-   the Governance service as enriched facts?
+6. **Governance service DSL extension** — the current Governance YAML DSL
+   supports `eq` and `present` predicates. AirOS attribution rules require
+   `gte`/`lte` numeric comparisons. Should AirOS pre-evaluate thresholds and
+   pass boolean results as enriched facts, or is predicate extension planned?
