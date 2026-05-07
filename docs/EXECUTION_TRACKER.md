@@ -3,6 +3,19 @@
 
 ## Recent Sessions
 
+### 2026-05-07 – agentic-phase2-qa: write qa.py
+
+| Field | Value |
+| --- | --- |
+| **Task name** | Write `agentic/core/qa.py` — QA agent invocation that builds a review prompt, calls `claude --print`, parses and validates the review record, and writes to `reviews.yaml`. |
+| **Status** | **Done** |
+| **Files changed** | `agentic/core/qa.py`, `tests/test_agentic_qa.py`, `.agent-loop/state/tasks.yaml`, `docs/EXECUTION_TRACKER.md` |
+| **Verification** | `python -m pytest -q`: **492 passed** (32 new). All three outcome paths (approved, rejected, needs_human_decision) tested. |
+| **Commit hash** | pending |
+| **Current next task** | `agentic-phase3-dashboard` — write `agentic/core/dashboard.py` |
+
+---
+
 ### 2026-05-07 – agentic-phase2-loop: write loop.py, state.py, config.py, invoke.py
 
 | Field | Value |

@@ -186,7 +186,8 @@ tasks:
       - review record cannot be parsed from Claude Code output
     depends_on:
       - agentic-phase2-loop
-    status: ready
+    status: done
+    commit: pending
 
   - task_id: agentic-phase3-dashboard
     type: code_edit
