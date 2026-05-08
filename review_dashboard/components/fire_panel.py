@@ -364,6 +364,38 @@ def render_fire_panel() -> None:
             except Exception:
                 pass
 
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import (
+                write_signals, write_assessment, write_packet as _wp, upsert_metadata,
+            )
+            signal_rows = []
+            for cell in dashboard.get("risk_cells", []):
+                h3_id = cell.get("h3_id")
+                if not h3_id:
+                    continue
+                upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res)
+                frp = cell.get("max_frp_mw") or cell.get("frp")
+                if frp is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "FRP",
+                                        "value": frp, "unit": "MW"})
+                write_assessment(h3_id=h3_id, city_id=city_id, domain="fire",
+                                 risk_level=cell.get("risk_level", "unknown"),
+                                 primary_index="FRP", primary_value=frp,
+                                 summary=cell)
+            write_signals(signal_rows, city_id=city_id, domain="fire",
+                          source="firms" if live else "demo")
+            for pkt in packets:
+                _wp(packet_id=pkt.get("packet_id", ""),
+                    h3_id=pkt.get("spatial_unit_id", ""),
+                    city_id=city_id, domain="fire",
+                    risk_level=pkt.get("risk_level", "unknown"),
+                    confidence_score=pkt.get("confidence_score"),
+                    field_verification_required=bool(pkt.get("field_verification_required")),
+                    packet=pkt)
+        except Exception:
+            pass
+
     # ── Warnings ───────────────────────────────────────────────────────────
     rs = dashboard.get("risk_summary", {})
     cells = dashboard.get("risk_cells", [])

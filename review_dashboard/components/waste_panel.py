@@ -370,6 +370,47 @@ def render_waste_panel() -> None:
             except Exception:
                 pass
 
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import (
+                write_signals, write_assessment, write_packet as _wp, upsert_metadata,
+            )
+            signal_rows = []
+            for cell in dashboard.get("risk_cells", []):
+                h3_id = cell.get("h3_id")
+                if not h3_id:
+                    continue
+                upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res)
+                score = cell.get("waste_risk_score") or cell.get("risk_score")
+                frp = cell.get("max_frp_mw") or cell.get("frp")
+                ch4 = cell.get("ch4_ppb")
+                if score is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "WASTE_RISK_SCORE",
+                                        "value": score, "unit": "index"})
+                if frp is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "WASTE_FRP",
+                                        "value": frp, "unit": "MW"})
+                if ch4 is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "CH4",
+                                        "value": ch4, "unit": "ppb"})
+                write_assessment(h3_id=h3_id, city_id=city_id, domain="waste",
+                                 risk_level=cell.get("risk_level", "unknown"),
+                                 primary_index="WASTE_RISK_SCORE", primary_value=score,
+                                 dominant_issue=cell.get("dominant_type"),
+                                 summary=cell)
+            write_signals(signal_rows, city_id=city_id, domain="waste",
+                          source="firms" if live else "demo")
+            for pkt in packets:
+                _wp(packet_id=pkt.get("packet_id", ""),
+                    h3_id=pkt.get("spatial_unit_id", ""),
+                    city_id=city_id, domain="waste",
+                    risk_level=pkt.get("risk_level", "unknown"),
+                    confidence_score=pkt.get("confidence_score"),
+                    field_verification_required=bool(pkt.get("field_verification_required")),
+                    packet=pkt)
+        except Exception:
+            pass
+
     # ── Warnings ───────────────────────────────────────────────────────────
     for w in dashboard.get("active_warnings", []):
         sev = str(w.get("severity", "info")).lower()

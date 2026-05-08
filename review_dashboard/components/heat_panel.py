@@ -367,6 +367,48 @@ def render_heat_panel() -> None:
             except Exception:
                 pass
 
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import (
+                write_signals, write_assessment, write_packet as _wp, upsert_metadata,
+            )
+            signal_rows = []
+            for cell in dashboard.get("risk_cells", []):
+                h3_id = cell.get("h3_id")
+                if not h3_id:
+                    continue
+                upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res)
+                score = cell.get("heat_risk_score")
+                lst = cell.get("heat_index_c") or cell.get("temperature_c")
+                uhi = cell.get("uhi_intensity")
+                if score is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "HEAT_RISK_SCORE",
+                                        "value": score, "unit": "index"})
+                if lst is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "LST",
+                                        "value": lst, "unit": "degC"})
+                if uhi is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "UHI",
+                                        "value": uhi, "unit": "degC"})
+                risk = "high" if (score or 0) >= 0.66 else "moderate" if (score or 0) >= 0.33 else "good"
+                write_assessment(h3_id=h3_id, city_id=city_id, domain="heat",
+                                 risk_level=risk,
+                                 primary_index="HEAT_RISK_SCORE", primary_value=score,
+                                 summary=cell)
+            write_signals(signal_rows, city_id=city_id, domain="heat",
+                          source="openmeteo" if live else "demo")
+            # Heat uses 'candidates' not 'packets' — write as packets using candidate_id
+            for cand in candidates.get("candidates", []):
+                _wp(packet_id=cand.get("candidate_id", ""),
+                    h3_id=cand.get("h3_id", ""),
+                    city_id=city_id, domain="heat",
+                    risk_level="high" if (cand.get("heat_risk_score") or 0) >= 0.66 else "moderate",
+                    confidence_score=cand.get("heat_risk_score"),
+                    field_verification_required=False,
+                    packet=cand)
+        except Exception:
+            pass
+
     # Schema validation
     validator_for_schema_file(
         str((SPEC_ROOT / "consumer_contracts" / "heat_risk_dashboard.v1.schema.json").resolve())
