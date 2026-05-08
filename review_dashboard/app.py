@@ -74,6 +74,18 @@ def _render_system_sidebar(client: UrbanPlatformClient, *, audit: dict, metrics:
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
             st.caption(f"Validated at: {cr.get('validated_at', '—')}")
 
+        with st.expander("LLM Provider", expanded=False):
+            from urban_platform.agents.llm_config import load_config as _load_llm_cfg, PROVIDER_PRESETS
+            _cfg = _load_llm_cfg()
+            st.markdown(f"**{_cfg.label}**")
+            st.caption(f"Model: `{_cfg.model}`")
+            st.caption(f"Base URL: `{_cfg.base_url}`")
+            st.caption(
+                PROVIDER_PRESETS.get(_cfg.provider, {}).get("notes", "")
+                or "Set LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, LLM_API_KEY in .env"
+            )
+            st.caption("Configure in the 🤖 H3 Agent tab or via .env variables.")
+
         with st.expander("H3 Knowledge Store", expanded=False):
             try:
                 from urban_platform.h3_knowledge.reader import get_store_stats
