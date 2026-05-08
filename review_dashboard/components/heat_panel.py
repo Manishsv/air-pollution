@@ -223,7 +223,7 @@ def _render_heat_map(
         cell_lookup = {c["h3_id"]: c for c in cells}
         try:
             def _srow(row):
-                cell = _h3.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                cell = _h3.latlng_to_cell(row["latitude"], row["longitude"], h3_res)
                 ci = cell_lookup.get(cell, {})
                 return {
                     "latitude":       row["latitude"],

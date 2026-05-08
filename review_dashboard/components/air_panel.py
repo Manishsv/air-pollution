@@ -32,12 +32,44 @@ from review_dashboard.formatters import (
 _LOOKBACK_HOURS = 24
 
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
+from review_dashboard.data_cache import load_firms as _load_firms_shared, load_aod as _load_aod_shared
 
 
-# ── Sidebar ────────────────────────────────────────────────────────────────
+# ── WHO 2021 PM2.5 breakpoints (µg/m³) ─────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool]:
-    c1, c2, c3 = st.columns([2, 2, 2])
+def _who_category(pm25: float) -> str:
+    if pm25 <= 5:    return "WHO good"
+    if pm25 <= 10:   return "WHO target"
+    if pm25 <= 15:   return "WHO moderate"
+    if pm25 <= 25:   return "WHO poor"
+    if pm25 <= 75:   return "WHO very poor"
+    return "WHO hazardous"
+
+
+# ── AQI color map ──────────────────────────────────────────────────────────
+
+_AQI_COLOR_MAP = {
+    "good":         [34, 139, 34, 180],
+    "satisfactory": [144, 238, 0, 180],
+    "moderate":     [255, 215, 0, 190],
+    "poor":         [255, 140, 0, 200],
+    "very_poor":    [200, 40, 40, 210],
+    "severe":       [128, 0, 32, 230],
+}
+
+# AOD colour ramp: low (green) → high (red)
+def _aod_color(aod: float) -> list:
+    if aod < 0.1:  return [0, 200, 100, 80]
+    if aod < 0.2:  return [180, 220, 0, 100]
+    if aod < 0.4:  return [255, 200, 0, 120]
+    if aod < 0.6:  return [255, 120, 0, 140]
+    return [200, 0, 0, 160]
+
+
+# ── Sidebar ─────────────────────────────────────────────────────────────────
+
+def _city_selector() -> tuple[str, dict, int, bool, str]:
+    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="air_city_selector")
@@ -47,12 +79,19 @@ def _city_selector() -> tuple[str, dict, int, bool]:
     with c3:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="air_live_toggle",
                          help="Uses CPCB if CPCB_API_KEY is set, otherwise OpenMeteo AQ")
+    with c4:
+        station_type_filter = st.selectbox(
+            "Station type",
+            ["All", "Residential", "Roadside", "Industrial", "Background"],
+            key="air_station_type",
+            help="Filter measurement stations by location type",
+        )
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
-    return city_id, bbox, h3_res, live
+    return city_id, bbox, h3_res, live, station_type_filter
 
 
-# ── Data loading ───────────────────────────────────────────────────────────
+# ── Data loading ────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=300, show_spinner="Loading air quality data…")
 def _load_live_aq(city_id: str, lat_min: float, lon_min: float,
@@ -73,18 +112,23 @@ def _load_live_aq(city_id: str, lat_min: float, lon_min: float,
     )
 
 
-def _synthetic_aq(bbox: dict) -> pd.DataFrame:
-    """3×3 grid of synthetic AQ observations.
+def _load_fire_data(lat_min: float, lon_min: float,
+                    lat_max: float, lon_max: float) -> pd.DataFrame:
+    return _load_firms_shared(lat_min, lon_min, lat_max, lon_max, day_range=1)
 
-    SW corner industrial (heavy pollution), NE corner cleaner.
-    """
+
+def _load_aod(h3_ids: tuple, lat_min: float, lon_min: float,
+              lat_max: float, lon_max: float) -> dict:
+    return _load_aod_shared(h3_ids, lat_min, lon_min, lat_max, lon_max)
+
+
+def _synthetic_aq(bbox: dict) -> pd.DataFrame:
     lats = [bbox["lat_min"], (bbox["lat_min"] + bbox["lat_max"]) / 2, bbox["lat_max"]]
     lons = [bbox["lon_min"], (bbox["lon_min"] + bbox["lon_max"]) / 2, bbox["lon_max"]]
-    # [lat_row][lon_col]: south→north rows, west→east columns
     pm25_vals = [
-        [145.0, 95.0, 65.0],   # south: very_poor SW, poor, moderate
-        [110.0, 75.0, 45.0],   # center: poor, moderate, satisfactory
-        [80.0,  50.0, 25.0],   # north: poor, satisfactory, good NE corner
+        [145.0, 95.0, 65.0],
+        [110.0, 75.0, 45.0],
+        [80.0,  50.0, 25.0],
     ]
     rows = []
     for i, lat in enumerate(lats):
@@ -99,8 +143,20 @@ def _synthetic_aq(bbox: dict) -> pd.DataFrame:
                 "european_aqi": None,
                 "data_source": "openmeteo_aq",
                 "quality_flag": "synthetic",
+                "station_type": "background",
             })
     return pd.DataFrame(rows)
+
+
+# ── Station-type filtering ──────────────────────────────────────────────────
+
+def _apply_station_filter(aq_df: pd.DataFrame, station_type_filter: str) -> pd.DataFrame:
+    if station_type_filter == "All" or aq_df.empty:
+        return aq_df
+    if "station_type" not in aq_df.columns:
+        return aq_df
+    filt = station_type_filter.lower()
+    return aq_df[aq_df["station_type"].str.lower().str.contains(filt, na=False)]
 
 
 # ── Colour helpers ─────────────────────────────────────────────────────────
@@ -135,12 +191,10 @@ def _status_badge(status: str) -> str:
 
 
 def _render_evidence_chain(packet: dict) -> None:
-    """Collapsible expander: data sources (with status badges) → features → formula."""
     src_status = packet.get("data_source_status") or []
     trace = packet.get("computation_trace") or {}
 
     with st.expander("How was this score computed?", expanded=False):
-        # ── Data sources ──────────────────────────────────────────────────
         st.markdown("**Data sources**", unsafe_allow_html=False)
         if src_status:
             rows_html = ""
@@ -163,7 +217,6 @@ def _render_evidence_chain(packet: dict) -> None:
         else:
             st.caption("No source status available.")
 
-        # ── Features used ─────────────────────────────────────────────────
         st.markdown("**Features used**")
         ev = packet.get("evidence") or {}
         inputs = ev.get("inputs") or []
@@ -177,7 +230,6 @@ def _render_evidence_chain(packet: dict) -> None:
                 })
             st.dataframe(pd.DataFrame(feat_rows), hide_index=True, use_container_width=True)
 
-        # ── Scoring formula ───────────────────────────────────────────────
         if trace:
             st.markdown("**Scoring formula**")
             st.code(trace.get("formula", ""), language=None)
@@ -201,40 +253,33 @@ def _render_evidence_chain(packet: dict) -> None:
                 st.caption(f"Algorithm: {algo} · Data quality: {trace.get('data_quality_flag', '—')}")
 
 
-# ── AQI color map ──────────────────────────────────────────────────────────
-
-_AQI_COLOR_MAP = {
-    "good":         [34, 139, 34, 180],
-    "satisfactory": [144, 238, 0, 180],
-    "moderate":     [255, 215, 0, 190],
-    "poor":         [255, 140, 0, 200],
-    "very_poor":    [200, 40, 40, 210],
-    "severe":       [128, 0, 32, 230],
-}
-
-
 # ── Map rendering ──────────────────────────────────────────────────────────
 
 def _render_aq_map(
     dashboard: dict,
     aq_df: pd.DataFrame,
+    fire_df: pd.DataFrame,
+    aod_map: dict,
     bbox: dict,
     h3_res: int,
+    show_aod: bool,
+    show_fires: bool,
 ) -> None:
     cells = dashboard.get("risk_cells", [])
     if not cells:
         st.info("No H3 cells to display.")
         return
 
-    # ── Layer 1: AQ grid (all cells, coloured by AQI category) ───────────
+    # ── Layer 1: AQ grid ─────────────────────────────────────────────────
     grid_df = pd.DataFrame([
         {
-            "h3_id": c["h3_id"],
-            "aqi_score": c.get("aqi_score") or 0.0,
+            "h3_id":        c["h3_id"],
+            "aqi_score":    c.get("aqi_score") or 0.0,
             "aqi_category": c.get("aqi_category", "good"),
-            "color": _AQI_COLOR_MAP.get(c.get("aqi_category", "good"), [128, 128, 128, 150]),
-            "station_id": "",
-            "pm25_ugm3": "",
+            "color":        _AQI_COLOR_MAP.get(c.get("aqi_category", "good"), [128, 128, 128, 150]),
+            "station_id":   "",
+            "pm25_ugm3":    "",
+            "who_category": "",
         }
         for c in cells
     ])
@@ -253,23 +298,51 @@ def _render_aq_map(
     )
     layers = [aq_layer]
 
-    # ── Layer 2: AQ IDW sample points (blue circles) ──────────────────────
-    # Build H3 cell lookup so station tooltip can show cell AQI
+    # ── Layer 2: MODIS AOD overlay ────────────────────────────────────────
+    if show_aod and aod_map:
+        aod_df = pd.DataFrame([
+            {
+                "h3_id": h3_id,
+                "aod":   aod_val,
+                "color": _aod_color(aod_val),
+                "aod_label": f"{aod_val:.3f}",
+            }
+            for h3_id, aod_val in aod_map.items()
+        ])
+        aod_layer = pdk.Layer(
+            "H3HexagonLayer",
+            data=aod_df,
+            get_hexagon="h3_id",
+            get_fill_color="color",
+            line_width_min_pixels=0,
+            pickable=True,
+            extruded=False,
+            opacity=0.5,
+            id="aod_overlay",
+        )
+        layers.append(aod_layer)
+
+    # ── Layer 3: Station scatter points ───────────────────────────────────
     cell_lookup = {c["h3_id"]: c for c in cells}
     if not aq_df.empty and "latitude" in aq_df.columns:
         try:
             import h3
             def _station_row(row):
-                cell = h3.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                cell = h3.latlng_to_cell(row["latitude"], row["longitude"], h3_res)
                 ci = cell_lookup.get(cell, {})
+                pm25_raw = row.get("pm25_ugm3")
+                pm25_str = "N/A" if pd.isna(pm25_raw) else f"{pm25_raw:.1f}"
+                who_cat  = _who_category(float(pm25_raw)) if not pd.isna(pm25_raw) else "—"
                 return {
                     "latitude":     row["latitude"],
                     "longitude":    row["longitude"],
                     "station_id":   row.get("station_id", ""),
-                    "pm25_ugm3":    "N/A" if pd.isna(row.get("pm25_ugm3")) else f"{row['pm25_ugm3']:.1f}",
+                    "station_type": row.get("station_type", "—"),
+                    "pm25_ugm3":    pm25_str,
                     "h3_id":        cell,
                     "aqi_category": ci.get("aqi_category", ""),
                     "aqi_score":    f"{ci.get('aqi_score', 0):.3f}",
+                    "who_category": who_cat,
                 }
             aq_pts = pd.DataFrame([_station_row(r) for _, r in aq_df.iterrows()])
         except Exception:
@@ -277,6 +350,8 @@ def _render_aq_map(
             aq_pts["h3_id"] = ""
             aq_pts["aqi_category"] = ""
             aq_pts["aqi_score"] = ""
+            aq_pts["who_category"] = ""
+            aq_pts["station_type"] = ""
 
         sample_layer = pdk.Layer(
             "ScatterplotLayer",
@@ -292,7 +367,41 @@ def _render_aq_map(
         )
         layers.append(sample_layer)
 
-    # ── View state: bbox centre + h3_res-appropriate zoom ────────────────
+    # ── Layer 4: FIRMS fire hotspots ──────────────────────────────────────
+    if show_fires and fire_df is not None and not fire_df.empty:
+        required = {"latitude", "longitude", "frp"}
+        if required.issubset(fire_df.columns):
+            fire_pts = pd.DataFrame([
+                {
+                    "latitude":    float(r["latitude"]),
+                    "longitude":   float(r["longitude"]),
+                    "frp":         float(r.get("frp") or 0),
+                    "radius":      max(300, min(1500, float(r.get("frp") or 5) * 40)),
+                    "color":       [255, 80, 0, 220] if r.get("within_bbox") else [255, 160, 0, 180],
+                    "confidence":  str(r.get("detection_confidence", "—")),
+                    "acq_date":    str(r.get("acq_date", "")),
+                    "satellite":   str(r.get("satellite", "VIIRS")),
+                    "location":    "city" if r.get("within_bbox") else "airshed",
+                }
+                for _, r in fire_df.iterrows()
+                if float(r.get("frp") or 0) >= 5
+            ])
+            if not fire_pts.empty:
+                fire_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=fire_pts,
+                    get_position=["longitude", "latitude"],
+                    get_radius="radius",
+                    radius_min_pixels=6,
+                    get_fill_color="color",
+                    get_line_color=[200, 40, 0, 255],
+                    line_width_min_pixels=2,
+                    stroked=True, filled=True, pickable=True,
+                    id="fire_hotspots",
+                )
+                layers.append(fire_layer)
+
+    # ── View state ────────────────────────────────────────────────────────
     center_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
     center_lon = (bbox["lon_min"] + bbox["lon_max"]) / 2
     zoom = {7: 9, 8: 10, 9: 11, 10: 12}.get(h3_res, 11)
@@ -300,11 +409,14 @@ def _render_aq_map(
 
     tooltip = {
         "html": """
-            <div style="font-family:sans-serif;font-size:12px;padding:4px 8px;
-                        background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;max-width:260px;">
+            <div style="font-family:sans-serif;font-size:12px;padding:6px 10px;
+                        background:rgba(0,0,0,0.88);color:#fff;border-radius:4px;max-width:300px;">
               <b>H3:</b> {h3_id}<br/>
-              <b>AQI category:</b> {aqi_category} &nbsp; <b>Score:</b> {aqi_score}<br/>
-              <i style="color:#6ab0ff;">{station_id}: {pm25_ugm3} µg/m³ PM2.5</i>
+              <b>India AQI:</b> {aqi_category} &nbsp; <b>Score:</b> {aqi_score}<br/>
+              <b>WHO 2021:</b> {who_category}<br/>
+              <b>Station:</b> {station_id} ({station_type})<br/>
+              <b>PM2.5:</b> {pm25_ugm3} µg/m³<br/>
+              <span style="color:#f97316;font-weight:600;">{location} 🔥 FRP {frp} MW ({satellite}, {acq_date})</span>
             </div>
         """,
         "style": {"color": "white"},
@@ -323,12 +435,12 @@ def _render_aq_map(
         st.pydeck_chart(deck, use_container_width=True, height=520)
 
     with col_legend:
-        st.markdown("**Legend**")
+        st.markdown("**India NAAQS**")
         st.markdown(
             """
-            <div style="font-size:12px;line-height:1.9;">
+            <div style="font-size:11px;line-height:1.9;">
             <span style="display:inline-block;width:12px;height:12px;background:rgba(34,139,34,0.7);
-                         margin-right:6px;border-radius:2px;"></span>Good (0–30 µg/m³)<br/>
+                         margin-right:6px;border-radius:2px;"></span>Good (0–30)<br/>
             <span style="display:inline-block;width:12px;height:12px;background:rgba(144,238,0,0.7);
                          margin-right:6px;border-radius:2px;"></span>Satisfactory (30–60)<br/>
             <span style="display:inline-block;width:12px;height:12px;background:rgba(255,215,0,0.75);
@@ -339,24 +451,48 @@ def _render_aq_map(
                          margin-right:6px;border-radius:2px;"></span>Very Poor (120–250)<br/>
             <span style="display:inline-block;width:12px;height:12px;background:rgba(128,0,32,0.9);
                          margin-right:6px;border-radius:2px;"></span>Severe (&gt;250)<br/>
-            <hr style="margin:6px 0;"/>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("**WHO 2021 (PM2.5)**")
+        st.markdown(
+            """
+            <div style="font-size:10px;line-height:1.7;color:#9ca3af;">
+            Good ≤5 µg/m³<br/>
+            Target ≤10<br/>
+            Moderate ≤15<br/>
+            Poor ≤25<br/>
+            Very Poor ≤75<br/>
+            Hazardous &gt;75
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <div style="font-size:11px;line-height:1.9;margin-top:6px;">
             <span style="display:inline-block;width:12px;height:12px;background:rgba(30,100,220,0.7);
-                         border:2px solid #0a3cc8;margin-right:6px;border-radius:50%;"></span>AQ IDW sample point<br/>
+                         border:2px solid #0a3cc8;margin-right:6px;border-radius:50%;"></span>AQ station<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(255,80,0,0.85);
+                         border:2px solid #c82800;margin-right:6px;border-radius:50%;"></span>Fire (city)<br/>
+            <span style="display:inline-block;width:12px;height:12px;background:rgba(255,160,0,0.7);
+                         border:2px solid #c87000;margin-right:6px;border-radius:50%;"></span>Fire (airshed)
             </div>
             """,
             unsafe_allow_html=True,
         )
         st.caption("Hover for details.")
         n_severe = sum(1 for c in cells if c.get("aqi_category") == "severe")
-        n_vpoor = sum(1 for c in cells if c.get("aqi_category") == "very_poor")
-        n_poor = sum(1 for c in cells if c.get("aqi_category") == "poor")
-        st.markdown(f"**{n_severe}** severe cells  \n**{n_vpoor}** very poor cells  \n**{n_poor}** poor cells")
+        n_vpoor  = sum(1 for c in cells if c.get("aqi_category") == "very_poor")
+        n_poor   = sum(1 for c in cells if c.get("aqi_category") == "poor")
+        st.markdown(f"**{n_severe}** severe  \n**{n_vpoor}** very poor  \n**{n_poor}** poor")
 
 
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_air_panel() -> None:
-    city_id, bbox, h3_res, live = _city_selector()
+    city_id, bbox, h3_res, live, station_type_filter = _city_selector()
 
     render_domain_header(
         title="Air Quality Review",
@@ -366,6 +502,15 @@ def render_air_panel() -> None:
         ),
         primary_alert=None,
     )
+
+    # ── Map layer toggles ──────────────────────────────────────────────────
+    c_aod, c_fire = st.columns(2)
+    with c_aod:
+        show_aod   = st.toggle("MODIS AOD overlay", value=False, key="air_show_aod",
+                               help="Aerosol Optical Depth from MODIS MAIAC (requires GEE_PROJECT)")
+    with c_fire:
+        show_fires = st.toggle("FIRMS fire hotspots", value=True, key="air_show_fires",
+                               help="NASA VIIRS active fire detections (requires FIRMS_API_KEY)")
 
     # ── Load data ──────────────────────────────────────────────────────────
     with st.spinner("Building air quality grid…"):
@@ -379,28 +524,55 @@ def render_air_panel() -> None:
                 aq_df = _synthetic_aq(bbox)
                 data_note = "synthetic (OpenMeteo AQ call failed)"
             else:
-                data_note = f"live OpenMeteo AQ ({len(aq_df)} records)"
+                data_note = f"live ({len(aq_df)} records)"
         else:
             aq_df = _synthetic_aq(bbox)
-            data_note = "synthetic demo (toggle 'Fetch live data' in sidebar for real AQ)"
+            data_note = "synthetic demo"
+
+        # Apply station-type filter
+        aq_filtered = _apply_station_filter(aq_df, station_type_filter)
+        if len(aq_filtered) < len(aq_df):
+            data_note += f" [{station_type_filter} stations only, {len(aq_filtered)}/{len(aq_df)}]"
+        aq_df_for_grid = aq_filtered if not aq_filtered.empty else aq_df
 
         dashboard = build_air_quality_dashboard(
-            aq_df=aq_df,
+            aq_df=aq_df_for_grid,
             h3_resolution=h3_res,
             city_id=city_id,
             **bbox,
         )
         packets = build_air_quality_decision_packets(
-            aq_df=aq_df,
+            aq_df=aq_df_for_grid,
             h3_resolution=h3_res,
             city_id=city_id,
             **bbox,
             top_n=10,
         )
+
+        # Fire hotspots
+        fire_df = pd.DataFrame()
+        if live and show_fires:
+            fire_df = _load_fire_data(
+                bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"]
+            )
+
+        # MODIS AOD
+        aod_map: dict = {}
+        if live and show_aod:
+            cells = dashboard.get("risk_cells", [])
+            if cells:
+                h3_ids = tuple(sorted(c["h3_id"] for c in cells))
+                aod_map = _load_aod(
+                    h3_ids,
+                    bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"],
+                )
+
         if live:
             try:
-                from urban_platform.decision_events import emit_air_decisions
+                from urban_platform.decision_events import emit_air_decisions, emit_fire_decisions
                 emit_air_decisions(packets, city_id=city_id)
+                if not fire_df.empty:
+                    emit_fire_decisions(fire_df, city_id=city_id, bbox=bbox)
             except Exception:
                 pass
 
@@ -417,6 +589,16 @@ def render_air_panel() -> None:
     rs = dashboard.get("risk_summary", {})
     cells = dashboard.get("risk_cells", [])
     summary = dashboard.get("summary", {})
+
+    fire_count = 0
+    fire_in_city = 0
+    if not fire_df.empty and "frp" in fire_df.columns:
+        sig = fire_df[fire_df["frp"] >= 5]
+        fire_count = len(sig)
+        fire_in_city = int(sig["within_bbox"].sum()) if "within_bbox" in sig.columns else 0
+
+    aod_avg = f"{sum(aod_map.values()) / len(aod_map):.3f}" if aod_map else "—"
+
     render_context_metrics(
         ("City", city_id),
         ("H3 resolution", str(h3_res)),
@@ -424,6 +606,8 @@ def render_air_panel() -> None:
         ("Poor+ cells", str(sum(1 for c in cells if c.get("aqi_category") in ("poor", "very_poor", "severe")))),
         ("Overall AQI category", str(rs.get("overall_aqi_category", "—"))),
         ("Max PM2.5 (µg/m³)", f"{summary.get('max_pm25_ugm3') or 0:.1f}"),
+        ("Fire hotspots", f"{fire_in_city} city / {fire_count - fire_in_city} airshed"),
+        ("Avg MODIS AOD", aod_avg),
         ("Data source", data_note),
         ("Quality flag", dashboard.get("data_quality_flag", "—")),
     )
@@ -433,33 +617,55 @@ def render_air_panel() -> None:
         msg = f"**{humanize_warning_id(str(w.get('warning_id', '')))}** — {w.get('message', '')}"
         (st.error if sev == "error" else st.warning if sev == "warning" else st.info)(msg)
 
+    if fire_count > 0:
+        st.warning(
+            f"**{fire_in_city} active fire(s) detected within city boundary** "
+            f"and {fire_count - fire_in_city} in surrounding airshed (VIIRS, last 24h). "
+            "Fire smoke may significantly elevate PM2.5 and PM10 readings."
+        )
+
     st.divider()
 
-    # ── Tabs: Map / Grid table / Decision packets ──────────────────────────
-    t_map, t_browse, t_detail = st.tabs(["🗺️ Map", "📊 AQI grid", "🎯 Decision packets"])
+    # ── Tabs ───────────────────────────────────────────────────────────────
+    t_map, t_browse, t_fire, t_detail = st.tabs(
+        ["🗺️ Map", "📊 AQI grid", "🔥 Fire events", "🎯 Decision packets"]
+    )
 
     with t_map:
-        _render_aq_map(dashboard, aq_df, bbox=bbox, h3_res=h3_res)
-        st.caption(
-            "**Blue circles** are IDW sample points — virtual grid coordinates queried from "
-            "the OpenMeteo Air Quality API (or synthesised for demo), not physical sensors. "
-            "H3 cells are coloured by India AQI category: "
-            "green (good) → yellow-green (satisfactory) → yellow (moderate) → "
-            "orange (poor) → red (very poor) → maroon (severe)."
+        _render_aq_map(
+            dashboard, aq_df_for_grid, fire_df, aod_map,
+            bbox=bbox, h3_res=h3_res,
+            show_aod=show_aod, show_fires=show_fires,
         )
+        caption_parts = [
+            "**Blue circles** are AQ measurement stations.",
+            "H3 cells coloured by India AQI category.",
+        ]
+        if show_fires:
+            caption_parts.append(
+                "**Orange/red circles** are VIIRS fire hotspots — size proportional to fire radiative power (FRP)."
+            )
+        if show_aod and aod_map:
+            caption_parts.append(
+                "**AOD overlay** shows MODIS MAIAC aerosol optical depth (green=low → red=high)."
+            )
+        st.caption(" ".join(caption_parts))
 
     with t_browse:
         render_section_title("Air quality grid")
         if cells:
-            rows = [
-                {
+            # Add WHO category to grid table
+            rows = []
+            for c in cells:
+                pm25 = c.get("aqi_score") or 0
+                rows.append({
                     "AQI": _aqi_emoji(c.get("aqi_category", "good")),
                     "H3 cell": str(c.get("h3_id", ""))[:16] + "…",
-                    "AQI category": c.get("aqi_category", "—"),
+                    "India AQI": c.get("aqi_category", "—"),
                     "AQI score": f"{c.get('aqi_score') or c.get('confidence_score', 0) or 0:.3f}",
-                }
-                for c in cells
-            ]
+                    "WHO 2021": _who_category(pm25 * 250 / 1.0) if pm25 else "—",  # score→µg/m³ approx
+                    "AOD": f"{aod_map.get(c['h3_id'], 0):.3f}" if aod_map else "—",
+                })
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
             render_section_title("AQI score distribution")
@@ -467,6 +673,35 @@ def render_air_panel() -> None:
             st.bar_chart(score_df, y="aqi_score", height=200)
         else:
             st.info("No H3 cells generated.")
+
+    with t_fire:
+        render_section_title("FIRMS fire hotspots (last 24h)")
+        if fire_df.empty:
+            if not live:
+                st.info("Enable 'Live data' to fetch FIRMS fire hotspots.")
+            else:
+                st.info("No active fire detections in city or airshed (or FIRMS_API_KEY not set).")
+        else:
+            sig = fire_df[fire_df.get("frp", pd.Series(dtype=float)) >= 5] if "frp" in fire_df.columns else fire_df
+            if sig.empty:
+                st.info("No significant fire detections (FRP ≥ 5 MW).")
+            else:
+                fire_rows = []
+                for _, r in sig.iterrows():
+                    fire_rows.append({
+                        "Date": str(r.get("acq_date", "")),
+                        "Lat": f"{float(r['latitude']):.4f}",
+                        "Lon": f"{float(r['longitude']):.4f}",
+                        "FRP (MW)": f"{float(r.get('frp', 0)):.1f}",
+                        "Confidence %": int(r.get("detection_confidence", 0)),
+                        "Satellite": str(r.get("satellite", "VIIRS")),
+                        "Location": "City" if r.get("within_bbox") else "Airshed",
+                    })
+                st.dataframe(pd.DataFrame(fire_rows), hide_index=True, use_container_width=True)
+                st.caption(
+                    "Fire smoke typically elevates PM2.5 by 30–100 µg/m³ within 50 km downwind. "
+                    "Decision Objects have been emitted for all detections with FRP ≥ 5 MW."
+                )
 
     with t_detail:
         render_section_title("Decision packets (top-10 highest AQI)")

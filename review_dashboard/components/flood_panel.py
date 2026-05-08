@@ -281,7 +281,7 @@ def _render_flood_map(
         try:
             import h3 as _h3f
             def _rrow(row):
-                cell = _h3f.geo_to_h3(row["latitude"], row["longitude"], h3_res)
+                cell = _h3f.latlng_to_cell(row["latitude"], row["longitude"], h3_res)
                 ci = cell_lookup.get(cell, {})
                 intens = row.get("rainfall_intensity_mm_per_hr", 0) or 0
                 return {

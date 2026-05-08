@@ -4,6 +4,13 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
+# Load .env before any connector imports read os.environ
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env", override=False)
+except ImportError:
+    pass
+
 import pandas as pd
 import streamlit as st
 
@@ -24,6 +31,12 @@ from review_dashboard.components.ward_decisions_panel import render_ward_decisio
 from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
 from review_dashboard.components.heat_panel import render_heat_panel
 from review_dashboard.components.air_panel import render_air_panel
+from review_dashboard.components.fire_panel import render_fire_panel
+from review_dashboard.components.waste_panel import render_waste_panel
+from review_dashboard.components.water_panel import render_water_panel
+from review_dashboard.components.construction_panel import render_construction_panel
+from review_dashboard.components.green_panel import render_green_panel
+from review_dashboard.components.noise_panel import render_noise_panel
 from review_dashboard.design_system import apply_airos_design_system
 from review_dashboard.ui_shell import (
     render_domain_header,
@@ -117,14 +130,33 @@ def main():
 
     _render_system_sidebar(client, audit=audit, metrics=metrics)
 
-    t_aq, t_flood, t_heat, t_cross, t_ward, t_decisions, t_property, t_program, t_trace, t_crowd, t_events = st.tabs([
-        "Air Quality", "Flood", "Heat", "Cross-Domain", "Ward QoL",
+    t_aq, t_fire, t_waste, t_water, t_construction, t_green, t_noise, t_flood, t_heat, t_cross, t_ward, t_decisions, t_property, t_program, t_trace, t_crowd, t_events = st.tabs([
+        "Air Quality", "Fire", "Waste", "Water Quality", "Construction & Dust",
+        "Green Cover", "Noise", "Flood", "Heat", "Cross-Domain", "Ward QoL",
         "Ward Decisions", "Property & Buildings", "Program Reporting", "Runtime Trace",
         "Crowd", "Events",
     ])
 
     with t_aq:
         render_air_panel()
+
+    with t_fire:
+        render_fire_panel()
+
+    with t_waste:
+        render_waste_panel()
+
+    with t_water:
+        render_water_panel()
+
+    with t_construction:
+        render_construction_panel()
+
+    with t_green:
+        render_green_panel()
+
+    with t_noise:
+        render_noise_panel()
 
     with t_flood:
         render_flood_panel()
