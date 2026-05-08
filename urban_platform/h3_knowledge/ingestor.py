@@ -493,6 +493,9 @@ def run(
 ) -> dict[str, dict[str, int]]:
     """Run the ingestor for the given cities and domains.
 
+    Opens a read-write connection (exclusively), runs all domain ingests,
+    then closes the connection so the dashboard can resume read-only access.
+
     Returns a nested dict: {city_id: {domain: rows_written}}.
     """
     cities  = cities  or ALL_CITIES
