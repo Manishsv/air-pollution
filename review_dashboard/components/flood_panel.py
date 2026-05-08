@@ -483,43 +483,6 @@ def render_flood_panel() -> None:
             except Exception:
                 pass
 
-        # ── Persist to H3 Knowledge Store (best-effort) ──
-        try:
-            from urban_platform.h3_knowledge.writer import (
-                write_signals, write_assessment, write_packet as _wp, upsert_metadata,
-            )
-            signal_rows = []
-            for cell in dashboard.get("risk_cells", []):
-                h3_id = cell.get("h3_id")
-                if not h3_id:
-                    continue
-                upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res)
-                score = cell.get("flood_risk_score")
-                rainfall = cell.get("rainfall_mm_per_hr")
-                if score is not None:
-                    signal_rows.append({"h3_id": h3_id, "signal": "FLOOD_RISK_SCORE",
-                                        "value": score, "unit": "index"})
-                if rainfall is not None:
-                    signal_rows.append({"h3_id": h3_id, "signal": "RAINFALL",
-                                        "value": rainfall, "unit": "mm/hr"})
-                write_assessment(h3_id=h3_id, city_id=city_id, domain="flood",
-                                 risk_level=cell.get("risk_level", "unknown"),
-                                 primary_index="FLOOD_RISK_SCORE", primary_value=score,
-                                 dominant_issue=cell.get("dominant_issue"),
-                                 summary=cell)
-            write_signals(signal_rows, city_id=city_id, domain="flood",
-                          source="imd" if live else "demo")
-            for pkt in packets:
-                _wp(packet_id=pkt.get("packet_id", ""),
-                    h3_id=pkt.get("spatial_unit_id", ""),
-                    city_id=city_id, domain="flood",
-                    risk_level=pkt.get("risk_level", "unknown"),
-                    confidence_score=pkt.get("confidence_score"),
-                    field_verification_required=bool(pkt.get("field_verification_required")),
-                    packet=pkt)
-        except Exception:
-            pass
-
     # Schema validation
     validator_for_schema_file(
         str((SPEC_ROOT / "consumer_contracts" / "flood_risk_dashboard.v1.schema.json").resolve())

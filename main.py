@@ -27,7 +27,7 @@ def main() -> None:
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
     ap.add_argument(
         "--step",
-        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance"],
+        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance", "ingest-h3"],
         default="all",
         help="Stop after a step (sensor-siting reads existing outputs)",
     )
@@ -39,6 +39,21 @@ def main() -> None:
     )
     ap.add_argument("--no-recommendations", action="store_true", help="Disable operational recommendations")
     args = ap.parse_args()
+
+    if args.step == "ingest-h3":
+        import logging as _logging
+        _logging.basicConfig(level=_logging.INFO,
+                             format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                             datefmt="%H:%M:%S")
+        from urban_platform.h3_knowledge.ingestor import run as _h3_run, ALL_CITIES, ALL_DOMAINS
+        cities  = getattr(args, "cities",  None) or ALL_CITIES
+        domains = getattr(args, "domains", None) or ALL_DOMAINS
+        force   = getattr(args, "force",   False)
+        results = _h3_run(cities=cities, domains=domains, force=force)
+        total = sum(n for dm in results.values() for n in dm.values() if n > 0)
+        print(f"\nH3 ingest complete — {total} rows written across "
+              f"{len(results)} cities × {len(domains)} domains")
+        return
 
     if args.step == "conformance":
         log = logging.getLogger(__name__)

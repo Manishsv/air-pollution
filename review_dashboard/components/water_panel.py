@@ -405,28 +405,6 @@ def render_water_panel() -> None:
             water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
         )
 
-        # ── Persist to H3 Knowledge Store (best-effort) ──
-        try:
-            from urban_platform.h3_knowledge.writer import ingest_assessment_cells, write_packet as _wp
-            cell_list = [{"h3_id": k, **v} for k, v in water_cells.items()]
-            ingest_assessment_cells(
-                cell_list, city_id=city_id, domain="water",
-                signal_key="wqi", risk_key="risk_level",
-                issue_key="dominant_issue", unit="index", source=data_source,
-            )
-            for pkt in packets_water:
-                _wp(
-                    packet_id=pkt.get("packet_id", ""),
-                    h3_id=pkt.get("spatial_unit_id", ""),
-                    city_id=city_id, domain="water",
-                    risk_level=pkt.get("risk_level", "unknown"),
-                    confidence_score=pkt.get("confidence_score"),
-                    field_verification_required=bool(pkt.get("field_verification_required")),
-                    packet=pkt,
-                )
-        except Exception:
-            pass
-
         st.session_state[ss_key] = {
             "water_cells": water_cells,
             "data_source": data_source,
