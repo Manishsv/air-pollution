@@ -576,6 +576,38 @@ def render_air_panel() -> None:
             except Exception:
                 pass
 
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import write_assessment, write_packet as _wp, write_signals, upsert_metadata
+            signal_rows = []
+            for cell in dashboard.get("risk_cells", []):
+                h3_id = cell.get("h3_id")
+                if not h3_id:
+                    continue
+                upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res,
+                                centroid_lat=cell.get("centroid_lat"),
+                                centroid_lon=cell.get("centroid_lon"))
+                aqi_val = cell.get("aqi")
+                if aqi_val is not None:
+                    signal_rows.append({"h3_id": h3_id, "signal": "AQI",
+                                        "value": aqi_val, "unit": "index"})
+                write_assessment(h3_id=h3_id, city_id=city_id, domain="air",
+                                 risk_level=cell.get("risk_level", "unknown"),
+                                 primary_index="AQI", primary_value=aqi_val,
+                                 dominant_issue=cell.get("dominant_pollutant"),
+                                 summary=cell)
+            write_signals(signal_rows, city_id=city_id, domain="air", source="cpcb" if live else "demo")
+            for pkt in packets:
+                _wp(packet_id=pkt.get("packet_id", ""),
+                    h3_id=pkt.get("spatial_unit_id", ""),
+                    city_id=city_id, domain="air",
+                    risk_level=pkt.get("risk_level", "unknown"),
+                    confidence_score=pkt.get("confidence_score"),
+                    field_verification_required=bool(pkt.get("field_verification_required")),
+                    packet=pkt)
+        except Exception:
+            pass
+
     # Schema validation
     validator_for_schema_file(
         str((SPEC_ROOT / "consumer_contracts" / "air_quality_dashboard.v1.schema.json").resolve())

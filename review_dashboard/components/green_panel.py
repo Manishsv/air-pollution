@@ -427,15 +427,39 @@ def render_green_panel() -> None:
             green_cells = _demo_green_cells(city_id, h3_ids)
             data_source = "demo"
 
+        packets_green = build_green_decision_packets(
+            green_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
+        )
+
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import ingest_assessment_cells, write_packet as _wp
+            cell_list = [{"h3_id": k, **v} for k, v in green_cells.items()]
+            ingest_assessment_cells(
+                cell_list, city_id=city_id, domain="green",
+                signal_key="gcci", risk_key="risk_level",
+                issue_key="dominant_issue", unit="index", source=data_source,
+            )
+            for pkt in packets_green:
+                _wp(
+                    packet_id=pkt.get("packet_id", ""),
+                    h3_id=pkt.get("spatial_unit_id", ""),
+                    city_id=city_id, domain="green",
+                    risk_level=pkt.get("risk_level", "unknown"),
+                    confidence_score=pkt.get("confidence_score"),
+                    field_verification_required=bool(pkt.get("field_verification_required")),
+                    packet=pkt,
+                )
+        except Exception:
+            pass
+
         st.session_state[ss_key] = {
             "green_cells": green_cells,
             "data_source": data_source,
             "dashboard":   build_green_dashboard(
                 green_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets":     build_green_decision_packets(
-                green_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-            ),
+            "packets":     packets_green,
         }
 
     cached      = st.session_state[ss_key]

@@ -73,6 +73,24 @@ def _render_system_sidebar(client: UrbanPlatformClient, *, audit: dict, metrics:
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
             st.caption(f"Validated at: {cr.get('validated_at', '—')}")
 
+        with st.expander("H3 Knowledge Store", expanded=False):
+            try:
+                from urban_platform.h3_knowledge.reader import get_store_stats
+                stats = get_store_stats()
+                if stats:
+                    st.dataframe(
+                        pd.DataFrame(
+                            [{"Table": k, "Rows": v} for k, v in stats.items()]
+                        ),
+                        hide_index=True, use_container_width=True,
+                    )
+                    total = sum(stats.values())
+                    st.caption(f"Total records: {total:,}  |  DB: data/h3/knowledge.duckdb")
+                else:
+                    st.caption("Store empty — browse a domain tab to populate it.")
+            except Exception as _e:
+                st.caption(f"Knowledge store unavailable: {_e}")
+
 
 def _render_events(events: pd.DataFrame) -> None:
     render_section_title("Events / Tasks Queue")

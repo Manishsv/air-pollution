@@ -401,15 +401,39 @@ def render_water_panel() -> None:
         else:
             data_source = "live"
 
+        packets_water = build_water_decision_packets(
+            water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
+        )
+
+        # ── Persist to H3 Knowledge Store (best-effort) ──
+        try:
+            from urban_platform.h3_knowledge.writer import ingest_assessment_cells, write_packet as _wp
+            cell_list = [{"h3_id": k, **v} for k, v in water_cells.items()]
+            ingest_assessment_cells(
+                cell_list, city_id=city_id, domain="water",
+                signal_key="wqi", risk_key="risk_level",
+                issue_key="dominant_issue", unit="index", source=data_source,
+            )
+            for pkt in packets_water:
+                _wp(
+                    packet_id=pkt.get("packet_id", ""),
+                    h3_id=pkt.get("spatial_unit_id", ""),
+                    city_id=city_id, domain="water",
+                    risk_level=pkt.get("risk_level", "unknown"),
+                    confidence_score=pkt.get("confidence_score"),
+                    field_verification_required=bool(pkt.get("field_verification_required")),
+                    packet=pkt,
+                )
+        except Exception:
+            pass
+
         st.session_state[ss_key] = {
             "water_cells": water_cells,
             "data_source": data_source,
             "dashboard": build_water_dashboard(
                 water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets": build_water_decision_packets(
-                water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-            ),
+            "packets": packets_water,
         }
         if live and not water_cells:
             st.warning(
