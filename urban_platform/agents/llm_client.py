@@ -258,8 +258,33 @@ class LLMClient:
 
         stop = choice.finish_reason or "stop"
 
+        # Normalise content — reasoning models (e.g. gptoss family) emit an
+        # empty content string and put their thinking in a separate `reasoning`
+        # field.  Treat empty string as None so callers can use `if content`.
+        content = msg.content or None
+
+        # If content is empty, fall back to the `reasoning` field that some
+        # providers (Ollama gptoss, DeepSeek-R1, etc.) include in the message.
+        # This gives the agent the model's thinking as text for logging/fallback.
+        if content is None:
+            # Try standard attribute first (some SDK versions expose it)
+            reasoning = getattr(msg, "reasoning", None)
+            # Then try model_extra dict (Pydantic v2 extra fields)
+            if not reasoning:
+                reasoning = (getattr(msg, "model_extra", None) or {}).get("reasoning")
+            # Then try the raw dict representation
+            if not reasoning:
+                try:
+                    raw_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
+                    reasoning = raw_dict.get("reasoning")
+                except Exception:
+                    pass
+            if reasoning:
+                logger.debug("Reasoning model — using 'reasoning' field as content (%d chars)", len(reasoning))
+                content = reasoning   # surface thinking as content for fallback path
+
         return LLMResponse(
-            content=msg.content,
+            content=content,
             tool_calls=tool_calls,
             stop_reason=stop,
             model=raw.model,

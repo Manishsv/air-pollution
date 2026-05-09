@@ -16,6 +16,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from urban_platform.rules import rules as _rules
+
 _LEVEL_ORDER = ["minimal", "low", "moderate", "high", "severe"]
 
 _CRI_COLORS = {
@@ -73,10 +75,11 @@ _ACTIVITY_LABELS = {
 
 
 def _cri_to_level(cri: float) -> str:
-    if cri >= 0.80: return "severe"
-    if cri >= 0.60: return "high"
-    if cri >= 0.40: return "moderate"
-    if cri >= 0.20: return "low"
+    t = _rules.get("construction", "cri_risk_levels", default={"severe": 0.80, "high": 0.60, "moderate": 0.40, "low": 0.20})
+    if cri >= t["severe"]:   return "severe"
+    if cri >= t["high"]:     return "high"
+    if cri >= t["moderate"]: return "moderate"
+    if cri >= t["low"]:      return "low"
     return "minimal"
 
 
@@ -178,9 +181,11 @@ def build_construction_decision_packets(
 
     packets = []
     for c in active:
+        _bsi_thr = _rules.get("construction", "bsi_earthworks_threshold", default=0.6)
+        _no2_thr = _rules.get("construction", "no2_machinery_threshold", default=0.5)
         dominant = (
-            "heavy_earthworks" if c["bsi_score"] > 0.6 else
-            "machinery_exhaust" if c["no2_score"] > 0.5 else
+            "heavy_earthworks"  if c["bsi_score"] > _bsi_thr else
+            "machinery_exhaust" if c["no2_score"]  > _no2_thr else
             "soil_disturbance"
         )
         cri   = c["construction_risk_index"]
@@ -200,7 +205,7 @@ def build_construction_decision_packets(
             "field_verification_required": level in ("high", "severe"),
             "confidence": {
                 "confidence_score":       cri,
-                "recommendation_allowed": cri >= 0.4,
+                "recommendation_allowed": cri >= _rules.get("construction", "min_cri_for_recommendation", default=0.4),
             },
             "evidence": {
                 "inputs": [

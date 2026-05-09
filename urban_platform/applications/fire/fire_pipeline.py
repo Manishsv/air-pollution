@@ -8,15 +8,15 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
+from urban_platform.rules import rules as _rules
 
-# ── Risk thresholds ────────────────────────────────────────────────────────
 
-_FRP_THRESHOLDS = {
-    "severe":   100.0,  # MW total FRP in cell
-    "high":      30.0,
-    "moderate":  10.0,
-    "low":        5.0,
-}
+# ── Risk thresholds — read from rules registry ─────────────────────────────
+
+def _frp_thresholds() -> dict:
+    return _rules.get("fire", "frp_risk_levels_mw", default={
+        "severe": 100.0, "high": 30.0, "moderate": 10.0, "low": 5.0,
+    })
 
 _RISK_COLORS = {
     "none":     [200, 200, 200, 60],
@@ -32,9 +32,11 @@ _LEVEL_ORDER = ["none", "low", "moderate", "high", "severe"]
 # ── Scoring ────────────────────────────────────────────────────────────────
 
 def _frp_to_risk(total_frp: float) -> tuple[float, str]:
-    score = min(1.0, math.log1p(total_frp) / math.log1p(500))
+    saturation = _rules.get("fire", "frp_score_saturation_mw", default=500.0)
+    score = min(1.0, math.log1p(total_frp) / math.log1p(saturation))
+    thresholds = _frp_thresholds()
     for level in ("severe", "high", "moderate", "low"):
-        if total_frp >= _FRP_THRESHOLDS[level]:
+        if total_frp >= thresholds[level]:
             return round(score, 4), level
     return 0.0, "none"
 
@@ -63,7 +65,8 @@ def build_fire_dashboard(
             h3 = None
 
         if h3:
-            sig = fire_df[fire_df["frp"] >= 5.0].copy()
+            _floor = _rules.get("fire", "frp_detection_floor_mw", default=5.0)
+            sig = fire_df[fire_df["frp"] >= _floor].copy()
             sig["h3_id"] = [
                 h3.latlng_to_cell(float(lat), float(lon), h3_resolution)
                 for lat, lon in zip(sig["latitude"], sig["longitude"])
@@ -105,7 +108,7 @@ def build_fire_dashboard(
 
     n_sig = 0
     if not fire_df.empty and "frp" in fire_df.columns:
-        n_sig = int((fire_df["frp"] >= 5).sum())
+        n_sig = int((fire_df["frp"] >= _rules.get("fire", "frp_detection_floor_mw", default=5.0)).sum())
 
     return {
         "dashboard_id":   str(uuid.uuid4()),
@@ -132,7 +135,7 @@ def _build_warnings(overall: str, n_city: int, max_frp: float) -> list[dict]:
     if n_city > 0:
         warnings.append({
             "warning_id": "FIRE_WITHIN_CITY",
-            "severity":   "error" if n_city >= 3 else "warning",
+            "severity":   "error" if n_city >= _rules.get("fire", "in_city_alert_error_threshold", default=3) else "warning",
             "message":    f"{n_city} active fire hotspot(s) detected within city boundary.",
         })
     if overall in ("high", "severe"):

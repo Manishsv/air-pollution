@@ -17,6 +17,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from urban_platform.rules import rules as _rules
+
 _CHANGE_COLORS = {
     "severe_loss":       [180,  20,  20, 230],
     "high_loss":         [230,  80,  20, 210],
@@ -79,11 +81,15 @@ _TYPE_ICON = {
 
 
 def _gcci_to_change_level(gcci: float) -> str:
-    if gcci <= -0.6:  return "severe_loss"
-    if gcci <= -0.2:  return "high_loss"
-    if gcci <= -0.05: return "moderate_loss"
-    if gcci >= 0.2:   return "significant_gain"
-    if gcci >= 0.05:  return "moderate_gain"
+    t = _rules.get("green", "gcci_thresholds", default={
+        "severe_loss": -0.60, "high_loss": -0.20, "moderate_loss": -0.05,
+        "moderate_gain": 0.05, "significant_gain": 0.20,
+    })
+    if gcci <= t["severe_loss"]:     return "severe_loss"
+    if gcci <= t["high_loss"]:       return "high_loss"
+    if gcci <= t["moderate_loss"]:   return "moderate_loss"
+    if gcci >= t["significant_gain"]: return "significant_gain"
+    if gcci >= t["moderate_gain"]:   return "moderate_gain"
     return "stable"
 
 
@@ -228,7 +234,7 @@ def build_green_decision_packets(
             "field_verification_required": level in ("high_loss", "severe_loss"),
             "confidence": {
                 "confidence_score":       abs(gcci),
-                "recommendation_allowed": abs(gcci) >= 0.2,
+                "recommendation_allowed": abs(gcci) >= _rules.get("green", "recommendation_min_abs_gcci", default=0.2),
             },
             "evidence": {
                 "inputs": [

@@ -6,12 +6,12 @@ from typing import Any
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 from urban_platform.applications.air.air_pipeline import (
     build_air_quality_dashboard,
-    build_air_quality_decision_packets,
 )
 from urban_platform.connectors.air_quality import fetch_air_quality_observations
 
@@ -68,18 +68,17 @@ def _aod_color(aod: float) -> list:
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, str]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+_DEFAULT_H3_RES = 8  # fixed at H3 Knowledge Store resolution
+
+def _city_selector() -> tuple[str, dict, bool, str]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="air_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="air_h3_res",
-                           help="Higher = smaller cells, more detail, slower")
-    with c3:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="air_live_toggle",
                          help="Uses CPCB if CPCB_API_KEY is set, otherwise OpenMeteo AQ")
-    with c4:
+    with c3:
         station_type_filter = st.selectbox(
             "Station type",
             ["All", "Residential", "Roadside", "Industrial", "Background"],
@@ -88,7 +87,7 @@ def _city_selector() -> tuple[str, dict, int, bool, str]:
         )
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
-    return city_id, bbox, h3_res, live, station_type_filter
+    return city_id, bbox, live, station_type_filter
 
 
 # ── Data loading ────────────────────────────────────────────────────────────
@@ -286,7 +285,7 @@ def _render_aq_map(
 
     aq_layer = pdk.Layer(
         "H3HexagonLayer",
-        data=grid_df,
+        data=clean_h3_data(grid_df),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[80, 80, 80],
@@ -311,7 +310,7 @@ def _render_aq_map(
         ])
         aod_layer = pdk.Layer(
             "H3HexagonLayer",
-            data=aod_df,
+            data=clean_h3_data(aod_df),
             get_hexagon="h3_id",
             get_fill_color="color",
             line_width_min_pixels=0,
@@ -355,7 +354,7 @@ def _render_aq_map(
 
         sample_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=aq_pts,
+            data=clean_h3_data(aq_pts),
             get_position=["longitude", "latitude"],
             get_radius=400,
             radius_min_pixels=5,
@@ -389,7 +388,7 @@ def _render_aq_map(
             if not fire_pts.empty:
                 fire_layer = pdk.Layer(
                     "ScatterplotLayer",
-                    data=fire_pts,
+                    data=clean_h3_data(fire_pts),
                     get_position=["longitude", "latitude"],
                     get_radius="radius",
                     radius_min_pixels=6,
@@ -492,7 +491,8 @@ def _render_aq_map(
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_air_panel() -> None:
-    city_id, bbox, h3_res, live, station_type_filter = _city_selector()
+    city_id, bbox, live, station_type_filter = _city_selector()
+    h3_res = _DEFAULT_H3_RES
 
     render_domain_header(
         title="Air Quality Review",
@@ -541,13 +541,6 @@ def render_air_panel() -> None:
             city_id=city_id,
             **bbox,
         )
-        packets = build_air_quality_decision_packets(
-            aq_df=aq_df_for_grid,
-            h3_resolution=h3_res,
-            city_id=city_id,
-            **bbox,
-            top_n=10,
-        )
 
         # Fire hotspots
         fire_df = pd.DataFrame()
@@ -569,8 +562,7 @@ def render_air_panel() -> None:
 
         if live:
             try:
-                from urban_platform.decision_events import emit_air_decisions, emit_fire_decisions
-                emit_air_decisions(packets, city_id=city_id)
+                from urban_platform.decision_events import emit_fire_decisions
                 if not fire_df.empty:
                     emit_fire_decisions(fire_df, city_id=city_id, bbox=bbox)
             except Exception:
@@ -580,10 +572,6 @@ def render_air_panel() -> None:
     validator_for_schema_file(
         str((SPEC_ROOT / "consumer_contracts" / "air_quality_dashboard.v1.schema.json").resolve())
     ).validate(dashboard)
-    for p in packets:
-        validator_for_schema_file(
-            str((SPEC_ROOT / "consumer_contracts" / "air_quality_decision_packet.v1.schema.json").resolve())
-        ).validate(p)
 
     # ── Context metrics ────────────────────────────────────────────────────
     rs = dashboard.get("risk_summary", {})
@@ -601,7 +589,6 @@ def render_air_panel() -> None:
 
     render_context_metrics(
         ("City", city_id),
-        ("H3 resolution", str(h3_res)),
         ("Total cells", str(len(cells))),
         ("Poor+ cells", str(sum(1 for c in cells if c.get("aqi_category") in ("poor", "very_poor", "severe")))),
         ("Overall AQI category", str(rs.get("overall_aqi_category", "—"))),
@@ -627,8 +614,8 @@ def render_air_panel() -> None:
     st.divider()
 
     # ── Tabs ───────────────────────────────────────────────────────────────
-    t_map, t_browse, t_fire, t_detail = st.tabs(
-        ["🗺️ Map", "📊 AQI grid", "🔥 Fire events", "🎯 Decision packets"]
+    t_map, t_browse, t_fire = st.tabs(
+        ["🗺️ Map", "📊 AQI grid", "🔥 Fire events"]
     )
 
     with t_map:
@@ -703,69 +690,7 @@ def render_air_panel() -> None:
                     "Decision Objects have been emitted for all detections with FRP ≥ 5 MW."
                 )
 
-    with t_detail:
-        render_section_title("Decision packets (top-10 highest AQI)")
-        if not packets:
-            st.info("No decision packets generated.")
-        else:
-            rows = [
-                {
-                    "Packet ID": str(p.get("packet_id") or ""),
-                    "H3 cell": str(p.get("h3_id") or "")[:16] + "…",
-                    "AQI category": str((p.get("aqi_assessment") or {}).get("aqi_category") or "—"),
-                    "Field verification": "Yes" if p.get("field_verification_required") else "No",
-                    "Rec. allowed": "Yes" if (p.get("confidence") or {}).get("recommendation_allowed") else "No",
-                }
-                for p in packets
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-            render_section_title("Drill-down")
-            ids = [str(p.get("packet_id")) for p in packets if p.get("packet_id")]
-            sel = st.selectbox("Select a packet for details", options=ids, index=0,
-                               key="air_selected_packet")
-            selected = next((p for p in packets if str(p.get("packet_id")) == sel), None)
-            if selected:
-                aa = selected.get("aqi_assessment") or {}
-                conf = selected.get("confidence") or {}
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("AQI category", str(aa.get("aqi_category", "—")))
-                    st.metric("Primary pollutant", str(aa.get("primary_pollutant", "—")))
-                with col2:
-                    st.metric("Confidence score", f"{conf.get('confidence_score', 0):.3f}")
-                    st.metric("Field verification required",
-                              "Yes" if selected.get("field_verification_required") else "No")
-
-                _render_evidence_chain(selected)
-
-                st.markdown("#### Evidence")
-                ev_rows = evidence_inputs_to_rows(selected.get("evidence"))
-                if not ev_rows:
-                    st.caption("No structured evidence rows.")
-                else:
-                    st.dataframe(pd.DataFrame(ev_rows), hide_index=True, use_container_width=True)
-
-                rg = selected.get("review_guidance") or {}
-                st.markdown("#### Review prompts")
-                for q in rg.get("review_prompts") or []:
-                    st.markdown(f"- {q}")
-                st.markdown("#### When not to act")
-                for q in rg.get("when_not_to_act") or []:
-                    st.markdown(f"- {q}")
-
-                st.markdown("#### Safety gates")
-                gdf = pd.DataFrame(safety_gates_to_rows(selected.get("safety_gates")))
-                if gdf.empty:
-                    st.caption("No safety gates listed.")
-                else:
-                    st.dataframe(gdf, hide_index=True, use_container_width=True)
-
-                st.markdown("#### Blocked uses")
-                for bu in selected.get("blocked_uses") or []:
-                    st.markdown(f"- {humanize_snake_sentence(str(bu))}")
-
     render_technical_json_expander(
-        title="Technical: Raw contract payloads",
-        payload={"air_quality_dashboard": dashboard, "air_quality_decision_packets": packets},
+        title="Technical: Raw contract payload",
+        payload={"air_quality_dashboard": dashboard},
     )

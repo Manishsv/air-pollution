@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.construction.construction_pipeline import (
     build_construction_dashboard,
-    build_construction_decision_packets,
 )
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -30,6 +30,7 @@ from review_dashboard.formatters import (
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 from review_dashboard.data_cache import load_construction_signals, h3_grid_for_bbox
 
+_DEFAULT_H3_RES = 8
 
 # ── Colour map ─────────────────────────────────────────────────────────────
 
@@ -105,22 +106,20 @@ def _demo_construction_cells(city_id: str, h3_ids: tuple) -> dict:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool, int]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="construction_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="construction_h3_res")
-    with c3:
         live = st.toggle("Live data", value=True, key="construction_live_toggle",
                          help="Requires GEE_PROJECT for Sentinel-2 BSI + Sentinel-5P NO2")
-    with c4:
+    with c3:
         lookback = st.selectbox("Lookback (days)", [10, 20, 30], index=1,
                                 key="construction_lookback",
                                 help="Sentinel-2 revisit ~5 days; 20d balances coverage vs. currency")
     city_id = city_options[city_label]
-    return city_id, get_bbox(city_id), h3_res, live, int(lookback)
+    return city_id, get_bbox(city_id), live, int(lookback)
 
 
 # ── H3 hex layer ───────────────────────────────────────────────────────────
@@ -143,7 +142,7 @@ def _hex_layer(cells: list[dict]) -> pdk.Layer:
         })
     return pdk.Layer(
         "H3HexagonLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[255, 255, 255, 40],
@@ -166,7 +165,7 @@ def _zones_layer(zones: list[dict]) -> pdk.Layer:
         })
     return pdk.Layer(
         "ScatterplotLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_position="[lon, lat]",
         get_fill_color="color",
         get_radius=250,
@@ -382,7 +381,8 @@ def render_construction_panel() -> None:
         ),
     )
 
-    city_id, bbox, h3_res, live, lookback = _city_selector()
+    city_id, bbox, live, lookback = _city_selector()
+    h3_res = _DEFAULT_H3_RES
     lat_min, lon_min = bbox["lat_min"], bbox["lon_min"]
     lat_max, lon_max = bbox["lat_max"], bbox["lon_max"]
 
@@ -404,17 +404,12 @@ def render_construction_panel() -> None:
         else:
             data_source = "live"
 
-        packets_construction = build_construction_decision_packets(
-            construction_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-        )
-
         st.session_state[ss_key] = {
             "construction_cells": construction_cells,
             "data_source":        data_source,
             "dashboard":          build_construction_dashboard(
                 construction_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets":            packets_construction,
         }
         if live and not construction_cells:
             st.warning(
@@ -427,7 +422,6 @@ def render_construction_panel() -> None:
     construction_cells = cached["construction_cells"]
     data_source        = cached["data_source"]
     dashboard          = cached["dashboard"]
-    packets            = cached["packets"]
 
     summary = dashboard.get("risk_summary", {})
 
@@ -458,8 +452,8 @@ def render_construction_panel() -> None:
 | **BSI threshold** | — | Only cells with BSI > 0.05 flagged as construction candidates |
         """)
 
-    t_map, t_sites, t_signals, t_decisions = st.tabs([
-        "🗺️ Map", "🏗️ Construction Sites", "📊 Signal Breakdown", "📋 Decision Packets",
+    t_map, t_sites, t_signals = st.tabs([
+        "🗺️ Map", "🏗️ Construction Sites", "📊 Signal Breakdown",
     ])
 
     with t_map:
@@ -468,5 +462,3 @@ def render_construction_panel() -> None:
         _render_sites_tab(dashboard)
     with t_signals:
         _render_signal_tab(dashboard)
-    with t_decisions:
-        _render_decisions_tab(packets, city_id)

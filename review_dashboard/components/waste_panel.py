@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.waste.waste_pipeline import (
     build_waste_dashboard,
-    build_waste_decision_packets,
 )
 
 from review_dashboard.ui_shell import (
@@ -23,17 +23,12 @@ from review_dashboard.ui_shell import (
     render_section_title,
     render_technical_json_expander,
 )
-from review_dashboard.formatters import (
-    evidence_inputs_to_rows,
-    humanize_snake_sentence,
-    safety_gates_to_rows,
-)
-
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 from review_dashboard.data_cache import (
     load_firms, load_ndvi, load_ch4, h3_grid_for_bbox,
 )
 
+_DEFAULT_H3_RES = 8
 
 # ── Signal colour map ──────────────────────────────────────────────────────
 
@@ -61,22 +56,20 @@ def _risk_emoji(level: str) -> str:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool, int]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="waste_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="waste_h3_res")
-    with c3:
         live = st.toggle("Live data", value=True, key="waste_live_toggle",
                          help="FIRMS requires FIRMS_API_KEY; NDVI/CH4 require GEE_PROJECT")
-    with c4:
+    with c3:
         day_range = st.selectbox("FIRMS lookback (days)", [3, 7, 14], index=1,
                                  key="waste_day_range",
                                  help="Longer = better persistence detection; 7d recommended")
     city_id = city_options[city_label]
-    return city_id, get_bbox(city_id), h3_res, live, int(day_range)
+    return city_id, get_bbox(city_id), live, int(day_range)
 
 
 # ── Data loading — all API calls go through review_dashboard.data_cache ────
@@ -160,7 +153,7 @@ def _render_waste_map(
         ])
         grid_layer = pdk.Layer(
             "H3HexagonLayer",
-            data=grid_df,
+            data=clean_h3_data(grid_df),
             get_hexagon="h3_id",
             get_fill_color="color",
             get_line_color=[60, 40, 20],
@@ -281,7 +274,8 @@ def _render_waste_map(
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_waste_panel() -> None:
-    city_id, bbox, h3_res, live, day_range = _city_selector()
+    city_id, bbox, live, day_range = _city_selector()
+    h3_res = _DEFAULT_H3_RES
 
     render_domain_header(
         title="Waste Monitoring",
@@ -353,23 +347,6 @@ def render_waste_panel() -> None:
             city_id=city_id,
             **bbox,
         )
-        packets = build_waste_decision_packets(
-            firms_df=firms_df,
-            ndvi_map=ndvi_map,
-            ch4_map=ch4_map,
-            h3_resolution=h3_res,
-            city_id=city_id,
-            **bbox,
-            top_n=10,
-        )
-
-        if live:
-            try:
-                from urban_platform.decision_events import emit_waste_decisions
-                emit_waste_decisions(packets, city_id=city_id)
-            except Exception:
-                pass
-
     # ── Warnings ───────────────────────────────────────────────────────────
     for w in dashboard.get("active_warnings", []):
         sev = str(w.get("severity", "info")).lower()
@@ -396,8 +373,8 @@ def render_waste_panel() -> None:
     st.divider()
 
     # ── Tabs ───────────────────────────────────────────────────────────────
-    t_map, t_sites, t_burns, t_detail = st.tabs(
-        ["🗺️ Map", "♻️ Waste sites", "🔥 Burn history", "🎯 Decision packets"]
+    t_map, t_sites, t_burns = st.tabs(
+        ["🗺️ Map", "♻️ Waste sites", "🔥 Burn history"]
     )
 
     with t_map:
@@ -507,70 +484,7 @@ def render_waste_panel() -> None:
                         "as waste burns."
                     )
 
-    with t_detail:
-        render_section_title("Decision packets (top-10 by risk score)")
-        if not packets:
-            st.info("No waste decision packets generated (no signals above threshold).")
-        else:
-            rows = [
-                {
-                    "Packet ID":    str(p.get("packet_id") or "")[:12] + "…",
-                    "H3 cell":      str(p.get("h3_id") or "")[:16] + "…",
-                    "Type":         _TYPE_LABELS.get(
-                                        (p.get("waste_assessment") or {}).get("dominant_type", "none"),
-                                        "—"),
-                    "Risk level":   (p.get("waste_assessment") or {}).get("risk_level", "—"),
-                    "Confidence":   f"{(p.get('confidence') or {}).get('confidence_score', 0):.3f}",
-                    "Field verify": "Yes" if p.get("field_verification_required") else "No",
-                    "In city":      "Yes" if (p.get("waste_assessment") or {}).get("within_city") else "No",
-                }
-                for p in packets
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-            render_section_title("Drill-down")
-            ids = [str(p.get("packet_id")) for p in packets if p.get("packet_id")]
-            sel = st.selectbox("Select packet", options=ids, index=0, key="waste_selected_packet")
-            selected = next((p for p in packets if str(p.get("packet_id")) == sel), None)
-            if selected:
-                wa   = selected.get("waste_assessment") or {}
-                conf = selected.get("confidence") or {}
-
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Type", _TYPE_LABELS.get(wa.get("dominant_type", "none"), "—"))
-                with c2:
-                    st.metric("Risk level", wa.get("risk_level", "—").upper())
-                with c3:
-                    st.metric("Confidence", f"{conf.get('confidence_score', 0):.3f}")
-
-                signals = wa.get("signals_active", [])
-                if signals:
-                    st.caption(f"Active signals: {', '.join(signals)}")
-
-                st.markdown("#### Evidence")
-                ev_rows = evidence_inputs_to_rows(selected.get("evidence"))
-                if ev_rows:
-                    st.dataframe(pd.DataFrame(ev_rows), hide_index=True, use_container_width=True)
-
-                rg = selected.get("review_guidance") or {}
-                st.markdown("#### Review prompts")
-                for q in rg.get("review_prompts") or []:
-                    st.markdown(f"- {q}")
-                st.markdown("#### When not to act")
-                for q in rg.get("when_not_to_act") or []:
-                    st.markdown(f"- {q}")
-
-                st.markdown("#### Safety gates")
-                gdf = pd.DataFrame(safety_gates_to_rows(selected.get("safety_gates")))
-                if not gdf.empty:
-                    st.dataframe(gdf, hide_index=True, use_container_width=True)
-
-                st.markdown("#### Blocked uses")
-                for bu in selected.get("blocked_uses") or []:
-                    st.markdown(f"- {humanize_snake_sentence(str(bu))}")
-
     render_technical_json_expander(
         title="Technical: Raw waste payloads",
-        payload={"waste_dashboard": dashboard, "waste_decision_packets": packets},
+        payload={"waste_dashboard": dashboard},
     )

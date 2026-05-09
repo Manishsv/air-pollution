@@ -1,0 +1,238 @@
+# AirOS Rules Registry
+# ====================
+# Single source of truth for all domain thresholds, score weights,
+# and detection floors used by the AirOS pipeline.
+#
+# Changes here take effect immediately — no code deployment needed.
+# Call `rules.reload()` from Python or restart the scheduler.
+#
+# Per-city overrides
+# ------------------
+# Add a `cities:` block under any domain to override values for specific cities:
+#
+#   domains:
+#     crowd:
+#       gathering_threshold_per_km2: 500   # global default
+#       cities:
+#         mumbai:
+#           gathering_threshold_per_km2: 300   # denser population in Mumbai
+#
+# Values not present here fall back to built-in defaults in registry.py.
+# Only add keys you want to change.
+
+_meta:
+  version: "1.0"
+  last_reviewed: "2026-05-09"
+  reviewed_by: "Urban Operations Team"
+  standards_references:
+    - "India CPCB AQI Technical Manual 2014"
+    - "WHO Environmental Noise Guidelines 2018"
+    - "NDVI benchmarks: Huete et al. 2002"
+    - "CH4 background: NOAA GML 2023"
+
+domains:
+
+  # ── Air Quality ─────────────────────────────────────────────────────────
+  # India CPCB PM2.5 breakpoints (µg/m³).
+  # Ref: Central Pollution Control Board AQI Technical Document.
+  air:
+    pm25_category_thresholds_ug_m3:
+      severe:       250
+      very_poor:    120
+      poor:          90
+      moderate:      60
+      satisfactory:  30
+    # PM2.5 (µg/m³) that maps to normalised AQI score = 1.0
+    # Set equal to the "very_poor" threshold by default.
+    pm25_score_saturation_ug_m3: 120.0
+
+  # ── Fire ────────────────────────────────────────────────────────────────
+  # FRP = Fire Radiative Power (megawatts per FIRMS pixel, summed per H3 cell).
+  # Thresholds tuned for Indian urban fringe; adjust down for denser areas.
+  fire:
+    frp_risk_levels_mw:
+      severe:   100.0
+      high:      30.0
+      moderate:  10.0
+      low:        5.0
+    # FRP (MW) where log-normalised score saturates at 1.0
+    frp_score_saturation_mw: 500.0
+    # Minimum FRP (MW) to include a pixel as a detected fire
+    frp_detection_floor_mw: 5.0
+    # Number of simultaneous in-city hotspots that escalates the alert to ERROR severity
+    in_city_alert_error_threshold: 3
+
+  # ── Flood ───────────────────────────────────────────────────────────────
+  # Composite formula:
+  #   flood_risk_score = (rainfall_weight × rainfall_score
+  #                     + incident_weight × incident_score)
+  #                     × drainage_factor
+  flood:
+    risk_levels:
+      severe:   0.75
+      high:     0.50
+      moderate: 0.25
+    # Rainfall rate (mm/hr) that maps to rainfall_score = 1.0
+    # IMD heavy-rainfall threshold is 15.6 mm/hr; 20 allows headroom.
+    rainfall_score_saturation_mm_hr: 20.0
+    # Number of reported incidents that maps to incident_score = 1.0
+    incident_score_saturation_count: 3
+    score_weights:
+      rainfall: 0.6
+      incident: 0.4
+    # drainage_factor = max(drainage_factor_min, 1 − assets × decrement)
+    # A factor of 0.75 means drainage can reduce risk by at most 25%.
+    drainage_factor_min: 0.75
+    drainage_factor_decrement_per_asset: 0.05
+    # Radius (km) for counting nearby flood incidents and drainage assets
+    proximity_radius_km: 0.5
+
+  # ── Waste ───────────────────────────────────────────────────────────────
+  # Waste burning FRP range: 5–30 MW distinguishes waste fires from wildfires.
+  # Below 5 MW → noise / smouldering; above 30 MW → likely wildfire / forest.
+  waste:
+    frp_burn_range_mw:
+      min: 5.0
+      max: 30.0
+    # Hotspot must appear on this many distinct days to be called a landfill fire
+    persist_days_min: 2
+    # NDVI below this in an urban cell → likely exposed waste / dump site
+    ndvi_dump_threshold: 0.15
+    ndvi_severity_thresholds:
+      high:     0.05    # almost no vegetation
+      moderate: 0.10
+      # "low" severity: between moderate threshold and ndvi_dump_threshold
+    # Global tropospheric CH4 background (NOAA GML)
+    ch4_background_ppb: 1880.0
+    # CH4 elevation (ppb above background) for severity
+    ch4_elevation_thresholds_ppb:
+      high:     40.0
+      moderate: 20.0
+    risk_levels:
+      severe:   0.85
+      high:     0.65
+      moderate: 0.45
+      low:      0.25
+    # Log-normalisation ceiling for waste burn FRP contribution
+    frp_burn_score_saturation_mw: 30.0
+    burn_base_scores:
+      waste_burn:    0.40
+      landfill_fire: 0.65
+    frp_contribution_weight: 0.35
+    dump_severity_scores:
+      low:      0.30
+      moderate: 0.55
+      high:     0.75
+    gas_severity_scores:
+      moderate: 0.50
+      high:     0.80
+
+  # ── Heat ────────────────────────────────────────────────────────────────
+  # heat_risk_score = uhi_weight × uhi_norm + green_deficit_weight × green_deficit
+  heat:
+    score_weights:
+      uhi_norm:      0.6
+      green_deficit: 0.4
+    # heat_risk_score ≥ this → counted as "high risk" in dashboard summaries
+    high_risk_threshold: 0.66
+    intervention_thresholds:
+      # green_deficit above this → recommend tree_planting + shade_structures
+      tree_planting_min_deficit:    0.7
+      # green_deficit above this → recommend green_roofs
+      green_roofs_min_deficit:      0.5
+      # water_proximity_score below this → recommend cool_pavement
+      cool_pavement_max_water_prox: 0.2
+
+  # ── Noise ───────────────────────────────────────────────────────────────
+  # NRI is a proxy index built from source proximity, construction activity,
+  # and fire FRP.  WHO guidelines are used to label dB bands.
+  # WHO 2018: road traffic 53 dB day, aircraft 45 dB day, railway 54 dB day.
+  noise:
+    nri_risk_levels:
+      severe:   0.75    # > 70 dB proxy (near airport / major interchange)
+      high:     0.50    # 60–70 dB
+      moderate: 0.25    # 53–60 dB
+      # below 0.25 = low (< 53 dB, within WHO residential limit)
+    # Cells below this NRI with zero proximity score are excluded (noise floor)
+    nri_minimum_filter: 0.10
+    score_weights:
+      construction_cap: 0.3   # max construction adds to NRI
+      fire_cap:         0.2   # max fire FRP adds to NRI
+    # FRP (MW) where log-normalised fire contribution saturates
+    fire_score_log_saturation_mw: 100.0
+    # NRI thresholds for dominant-source classification
+    dominant_source_thresholds:
+      airport_proximity:       0.6
+      construction_machinery:  0.3
+      industrial_fire:         0.2
+    # Minimum NRI for a cell to receive an actionable recommendation
+    recommendation_nri_floor: 0.5
+
+  # ── Construction ────────────────────────────────────────────────────────
+  # CRI (Construction Risk Index) based on Sentinel-2 BSI and NO2 signals.
+  construction:
+    cri_risk_levels:
+      severe:   0.80    # mass earthworks / demolition
+      high:     0.60    # heavy construction
+      moderate: 0.40    # active construction — dust management required
+      low:      0.20    # light earthworks / cleared plot
+      # below 0.20 = minimal
+    bsi_earthworks_threshold: 0.6
+    no2_machinery_threshold:  0.5
+    min_cri_for_recommendation: 0.4
+
+  # ── Green Cover ─────────────────────────────────────────────────────────
+  # GCCI = Green Cover Change Index (NDVI delta between two satellite passes).
+  # Noise band ±0.05 is excluded to avoid flagging seasonal / sensor variation.
+  green:
+    gcci_thresholds:
+      severe_loss:       -0.60
+      high_loss:         -0.20
+      moderate_loss:     -0.05
+      moderate_gain:      0.05
+      significant_gain:   0.20
+    # |GCCI| ≥ this for the cell to receive an actionable recommendation
+    recommendation_min_abs_gcci: 0.2
+
+  # ── Water Quality ────────────────────────────────────────────────────────
+  water:
+    wqi_risk_levels:
+      severe:   0.75
+      poor:     0.50
+      moderate: 0.25
+    dominant_issue_thresholds:
+      foam_scum:    0.5
+      algal_bloom:  0.5
+    recommendation_wqi_floor: 0.3
+
+  # ── Crowd / CCTV ─────────────────────────────────────────────────────────
+  # Real-time camera feed, 15-min cadence.
+  # CROWD_DENSITY = PEOPLE_COUNT / cell_area_km²  (res-8 cell ≈ 0.74 km²)
+  crowd:
+    # People/km² above this triggers GATHERING_ALERT = 1 and a "high" assessment
+    # 500/km² ≈ a busy market or event venue in an Indian city
+    gathering_threshold_per_km2: 500.0
+    # People/km² that saturates CROWD_INDEX at 1.0
+    index_saturation_per_km2: 2000.0
+    # Observations older than this are excluded from the current window
+    observation_window_minutes: 20
+    # Data confidence when at least one camera is reporting
+    data_confidence: 0.90
+    # Per-city overrides — uncomment and adjust:
+    # cities:
+    #   mumbai:
+    #     gathering_threshold_per_km2: 300   # denser population density
+
+  # ── Buildings (OSM, quarterly) ────────────────────────────────────────────
+  buildings:
+    data_confidence: 0.75
+
+  # ── Roads (OSM, quarterly) ────────────────────────────────────────────────
+  roads:
+    data_confidence: 0.85
+
+  # ── Drains (OSM, quarterly) ───────────────────────────────────────────────
+  drains:
+    # Total waterway length per km² that saturates FLOOD_DRAIN_CAPACITY at 1.0
+    flood_drain_saturation_m_per_km2: 10000.0
+    data_confidence: 0.65

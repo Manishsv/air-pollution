@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.fire.fire_pipeline import (
     build_fire_dashboard,
-    build_fire_decision_packets,
 )
 
 from review_dashboard.ui_shell import (
@@ -17,15 +17,10 @@ from review_dashboard.ui_shell import (
     render_section_title,
     render_technical_json_expander,
 )
-from review_dashboard.formatters import (
-    evidence_inputs_to_rows,
-    humanize_snake_sentence,
-    safety_gates_to_rows,
-)
-
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 from review_dashboard.data_cache import load_firms as _load_firms_shared
 
+_DEFAULT_H3_RES = 8
 
 # ── Risk colour map ────────────────────────────────────────────────────────
 
@@ -43,23 +38,20 @@ def _risk_emoji(level: str) -> str:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool, int]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="fire_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=8, key="fire_h3_res",
-                           help="Higher = smaller cells. Resolution 8 works well for fire clusters.")
-    with c3:
         live = st.toggle("Live data (FIRMS)", value=True, key="fire_live_toggle",
                          help="Fetches NASA FIRMS VIIRS SNPP (requires FIRMS_API_KEY)")
-    with c4:
+    with c3:
         day_range = st.selectbox("Lookback (days)", [1, 2, 3, 7], index=0, key="fire_day_range",
                                  help="How many days of FIRMS data to fetch")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
-    return city_id, bbox, h3_res, live, int(day_range)
+    return city_id, bbox, live, int(day_range)
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
@@ -134,7 +126,7 @@ def _render_fire_map(
         ])
         grid_layer = pdk.Layer(
             "H3HexagonLayer",
-            data=grid_df,
+            data=clean_h3_data(grid_df),
             get_hexagon="h3_id",
             get_fill_color="color",
             get_line_color=[80, 80, 80],
@@ -176,7 +168,7 @@ def _render_fire_map(
             ])
             hotspot_layer = pdk.Layer(
                 "ScatterplotLayer",
-                data=fire_pts,
+                data=clean_h3_data(fire_pts),
                 get_position=["longitude", "latitude"],
                 get_radius="radius",
                 radius_min_pixels=5,
@@ -297,7 +289,8 @@ def _render_trend(fire_df: pd.DataFrame) -> None:
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_fire_panel() -> None:
-    city_id, bbox, h3_res, live, day_range = _city_selector()
+    city_id, bbox, live, day_range = _city_selector()
+    h3_res = _DEFAULT_H3_RES
 
     render_domain_header(
         title="Fire Monitoring",
@@ -349,14 +342,6 @@ def render_fire_panel() -> None:
             city_id=city_id,
             **bbox,
         )
-        packets = build_fire_decision_packets(
-            fire_df=fire_df,
-            h3_resolution=h3_res,
-            city_id=city_id,
-            **bbox,
-            top_n=10,
-        )
-
         if live:
             try:
                 from urban_platform.decision_events import emit_fire_decisions
@@ -388,8 +373,8 @@ def render_fire_panel() -> None:
     st.divider()
 
     # ── Tabs ───────────────────────────────────────────────────────────────
-    t_map, t_hotspots, t_trend, t_detail = st.tabs(
-        ["🗺️ Map", "🔥 Hotspot table", "📈 Trend", "🎯 Decision packets"]
+    t_map, t_hotspots, t_trend = st.tabs(
+        ["🗺️ Map", "🔥 Hotspot table", "📈 Trend"]
     )
 
     with t_map:
@@ -452,62 +437,7 @@ def render_fire_panel() -> None:
     with t_trend:
         _render_trend(fire_df)
 
-    with t_detail:
-        render_section_title("Decision packets (top-10 by FRP)")
-        if not packets:
-            st.info("No fire decision packets generated (no detections above threshold).")
-        else:
-            rows = [
-                {
-                    "Packet ID":   str(p.get("packet_id") or "")[:12] + "…",
-                    "H3 cell":     str(p.get("h3_id") or "")[:16] + "…",
-                    "Risk level":  str((p.get("fire_assessment") or {}).get("risk_level") or "—"),
-                    "Total FRP MW": (p.get("fire_assessment") or {}).get("total_frp_mw", 0),
-                    "In city":     "Yes" if (p.get("fire_assessment") or {}).get("within_city") else "No",
-                    "Field verify": "Yes" if p.get("field_verification_required") else "No",
-                }
-                for p in packets
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-            render_section_title("Drill-down")
-            ids = [str(p.get("packet_id")) for p in packets if p.get("packet_id")]
-            sel = st.selectbox("Select packet", options=ids, index=0, key="fire_selected_packet")
-            selected = next((p for p in packets if str(p.get("packet_id")) == sel), None)
-            if selected:
-                fa   = selected.get("fire_assessment") or {}
-                conf = selected.get("confidence") or {}
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Risk level", fa.get("risk_level", "—").upper())
-                with c2:
-                    st.metric("Total FRP", f"{fa.get('total_frp_mw', 0):.1f} MW")
-                with c3:
-                    st.metric("Confidence", f"{conf.get('confidence_score', 0):.3f}")
-
-                st.markdown("#### Evidence")
-                ev_rows = evidence_inputs_to_rows(selected.get("evidence"))
-                if ev_rows:
-                    st.dataframe(pd.DataFrame(ev_rows), hide_index=True, use_container_width=True)
-
-                rg = selected.get("review_guidance") or {}
-                st.markdown("#### Review prompts")
-                for q in rg.get("review_prompts") or []:
-                    st.markdown(f"- {q}")
-                st.markdown("#### When not to act")
-                for q in rg.get("when_not_to_act") or []:
-                    st.markdown(f"- {q}")
-
-                st.markdown("#### Safety gates")
-                gdf = pd.DataFrame(safety_gates_to_rows(selected.get("safety_gates")))
-                if not gdf.empty:
-                    st.dataframe(gdf, hide_index=True, use_container_width=True)
-
-                st.markdown("#### Blocked uses")
-                for bu in selected.get("blocked_uses") or []:
-                    st.markdown(f"- {humanize_snake_sentence(str(bu))}")
-
     render_technical_json_expander(
         title="Technical: Raw fire payloads",
-        payload={"fire_dashboard": dashboard, "fire_decision_packets": packets},
+        payload={"fire_dashboard": dashboard},
     )

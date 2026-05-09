@@ -36,6 +36,7 @@ from urban_platform.applications.flood.flood_pipeline import (
     _haversine_km,
     _idw_interpolate,
 )
+from urban_platform.rules import rules as _rules
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +47,14 @@ _SPEC_ROOT = Path(__file__).resolve().parents[3] / "specifications"
 # ── AQI helpers ───────────────────────────────────────────────────────────
 
 def _aqi_category(pm25: float) -> str:
-    if pm25 >= 250:
-        return "severe"
-    if pm25 >= 120:
-        return "very_poor"
-    if pm25 >= 90:
-        return "poor"
-    if pm25 >= 60:
-        return "moderate"
-    if pm25 >= 30:
-        return "satisfactory"
+    t = _rules.get("air", "pm25_category_thresholds_ug_m3", default={
+        "severe": 250, "very_poor": 120, "poor": 90, "moderate": 60, "satisfactory": 30,
+    })
+    if pm25 >= t["severe"]:       return "severe"
+    if pm25 >= t["very_poor"]:    return "very_poor"
+    if pm25 >= t["poor"]:         return "poor"
+    if pm25 >= t["moderate"]:     return "moderate"
+    if pm25 >= t["satisfactory"]: return "satisfactory"
     return "good"
 
 
@@ -138,11 +137,12 @@ def _computation_trace(
 ) -> dict:
     """Explainable breakdown of the scoring formula for one H3 cell."""
     pm25_val = float(h3_row["pm25_ugm3"] or 0.0)
-    aqi_score = min(pm25_val / 120.0, 1.0)
+    _sat = _rules.get("air", "pm25_score_saturation_ug_m3", default=120.0)
+    aqi_score = min(pm25_val / _sat, 1.0)
 
     return {
         "algorithm": "IDW-weighted AQI scoring (v1)",
-        "formula": "aqi_score = min(pm25_ugm3 / 120.0, 1.0)",
+        "formula": f"aqi_score = min(pm25_ugm3 / {_sat}, 1.0)",
         "steps": [
             {
                 "name": "pm25_idw_interpolated",
@@ -155,7 +155,7 @@ def _computation_trace(
             },
             {
                 "name": "aqi_score",
-                "formula": "min(pm25_ugm3 / 120.0, 1.0)",
+                "formula": f"min(pm25_ugm3 / {_sat}, 1.0)",
                 "inputs": {"pm25_ugm3": round(pm25_val, 3)},
                 "value": round(aqi_score, 4),
                 "weight": 1.0,
@@ -212,9 +212,14 @@ def run_air_quality_pipeline(
 
         if has_aq:
             pm25_val = _idw_interpolate(clat, clon, obs_lats, obs_lons, obs_pm25)
-            score = min(pm25_val / 120.0, 1.0)
+            score = min(pm25_val / _rules.get("air", "pm25_score_saturation_ug_m3", default=120.0), 1.0)
+            # Distance to nearest real observation — drives data confidence
+            dists = np.array([_haversine_km(clat, clon, la, lo)
+                              for la, lo in zip(obs_lats, obs_lons)])
+            nearest_obs_km = float(dists.min()) if len(dists) else None
         else:
             pm25_val, score = 0.0, 0.0
+            nearest_obs_km = None
 
         cat = _aqi_category(float(pm25_val))
 
@@ -224,6 +229,9 @@ def run_air_quality_pipeline(
             "aqi_score": round(score, 4),
             "aqi_category": cat,
             "color": _aqi_color(cat),
+            "nearest_obs_km": round(nearest_obs_km, 3) if nearest_obs_km is not None else None,
+            "centroid_lat": clat,
+            "centroid_lon": clon,
         })
 
     risk_cells = pd.DataFrame(rows)

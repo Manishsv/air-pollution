@@ -19,6 +19,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from urban_platform.rules import rules as _rules
+
 logger = logging.getLogger(__name__)
 
 _INTERVENTION_TOP_N = 10
@@ -197,8 +199,9 @@ def run_heat_pipeline(
     # Green deficit
     merged["green_deficit"] = (1.0 - merged["green_cover_fraction"]).clip(0.0, 1.0)
 
-    # Heat risk score: 60% UHI + 40% green deficit
-    merged["heat_risk_score"] = (0.6 * merged["uhi_norm"] + 0.4 * merged["green_deficit"]).clip(0.0, 1.0)
+    # Heat risk score: UHI weight + green deficit weight (configurable)
+    _hw = _rules.get("heat", "score_weights", default={"uhi_norm": 0.6, "green_deficit": 0.4})
+    merged["heat_risk_score"] = (_hw["uhi_norm"] * merged["uhi_norm"] + _hw["green_deficit"] * merged["green_deficit"]).clip(0.0, 1.0)
     merged["heat_risk_score"] = merged["heat_risk_score"].fillna(merged["green_deficit"])
 
     # Data quality flag
@@ -267,7 +270,8 @@ def build_heat_risk_dashboard(
             "heat_risk_score": round(float(row.get("heat_risk_score", 0.0)), 4),
         })
 
-    high_risk_count = int((heat_cells_df["heat_risk_score"] >= 0.66).sum()) if not heat_cells_df.empty else 0
+    _hr_thr = _rules.get("heat", "high_risk_threshold", default=0.66)
+    high_risk_count = int((heat_cells_df["heat_risk_score"] >= _hr_thr).sum()) if not heat_cells_df.empty else 0
 
     warnings = []
     if not temperature_df.empty:
@@ -344,13 +348,18 @@ def build_intervention_candidates(
     for _, row in top_cells.iterrows():
         risk_score = float(row.get("heat_risk_score", 0.0))
         green_deficit = float(row.get("green_deficit", 1.0 - float(row.get("green_cover_fraction", 0.0))))
+        _ithr = _rules.get("heat", "intervention_thresholds", default={
+            "tree_planting_min_deficit": 0.7,
+            "green_roofs_min_deficit": 0.5,
+            "cool_pavement_max_water_prox": 0.2,
+        })
         suggestions = []
-        if green_deficit > 0.7:
+        if green_deficit > _ithr["tree_planting_min_deficit"]:
             suggestions.append("tree_planting")
             suggestions.append("shade_structures")
-        if green_deficit > 0.5:
+        if green_deficit > _ithr["green_roofs_min_deficit"]:
             suggestions.append("green_roofs")
-        if float(row.get("water_proximity_score", 0.0)) < 0.2:
+        if float(row.get("water_proximity_score", 0.0)) < _ithr["cool_pavement_max_water_prox"]:
             suggestions.append("cool_pavement")
 
         candidates.append({

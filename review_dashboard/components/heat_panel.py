@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
@@ -26,26 +27,24 @@ from review_dashboard.formatters import humanize_warning_id
 
 
 _LOOKBACK_DAYS = 1
+_DEFAULT_H3_RES = 8
 
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool]:
-    c1, c2, c3 = st.columns([2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool]:
+    c1, c2 = st.columns([2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="heat_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="heat_h3_res",
-                           help="Higher = smaller cells, more detail, slower")
-    with c3:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="heat_live_toggle",
                          help="Uses GEE MODIS LST if GEE_PROJECT is set, otherwise OpenMeteo")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
-    return city_id, bbox, h3_res, live
+    return city_id, bbox, live
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
@@ -167,7 +166,7 @@ def _render_heat_map(
 
     heat_layer = pdk.Layer(
         "H3HexagonLayer",
-        data=grid_df,
+        data=clean_h3_data(grid_df),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[80, 80, 80],
@@ -204,7 +203,7 @@ def _render_heat_map(
         ])
         candidate_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=cand_scatter_df,
+            data=clean_h3_data(cand_scatter_df),
             get_position=["lon", "lat"],
             get_radius=900,           # ~900m radius so clusters are clearly visible at city scale
             radius_min_pixels=6,
@@ -246,7 +245,7 @@ def _render_heat_map(
 
         station_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=station_df,
+            data=clean_h3_data(station_df),
             get_position=["longitude", "latitude"],
             get_radius=400,
             radius_min_pixels=5,
@@ -316,7 +315,8 @@ def _render_heat_map(
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_heat_panel() -> None:
-    city_id, bbox, h3_res, live = _city_selector()
+    city_id, bbox, live = _city_selector()
+    h3_res = _DEFAULT_H3_RES
 
     render_domain_header(
         title="Urban Heat Risk Review",
@@ -379,7 +379,6 @@ def render_heat_panel() -> None:
     summary = dashboard.get("summary", {})
     render_context_metrics(
         ("City", city_id),
-        ("H3 resolution", str(h3_res)),
         ("Total cells", str(summary.get("total_cells", "—"))),
         ("High-risk cells (≥0.66)", str(summary.get("high_risk_cell_count", "—"))),
         ("Max risk score", f"{summary.get('max_heat_risk_score') or 0:.3f}"),

@@ -1,0 +1,114 @@
+[
+  {
+    "entity_id":     "cam_blr_mg_road_01",
+    "city_id":       "bangalore",
+    "latitude":      12.9758,
+    "longitude":     77.6005,
+    "location_name": "MG Road junction — northbound",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_blr_silk_board_01",
+    "city_id":       "bangalore",
+    "latitude":      12.9165,
+    "longitude":     77.6236,
+    "location_name": "Silk Board flyover — eastbound",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_blr_koramangala_01",
+    "city_id":       "bangalore",
+    "latitude":      12.9352,
+    "longitude":     77.6245,
+    "location_name": "Koramangala 5th Block junction",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_blr_brigade_01",
+    "city_id":       "bangalore",
+    "latitude":      12.9716,
+    "longitude":     77.5946,
+    "location_name": "Brigade Road pedestrian plaza",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_hyd_hitech_01",
+    "city_id":       "hyderabad",
+    "latitude":      17.4435,
+    "longitude":     78.3772,
+    "location_name": "HITEC City main entrance",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_hyd_charminar_01",
+    "city_id":       "hyderabad",
+    "latitude":      17.3616,
+    "longitude":     78.4747,
+    "location_name": "Charminar — Laad Bazaar approach",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_mum_dadar_01",
+    "city_id":       "mumbai",
+    "latitude":      19.0178,
+    "longitude":     72.8478,
+    "location_name": "Dadar station west exit",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_mum_bandra_01",
+    "city_id":       "mumbai",
+    "latitude":      19.0596,
+    "longitude":     72.8295,
+    "location_name": "Bandra Linking Road",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_del_connaught_01",
+    "city_id":       "delhi",
+    "latitude":      28.6315,
+    "longitude":     77.2167,
+    "location_name": "Connaught Place inner circle",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_del_lajpat_01",
+    "city_id":       "delhi",
+    "latitude":      28.5665,
+    "longitude":     77.2431,
+    "location_name": "Lajpat Nagar market entrance",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_che_marina_01",
+    "city_id":       "chennai",
+    "latitude":      13.0500,
+    "longitude":     80.2824,
+    "location_name": "Marina Beach promenade",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_che_t_nagar_01",
+    "city_id":       "chennai",
+    "latitude":      13.0418,
+    "longitude":     80.2341,
+    "location_name": "T. Nagar Pondy Bazaar",
+    "active":        true
+  },
+  {
+    "entity_id":     "cam_pun_fc_road_01",
+    "city_id":       "pune",
+    "latitude":      18.5236,
+    "longitude":     73.8478,
+    "location_name": "FC Road — Deccan Gymkhana junction",
+    "active":        true
+  },
+  {
+    "entity_id":     "local_device",
+    "city_id":       "bangalore",
+    "latitude":      12.9716,
+    "longitude":     77.5946,
+    "location_name": "Dev/test laptop camera",
+    "active":        true
+  }
+]

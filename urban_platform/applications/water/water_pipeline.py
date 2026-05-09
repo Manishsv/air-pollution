@@ -13,6 +13,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from urban_platform.rules import rules as _rules
+
 _LEVEL_ORDER = ["good", "moderate", "poor", "severe"]
 
 _WQI_COLORS = {
@@ -58,9 +60,10 @@ _KNOWN_WATER_BODIES: dict[str, list[dict]] = {
 
 
 def _wqi_to_level(wqi: float) -> str:
-    if wqi >= 0.75:  return "severe"
-    if wqi >= 0.50:  return "poor"
-    if wqi >= 0.25:  return "moderate"
+    t = _rules.get("water", "wqi_risk_levels", default={"severe": 0.75, "poor": 0.50, "moderate": 0.25})
+    if wqi >= t["severe"]:   return "severe"
+    if wqi >= t["poor"]:     return "poor"
+    if wqi >= t["moderate"]: return "moderate"
     return "good"
 
 
@@ -164,9 +167,10 @@ def build_water_decision_packets(
 
     packets = []
     for c in active:
+        _dit = _rules.get("water", "dominant_issue_thresholds", default={"foam_scum": 0.5, "algal_bloom": 0.5})
         dominant = (
-            "foam_scum"  if c["foam_score"]     > 0.5 else
-            "algal_bloom" if c["algal_score"]   > 0.5 else
+            "foam_scum"   if c["foam_score"]  > _dit["foam_scum"]  else
+            "algal_bloom" if c["algal_score"] > _dit["algal_bloom"] else
             "turbidity"
         )
         packets.append({
@@ -184,7 +188,7 @@ def build_water_decision_packets(
             "field_verification_required": c["quality_level"] in ("poor", "severe"),
             "confidence": {
                 "confidence_score":       c["water_quality_index"],
-                "recommendation_allowed": c["water_quality_index"] >= 0.3,
+                "recommendation_allowed": c["water_quality_index"] >= _rules.get("water", "recommendation_wqi_floor", default=0.3),
             },
             "evidence": {
                 "inputs": [

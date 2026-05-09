@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.noise.noise_pipeline import (
     build_noise_risk,
     build_noise_dashboard,
-    build_noise_decision_packets,
     _NOISE_SOURCES,
     _SOURCE_TYPE_COLORS,
 )
@@ -37,6 +37,7 @@ from review_dashboard.data_cache import (
     load_firms, load_construction_signals, h3_grid_for_bbox,
 )
 
+_DEFAULT_H3_RES = 8
 
 # ── Colour map ─────────────────────────────────────────────────────────────
 
@@ -116,21 +117,19 @@ def _demo_noise_cells(city_id: str, h3_ids: tuple) -> dict:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool, int]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="noise_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="noise_h3_res")
-    with c3:
         live = st.toggle("Live signals", value=True, key="noise_live_toggle",
                          help="Uses cached FIRMS + construction data; no additional API key required")
-    with c4:
+    with c3:
         day_range = st.selectbox("FIRMS lookback (days)", [1, 3, 7], index=2,
                                  key="noise_day_range")
     city_id = city_options[city_label]
-    return city_id, get_bbox(city_id), h3_res, live, int(day_range)
+    return city_id, get_bbox(city_id), live, int(day_range)
 
 
 # ── Map layers ─────────────────────────────────────────────────────────────
@@ -151,7 +150,7 @@ def _hex_layer(cells: list[dict]) -> pdk.Layer:
         })
     return pdk.Layer(
         "H3HexagonLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[255, 255, 255, 30],
@@ -169,7 +168,7 @@ def _sources_layer(sources: list[dict]) -> pdk.Layer:
             for s in sources]
     return pdk.Layer(
         "ScatterplotLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_position="[lon, lat]",
         get_fill_color="color",
         get_radius=200,
@@ -396,7 +395,8 @@ def render_noise_panel() -> None:
         ),
     )
 
-    city_id, bbox, h3_res, live, day_range = _city_selector()
+    city_id, bbox, live, day_range = _city_selector()
+    h3_res = _DEFAULT_H3_RES
     lat_min, lon_min = bbox["lat_min"], bbox["lon_min"]
     lat_max, lon_max = bbox["lat_max"], bbox["lon_max"]
 
@@ -427,23 +427,17 @@ def render_noise_panel() -> None:
 
         data_source = "live signals" if (construction_cells or not firms_df.empty) else "proximity model"
 
-        packets_noise = build_noise_decision_packets(
-            noise_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-        )
-
         st.session_state[ss_key] = {
             "noise_cells": noise_cells,
             "data_source": data_source,
             "dashboard":   build_noise_dashboard(
                 noise_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets":     packets_noise,
         }
 
     cached      = st.session_state[ss_key]
     data_source = cached["data_source"]
     dashboard   = cached["dashboard"]
-    packets     = cached["packets"]
 
     summary = dashboard.get("risk_summary", {})
 
@@ -466,8 +460,8 @@ def render_noise_panel() -> None:
         ("Signals",         f"{'🟢' if 'live' in data_source else '🟡'} {data_source}"),
     )
 
-    t_map, t_sources, t_signals, t_decisions = st.tabs([
-        "🗺️ Map", "🔊 Noise Sources", "📊 Signal Breakdown", "📋 Decision Packets",
+    t_map, t_sources, t_signals = st.tabs([
+        "🗺️ Map", "🔊 Noise Sources", "📊 Signal Breakdown",
     ])
 
     with t_map:
@@ -476,5 +470,3 @@ def render_noise_panel() -> None:
         _render_sources_tab(dashboard)
     with t_signals:
         _render_signal_tab(dashboard)
-    with t_decisions:
-        _render_decisions_tab(packets, city_id)

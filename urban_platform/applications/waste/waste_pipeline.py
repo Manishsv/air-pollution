@@ -17,15 +17,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-# ── Thresholds ─────────────────────────────────────────────────────────────
-
-_WASTE_BURN_FRP_MAX   = 30.0   # MW — above this → likely wildfire, not waste
-_WASTE_BURN_FRP_MIN   =  5.0   # MW — minimum detectable
-_PERSIST_DAYS_MIN     =  2     # days a cell must appear to be "persistent"
-_NDVI_DUMP_THRESHOLD  =  0.15  # below → likely exposed waste
-_CH4_BACKGROUND_PPB   = 1880.0
-_CH4_ELEV_MODERATE    =   20.0 # ppb above background
-_CH4_ELEV_HIGH        =   40.0
+from urban_platform.rules import rules as _rules
 
 _LEVEL_ORDER = ["none", "low", "moderate", "high", "severe"]
 
@@ -54,9 +46,10 @@ def _extract_burn_signals(firms_df: pd.DataFrame, h3_resolution: int) -> dict[st
     except ImportError:
         return {}
 
+    _frp_range = _rules.get("waste", "frp_burn_range_mw", default={"min": 5.0, "max": 30.0})
     sig = firms_df[
-        (firms_df["frp"] >= _WASTE_BURN_FRP_MIN) &
-        (firms_df["frp"] <= _WASTE_BURN_FRP_MAX)
+        (firms_df["frp"] >= _frp_range["min"]) &
+        (firms_df["frp"] <= _frp_range["max"])
     ].copy()
 
     if sig.empty:
@@ -73,7 +66,7 @@ def _extract_burn_signals(firms_df: pd.DataFrame, h3_resolution: int) -> dict[st
         in_city  = bool(grp["within_bbox"].any()) if "within_bbox" in grp.columns else False
         n_days   = len(dates)
         total_frp = float(grp["frp"].sum())
-        waste_type = "landfill_fire" if n_days >= _PERSIST_DAYS_MIN else "waste_burn"
+        waste_type = "landfill_fire" if n_days >= _rules.get("waste", "persist_days_min", default=2) else "waste_burn"
 
         cells[h3_id] = {
             "waste_type":    waste_type,
@@ -90,10 +83,12 @@ def _extract_burn_signals(firms_df: pd.DataFrame, h3_resolution: int) -> dict[st
 
 def _classify_ndvi(ndvi_map: dict[str, float]) -> dict[str, dict]:
     """Return {h3_id: dump_site_info} for cells with low NDVI."""
+    _dump_thr  = _rules.get("waste", "ndvi_dump_threshold", default=0.15)
+    _sev_thr   = _rules.get("waste", "ndvi_severity_thresholds", default={"high": 0.05, "moderate": 0.10})
     result = {}
     for h3_id, ndvi in ndvi_map.items():
-        if ndvi < _NDVI_DUMP_THRESHOLD:
-            severity = "high" if ndvi < 0.05 else "moderate" if ndvi < 0.10 else "low"
+        if ndvi < _dump_thr:
+            severity = "high" if ndvi < _sev_thr["high"] else "moderate" if ndvi < _sev_thr["moderate"] else "low"
             result[h3_id] = {"ndvi": ndvi, "severity": severity}
     return result
 
@@ -102,11 +97,13 @@ def _classify_ndvi(ndvi_map: dict[str, float]) -> dict[str, dict]:
 
 def _classify_ch4(ch4_map: dict[str, float]) -> dict[str, dict]:
     """Return {h3_id: landfill_gas_info} for cells with elevated CH4."""
+    _bg       = _rules.get("waste", "ch4_background_ppb", default=1880.0)
+    _ch4_thr  = _rules.get("waste", "ch4_elevation_thresholds_ppb", default={"high": 40.0, "moderate": 20.0})
     result = {}
     for h3_id, ch4 in ch4_map.items():
-        elev = ch4 - _CH4_BACKGROUND_PPB
-        if elev >= _CH4_ELEV_MODERATE:
-            severity = "high" if elev >= _CH4_ELEV_HIGH else "moderate"
+        elev = ch4 - _bg
+        if elev >= _ch4_thr["moderate"]:
+            severity = "high" if elev >= _ch4_thr["high"] else "moderate"
             result[h3_id] = {"ch4_ppb": ch4, "elevation_ppb": round(elev, 1), "severity": severity}
     return result
 
@@ -114,23 +111,30 @@ def _classify_ch4(ch4_map: dict[str, float]) -> dict[str, dict]:
 # ── Risk score ─────────────────────────────────────────────────────────────
 
 def _compute_risk(burn: dict | None, dump: dict | None, gas: dict | None) -> tuple[float, str]:
+    _base_scores = _rules.get("waste", "burn_base_scores", default={"waste_burn": 0.40, "landfill_fire": 0.65})
+    _frp_sat     = _rules.get("waste", "frp_burn_score_saturation_mw", default=30.0)
+    _frp_weight  = _rules.get("waste", "frp_contribution_weight", default=0.35)
+    _dump_scores = _rules.get("waste", "dump_severity_scores", default={"low": 0.30, "moderate": 0.55, "high": 0.75})
+    _gas_scores  = _rules.get("waste", "gas_severity_scores", default={"moderate": 0.50, "high": 0.80})
+    _levels      = _rules.get("waste", "risk_levels", default={"severe": 0.85, "high": 0.65, "moderate": 0.45, "low": 0.25})
+
     scores = []
     if burn:
-        base = 0.4 if burn["waste_type"] == "waste_burn" else 0.65
-        scores.append(min(1.0, base + math.log1p(burn["total_frp_mw"]) / math.log1p(30) * 0.35))
+        base = _base_scores.get(burn["waste_type"], 0.40)
+        scores.append(min(1.0, base + math.log1p(burn["total_frp_mw"]) / math.log1p(_frp_sat) * _frp_weight))
     if dump:
-        scores.append({"low": 0.3, "moderate": 0.55, "high": 0.75}.get(dump["severity"], 0.3))
+        scores.append(_dump_scores.get(dump["severity"], 0.3))
     if gas:
-        scores.append({"moderate": 0.5, "high": 0.80}.get(gas["severity"], 0.3))
+        scores.append(_gas_scores.get(gas["severity"], 0.3))
 
     if not scores:
         return 0.0, "none"
     score = max(scores)
     level = (
-        "severe"   if score >= 0.85 else
-        "high"     if score >= 0.65 else
-        "moderate" if score >= 0.45 else
-        "low"      if score >= 0.25 else
+        "severe"   if score >= _levels["severe"]   else
+        "high"     if score >= _levels["high"]     else
+        "moderate" if score >= _levels["moderate"] else
+        "low"      if score >= _levels["low"]      else
         "none"
     )
     return round(score, 4), level

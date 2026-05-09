@@ -164,11 +164,43 @@ div[data-testid="stExpander"] {
   border-radius: var(--border-radius-lg) !important;
 }
 
-/* Dataframes: lighter borders */
+/* Dataframes: inbox-style — no border radius, hairline dividers */
 div[data-testid="stDataFrame"] {
   border: 0.5px solid var(--color-border-tertiary) !important;
-  border-radius: var(--border-radius-lg) !important;
+  border-radius: 6px !important;
   overflow: hidden;
+}
+
+/* Tighten top-level tab bar padding */
+div[data-testid="stTabs"] > div:first-child {
+  padding-bottom: 0 !important;
+}
+
+/* Remove excess top padding from tab content */
+div[data-testid="stTabsContent"] {
+  padding-top: 12px !important;
+}
+
+/* Compact sidebar */
+section[data-testid="stSidebar"] > div {
+  padding-top: 16px !important;
+}
+
+/* Tighter captions */
+div[data-testid="stCaptionContainer"] p {
+  font-size: 12px !important;
+  color: var(--color-text-tertiary) !important;
+}
+
+/* Compact st.info / st.warning banners */
+div[data-testid="stAlert"] {
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+}
+
+/* Chat messages */
+div[data-testid="stChatMessage"] {
+  padding: 8px 12px !important;
 }
 </style>
 """

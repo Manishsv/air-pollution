@@ -21,23 +21,37 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from urban_platform.sdk.client import UrbanPlatformClient
 
-from review_dashboard.components.audit_panel import render_audit_panel
-from review_dashboard.components.flood_panel import render_flood_panel
-from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
-from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
-from review_dashboard.components.cross_domain_panel import render_cross_domain_panel
-from review_dashboard.components.ward_panel import render_ward_panel
-from review_dashboard.components.ward_decisions_panel import render_ward_decisions_panel
-from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
-from review_dashboard.components.heat_panel import render_heat_panel
+# ── Primary views ─────────────────────────────────────────────────────────
+from review_dashboard.components.inbox_panel import render_inbox_panel
+from review_dashboard.components.map_panel import render_map_panel
+
+# ── Raw Data Explorer (source-centric) ────────────────────────────────────
+from review_dashboard.components.raw_data_panel import render_raw_data_panel
+
+# ── Domain signal panels (no decision packets, no H3 sliders) ─────────────
 from review_dashboard.components.air_panel import render_air_panel
+from review_dashboard.components.flood_panel import render_flood_panel
+from review_dashboard.components.heat_panel import render_heat_panel
+from review_dashboard.components.water_panel import render_water_panel
 from review_dashboard.components.fire_panel import render_fire_panel
 from review_dashboard.components.waste_panel import render_waste_panel
-from review_dashboard.components.water_panel import render_water_panel
 from review_dashboard.components.construction_panel import render_construction_panel
 from review_dashboard.components.green_panel import render_green_panel
 from review_dashboard.components.noise_panel import render_noise_panel
-from review_dashboard.components.agent_panel import render_agent_panel
+
+# ── Infrastructure, ward, programme panels ────────────────────────────────
+from review_dashboard.components.infrastructure_panel import render_infrastructure_panel
+from review_dashboard.components.ward_panel import render_ward_panel
+from review_dashboard.components.ward_decisions_panel import render_ward_decisions_panel
+from review_dashboard.components.property_buildings_panel import render_property_buildings_panel
+from review_dashboard.components.program_reporting_panel import render_program_reporting_panel
+
+# ── Operations panels ─────────────────────────────────────────────────────
+from review_dashboard.components.audit_panel import render_audit_panel
+from review_dashboard.components.data_sources_panel import render_data_sources_panel
+from review_dashboard.components.sensor_coverage_panel import render_sensor_coverage_panel
+from review_dashboard.components.runtime_trace_panel import render_runtime_trace_panel
+
 from review_dashboard.design_system import apply_airos_design_system
 from review_dashboard.ui_shell import (
     render_domain_header,
@@ -50,207 +64,328 @@ st.set_page_config(page_title="AirOS Review Console", layout="wide")
 apply_airos_design_system()
 
 
-def _render_system_sidebar(client: UrbanPlatformClient, *, audit: dict, metrics: dict) -> None:
-    with st.sidebar:
-        st.title("AirOS Review Console")
-        st.caption("Local-first review console for multiple use cases.")
-        with st.expander("System Data Quality", expanded=False):
-            render_audit_panel(audit, metrics)
-        with st.expander("Technical: Data Contracts", expanded=False):
-            cr = client.get_conformance_report()
-            if not cr:
-                st.caption("No conformance report yet. Run `python main.py --step conformance` to generate.")
-                return
-            rows = []
-            for name, art in (cr.get("artifacts") or {}).items():
-                rows.append({
-                    "Artifact": name,
-                    "Overall": art.get("status"),
-                    "Core review contract": str(art.get("core_schema_status") or "n/a"),
-                    "Air-quality profile": str(art.get("profile_schema_status") or "n/a"),
-                    "Schema key": art.get("schema"),
-                    "Errors": int(art.get("error_count") or 0),
-                })
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-            st.caption(f"Validated at: {cr.get('validated_at', '—')}")
+# ---------------------------------------------------------------------------
+# Cached data loaders — prevent re-reading files/DB on every Streamlit rerender
+# ---------------------------------------------------------------------------
 
-        with st.expander("LLM Provider", expanded=False):
-            from urban_platform.agents.llm_config import load_config as _load_llm_cfg, PROVIDER_PRESETS
-            _cfg = _load_llm_cfg()
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_metrics(base_path: str) -> dict:
+    try:
+        return UrbanPlatformClient(base_path=base_path).get_metrics()
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_audit(base_path: str) -> dict:
+    try:
+        return UrbanPlatformClient(base_path=base_path).get_data_audit()
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_events(base_path: str) -> pd.DataFrame:
+    try:
+        return UrbanPlatformClient(base_path=base_path).get_events()
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_conformance(base_path: str) -> dict:
+    try:
+        return UrbanPlatformClient(base_path=base_path).get_conformance_report()
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_store_stats() -> dict:
+    try:
+        from urban_platform.h3_knowledge.reader import get_store_stats
+        return get_store_stats() or {}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _load_analysis_queue() -> pd.DataFrame:
+    try:
+        from urban_platform.h3_knowledge.store import H3KnowledgeStore
+        return H3KnowledgeStore.get().fetchdf(
+            "SELECT status, count(*) AS count FROM h3_analysis_requests "
+            "GROUP BY status ORDER BY status"
+        )
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _load_scheduler_status() -> dict:
+    try:
+        from urban_platform.scheduler import read_status
+        return read_status() or {}
+    except Exception:
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
+
+def _render_sidebar(*, audit: dict, metrics: dict, base_path: str) -> None:
+    with st.sidebar:
+        st.markdown(
+            '<div style="font-size:18px;font-weight:600;margin-bottom:2px;">AirOS</div>'
+            '<div style="font-size:12px;color:rgba(0,0,0,0.45);margin-bottom:16px;">'
+            'Urban Intelligence Console</div>',
+            unsafe_allow_html=True,
+        )
+
+        with st.expander("System data quality", expanded=False):
+            render_audit_panel(audit, metrics)
+
+        with st.expander("Data contracts", expanded=False):
+            cr = _load_conformance(base_path)
+            if not cr:
+                st.caption("No conformance report. Run `python main.py --step conformance`.")
+            else:
+                rows = []
+                for name, art in (cr.get("artifacts") or {}).items():
+                    rows.append({
+                        "Artifact": name,
+                        "Status":   art.get("status"),
+                        "Errors":   int(art.get("error_count") or 0),
+                    })
+                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+                st.caption(f"Validated: {cr.get('validated_at', '—')}")
+
+        with st.expander("LLM provider", expanded=False):
+            from urban_platform.agents.llm_config import load_config as _lc, PROVIDER_PRESETS
+            _cfg = _lc()
             st.markdown(f"**{_cfg.label}**")
             st.caption(f"Model: `{_cfg.model}`")
-            st.caption(f"Base URL: `{_cfg.base_url}`")
+            st.caption(f"URL: `{_cfg.base_url}`")
             st.caption(
                 PROVIDER_PRESETS.get(_cfg.provider, {}).get("notes", "")
                 or "Set LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, LLM_API_KEY in .env"
             )
-            st.caption("Configure in the 🤖 H3 Agent tab or via .env variables.")
 
-        with st.expander("H3 Knowledge Store", expanded=False):
-            try:
-                from urban_platform.h3_knowledge.reader import get_store_stats
-                stats = get_store_stats()
-                if stats:
-                    st.dataframe(
-                        pd.DataFrame(
-                            [{"Table": k, "Rows": v} for k, v in stats.items()]
-                        ),
-                        hide_index=True, use_container_width=True,
-                    )
-                    total = sum(stats.values())
-                    st.caption(f"Total records: {total:,}  |  DB: data/h3/knowledge.duckdb")
-                else:
-                    st.caption("Store empty — browse a domain tab to populate it.")
-            except Exception as _e:
-                st.caption(f"Knowledge store unavailable: {_e}")
+        with st.expander("Web search", expanded=False):
+            from urban_platform.agents.web_search import (
+                load_web_search_config as _lwsc, PROVIDER_PRESETS as _WS_PRESETS,
+            )
+            _wsc = _lwsc()
+            if _wsc.enabled:
+                st.markdown(f"✅ **{_wsc.label}**")
+                st.caption("Agents can search recent news to validate findings.")
+            else:
+                st.markdown("⚫ **Disabled**")
+                st.caption(
+                    "Set `WEB_SEARCH_PROVIDER` in .env to enable. "
+                    "Options: `duckduckgo` (no key needed), `tavily`, `brave`, `serpapi`."
+                )
+            with st.container():
+                for name, preset in _WS_PRESETS.items():
+                    if name == "none":
+                        continue
+                    key_note = "no API key required" if not preset.get("requires_key") else f"needs `WEB_SEARCH_API_KEY`"
+                    st.caption(f"**{name}** — {preset['label']} ({key_note})")
 
+        with st.expander("H3 knowledge store", expanded=False):
+            stats = _load_store_stats()
+            if stats:
+                st.dataframe(
+                    pd.DataFrame([{"Table": k, "Rows": v} for k, v in stats.items()]),
+                    hide_index=True, use_container_width=True,
+                )
+                st.caption(f"Total: {sum(stats.values()):,} records")
+                st.caption("Run `python main.py --step ingest-h3` to refresh.")
+            else:
+                st.caption("Store empty. Run `python main.py --step ingest-h3`.")
+
+        with st.expander("Analysis queue", expanded=False):
+            q_df = _load_analysis_queue()
+            if q_df.empty:
+                st.caption("No analysis requests yet.")
+            else:
+                st.dataframe(q_df, hide_index=True, use_container_width=True)
+                pending = q_df.loc[q_df["status"] == "pending", "count"].sum()
+                if pending:
+                    st.caption(f"⏳ {int(pending)} request(s) queued — scheduler picks up ≤ 3/sweep.")
+
+        with st.expander("Scheduler status", expanded=False):
+            sc = _load_scheduler_status()
+            if sc:
+                state = sc.get("state", "unknown")
+                icon  = {"idle": "🟢", "sweeping": "🔵", "stopped": "🔴"}.get(state, "⚪")
+                st.markdown(f"{icon} **{state.upper()}**")
+                if sc.get("last_sweep_at"):
+                    st.caption(f"Last sweep: {sc['last_sweep_at'][:16].replace('T',' ')} UTC")
+                if sc.get("next_sweep_at"):
+                    st.caption(f"Next sweep: {sc['next_sweep_at'][:16].replace('T',' ')} UTC")
+                rows    = sc.get("last_sweep_rows", 0)
+                insights = sc.get("last_sweep_insights", 0)
+                analysis = sc.get("last_analysis_completed", 0)
+                st.caption(f"Last sweep: {rows} rows · {insights} insights · {analysis} analysis jobs")
+                st.caption(f"Sweep #{sc.get('sweep_count', 0)} · interval {sc.get('sweep_interval_sec', 900)}s")
+            else:
+                st.caption("Scheduler not running. Start with `python main.py --step scheduler`.")
+
+
+# ---------------------------------------------------------------------------
+# Events helper (used in Data Explorer)
+# ---------------------------------------------------------------------------
 
 def _render_events(events: pd.DataFrame) -> None:
-    render_section_title("Events / Tasks Queue")
+    render_section_title("Events / Tasks queue")
     if events is None or events.empty:
-        st.caption("No events yet. Run `python main.py` to generate decision packets and events.")
+        st.caption("No events. Run `python main.py` to generate decision packets.")
         return
     etypes = sorted(events["event_type"].astype(str).unique().tolist()) if "event_type" in events.columns else []
-    sev = sorted(events["severity"].astype(str).unique().tolist()) if "severity" in events.columns else []
+    sev    = sorted(events["severity"].astype(str).unique().tolist()) if "severity" in events.columns else []
     c1, c2 = st.columns(2)
     with c1:
-        et = st.selectbox("Event type", options=["(all)"] + etypes, index=0, key="events_type")
+        et = st.selectbox("Event type", ["(all)"] + etypes, index=0, key="events_type")
     with c2:
-        sv = st.selectbox("Severity", options=["(all)"] + sev, index=0, key="events_sev")
+        sv = st.selectbox("Severity", ["(all)"] + sev, index=0, key="events_sev")
     df = events.copy()
     if et != "(all)" and "event_type" in df.columns:
         df = df[df["event_type"].astype(str) == et]
     if sv != "(all)" and "severity" in df.columns:
         df = df[df["severity"].astype(str) == sv]
-    cols = [c for c in ["timestamp", "severity", "event_type", "spatial_unit_id",
-                        "recommended_action", "source_packet_id", "status"] if c in df.columns]
+    cols = [c for c in ["timestamp","severity","event_type","spatial_unit_id",
+                         "recommended_action","source_packet_id","status"] if c in df.columns]
     sort_col = "timestamp" if "timestamp" in df.columns else None
-    display = df[cols] if cols else df
+    display  = df[cols] if cols else df
     st.dataframe(
         display.sort_values(sort_col, ascending=False) if sort_col else display,
         hide_index=True, use_container_width=True,
     )
 
 
-def _render_crowd(client: UrbanPlatformClient) -> tuple[pd.DataFrame | None, list[dict]]:
-    render_section_title("Latest observations")
-    obs = client.get_observations(variable="people_count")
-    if obs is None or obs.empty:
-        st.caption("No `people_count` observations found yet. Run the camera publisher + ingest, then refresh.")
-        return None, []
-    df = obs.copy()
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-    if "entity_id" in df.columns:
-        df = df.sort_values("timestamp").groupby("entity_id", as_index=False).tail(1)
-        show = [c for c in ["entity_id", "timestamp", "value", "unit", "quality_flag", "source"]
-                if c in df.columns]
-        out = df[show].sort_values("timestamp", ascending=False)
-        st.dataframe(out, hide_index=True, use_container_width=True)
-        return obs, out.head(50).to_dict(orient="records")
-    tail = df.tail(50)
-    st.dataframe(tail, hide_index=True, use_container_width=True)
-    return obs, tail.to_dict(orient="records")
-
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main():
-    client = UrbanPlatformClient(base_path=str(PROJECT_ROOT))
-    metrics = client.get_metrics()
-    audit = client.get_data_audit()
-    events = client.get_events()
+    base_path = str(PROJECT_ROOT)
+    metrics   = _load_metrics(base_path)
+    audit     = _load_audit(base_path)
+    events    = _load_events(base_path)
 
-    _render_system_sidebar(client, audit=audit, metrics=metrics)
+    _render_sidebar(audit=audit, metrics=metrics, base_path=base_path)
 
-    t_aq, t_fire, t_waste, t_water, t_construction, t_green, t_noise, t_flood, t_heat, t_cross, t_ward, t_decisions, t_property, t_program, t_trace, t_crowd, t_events, t_agent = st.tabs([
-        "Air Quality", "Fire", "Waste", "Water Quality", "Construction & Dust",
-        "Green Cover", "Noise", "Flood", "Heat", "Cross-Domain", "Ward QoL",
-        "Ward Decisions", "Property & Buildings", "Program Reporting", "Runtime Trace",
-        "Crowd", "Events", "🤖 H3 Agent",
+    # ── Primary navigation ────────────────────────────────────────────────
+    st.markdown(
+        '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
+        'color:rgba(0,0,0,0.4);text-transform:uppercase;margin-bottom:4px;">'
+        'AirOS Review Console</div>',
+        unsafe_allow_html=True,
+    )
+
+    t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
+        "📬 Inbox",
+        "🗺️ City Map",
+        "🔬 Raw Data",
+        "📊 Domains",
+        "🔧 Operations",
     ])
 
-    with t_aq:
-        render_air_panel()
+    # ── Inbox ─────────────────────────────────────────────────────────────
+    with t_inbox:
+        render_inbox_panel()
 
-    with t_fire:
-        render_fire_panel()
+    # ── City Map ──────────────────────────────────────────────────────────
+    with t_map:
+        render_map_panel()
 
-    with t_waste:
-        render_waste_panel()
+    # ── Raw Data (source-centric explorer) ────────────────────────────────
+    with t_raw:
+        render_raw_data_panel()
 
-    with t_water:
-        render_water_panel()
-
-    with t_construction:
-        render_construction_panel()
-
-    with t_green:
-        render_green_panel()
-
-    with t_noise:
-        render_noise_panel()
-
-    with t_flood:
-        render_flood_panel()
-
-    with t_heat:
-        render_heat_panel()
-
-    with t_cross:
-        render_cross_domain_panel()
-
-    with t_ward:
-        render_ward_panel()
-
-    with t_decisions:
-        render_ward_decisions_panel()
-
-    with t_property:
-        render_property_buildings_panel()
-
-    with t_program:
-        render_program_reporting_panel()
-
-    with t_trace:
-        render_runtime_trace_panel()
-
-    with t_crowd:
+    # ── Domains (signal maps per risk domain) ────────────────────────────
+    with t_domains:
         render_domain_header(
-            title="Crowd / People count",
-            caption="Latest ingested `people_count` observations for spatial units (demo or live ingest).",
-            primary_alert="Counts are operational signals, not identity. Use only for capacity and safety review workflows.",
-            primary_alert_kind="info",
-        )
-        _obs_df, crowd_preview = _render_crowd(client)
-        render_technical_json_expander(
-            title="Technical: people_count preview",
-            payload={
-                "row_count": 0 if _obs_df is None or _obs_df.empty else int(len(_obs_df)),
-                "preview_rows": crowd_preview,
-            },
-        )
-
-    with t_agent:
-        render_agent_panel()
-
-    with t_events:
-        render_domain_header(
-            title="Events / Tasks queue",
-            caption="System-generated events linked to decision packets and recommended actions.",
+            title="Domain Signal Views",
+            caption=(
+                "Per-domain risk signal maps. Data is pre-computed by the H3 ingestors at "
+                "resolution 8 (~0.74 km² cells). "
+                "For cross-domain risk assessment use the City Map. "
+                "For AI insights use the Inbox. "
+                "For decision packets use Ward Decisions."
+            ),
             primary_alert=None,
         )
-        _render_events(events)
-        ev_preview = []
-        if events is not None and not events.empty:
-            prev = (events.sort_values("timestamp", ascending=False).head(40)
-                    if "timestamp" in events.columns else events.head(40))
-            ev_preview = prev.to_dict(orient="records")
-        render_technical_json_expander(
-            title="Technical: Events preview",
-            payload={
-                "preview_rows": ev_preview,
-                "total_rows": 0 if events is None or events.empty else int(len(events)),
-            },
+
+        # Selectbox navigation: only the selected domain panel renders.
+        # Using st.tabs here would render all 14 panels simultaneously on every rerun.
+        _DOMAIN_PANELS = {
+            "🌬️ Air Quality":      render_air_panel,
+            "💧 Flood":             render_flood_panel,
+            "🌡️ Heat":              render_heat_panel,
+            "🏞️ Water Quality":     render_water_panel,
+            "🔥 Fire":              render_fire_panel,
+            "🗑️ Waste":             render_waste_panel,
+            "🏗️ Construction":      render_construction_panel,
+            "🌿 Green Cover":       render_green_panel,
+            "🔊 Noise":             render_noise_panel,
+            "🏙️ Infrastructure":    render_infrastructure_panel,
+            "🏘️ Ward QoL":          render_ward_panel,
+            "📋 Ward Decisions":    render_ward_decisions_panel,
+            "🏢 Property":          render_property_buildings_panel,
+            "📁 Program Reporting": render_program_reporting_panel,
+        }
+        domain_choice = st.selectbox(
+            "Domain", list(_DOMAIN_PANELS.keys()), key="domain_panel_selector",
+            label_visibility="collapsed",
         )
+        st.divider()
+        _DOMAIN_PANELS[domain_choice]()
+
+    # ── Operations ────────────────────────────────────────────────────────
+    with t_ops:
+        render_domain_header(
+            title="Operations",
+            caption="Pipeline health, sensor coverage, runtime trace, and system events.",
+            primary_alert=None,
+        )
+
+        # Selectbox navigation: only the selected panel renders — avoids running
+        # all sub-panels simultaneously (which is what st.tabs does).
+        _OPS_PANELS = {
+            "🔌 Data Sources":   "sources",
+            "📡 Sensor Coverage": "sensors",
+            "🖥️ Runtime Trace":   "trace",
+            "📋 Events":          "events",
+        }
+        ops_choice = st.selectbox(
+            "View", list(_OPS_PANELS.keys()), key="ops_panel_selector",
+            label_visibility="collapsed",
+        )
+        ops_view = _OPS_PANELS[ops_choice]
+        st.divider()
+
+        if ops_view == "sources":
+            render_data_sources_panel()
+        elif ops_view == "sensors":
+            render_sensor_coverage_panel()
+        elif ops_view == "trace":
+            render_runtime_trace_panel()
+        elif ops_view == "events":
+            render_domain_header(
+                title="Events / Tasks queue",
+                caption="System-generated events linked to decision packets.",
+                primary_alert=None,
+            )
+            _render_events(events)
+            ev_preview = []
+            if events is not None and not events.empty:
+                prev = (events.sort_values("timestamp", ascending=False).head(40)
+                        if "timestamp" in events.columns else events.head(40))
+                ev_preview = prev.to_dict(orient="records")
+            render_technical_json_expander(
+                title="Technical: Events preview",
+                payload={
+                    "preview_rows": ev_preview,
+                    "total_rows":   0 if events is None or events.empty else int(len(events)),
+                },
+            )
 
 
 if __name__ == "__main__":

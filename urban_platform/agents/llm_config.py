@@ -16,9 +16,10 @@ LLM_TIMEOUT      — HTTP timeout in seconds (default: 120)
 
 Supported providers and their defaults
 ---------------------------------------
-ollama      base_url=http://localhost:11434/v1   model=llama3.2
+ollama      base_url=http://localhost:11434/v1   model=gpt-oss:20b-cloud
             Local inference, no API key needed.
-            Tool-calling models: llama3.1, llama3.2, qwen2.5, mistral-nemo
+            Tool-calling models: gpt-oss:20b-cloud, gpt-oss:120b-cloud, llama3.1, qwen2.5, mistral-nemo
+            Note: gpt-oss cloud variants are reasoning models (content="" but tool_calls work)
 
 openai      base_url=https://api.openai.com/v1   model=gpt-4o-mini
             Set LLM_API_KEY=sk-...
@@ -51,9 +52,9 @@ PROVIDER_PRESETS: dict[str, dict] = {
     "ollama": {
         "base_url":      "http://localhost:11434/v1",
         "api_key":       "ollama",           # Ollama ignores the key
-        "default_model": "llama3.2",
+        "default_model": "gpt-oss:20b-cloud",
         "label":         "Ollama (local)",
-        "notes":         "Run: ollama pull llama3.2  |  Tool-calling: llama3.1, qwen2.5, mistral-nemo",
+        "notes":         "Tool-calling models: gpt-oss:20b-cloud, gpt-oss:120b-cloud, llama3.1, qwen2.5, mistral-nemo  |  run: ollama list",
     },
     "openai": {
         "base_url":      "https://api.openai.com/v1",

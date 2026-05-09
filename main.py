@@ -27,7 +27,8 @@ def main() -> None:
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
     ap.add_argument(
         "--step",
-        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance", "ingest-h3"],
+        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance",
+                 "ingest-h3", "geocode-h3", "scheduler"],
         default="all",
         help="Stop after a step (sensor-siting reads existing outputs)",
     )
@@ -38,7 +39,21 @@ def main() -> None:
         help="Override config sensor_siting.mode (coverage prioritizes distant/interpolated; equity uses urban proxies)",
     )
     ap.add_argument("--no-recommendations", action="store_true", help="Disable operational recommendations")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="geocode-h3: re-geocode cells that already have an area name")
+    ap.add_argument("--city", default=None,
+                    help="geocode-h3: restrict to a single city id (e.g. bangalore)")
     args = ap.parse_args()
+
+    if args.step == "scheduler":
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        from urban_platform.scheduler import run_forever
+        run_forever()
+        return
 
     if args.step == "ingest-h3":
         import logging as _logging
@@ -53,6 +68,30 @@ def main() -> None:
         total = sum(n for dm in results.values() for n in dm.values() if n > 0)
         print(f"\nH3 ingest complete — {total} rows written across "
               f"{len(results)} cities × {len(domains)} domains")
+        return
+
+    if args.step == "geocode-h3":
+        logging.basicConfig(level=logging.INFO,
+                            format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                            datefmt="%H:%M:%S")
+        from urban_platform.h3_knowledge.geocoder import geocode_all_cells, geocode_summary
+        overwrite = getattr(args, "overwrite", False)
+        city_arg  = getattr(args, "city", None)
+        # Print coverage before
+        pre = geocode_summary(city_id=city_arg)
+        if not pre.empty:
+            print("\nCurrent coverage (before geocoding):")
+            print(pre.to_string(index=False))
+        results = geocode_all_cells(city_id=city_arg, overwrite=overwrite)
+        if results:
+            print("\nGeocoding results:")
+            for city, counts in sorted(results.items()):
+                print(f"  {city}: {counts['done']} named, {counts['failed']} failed")
+        # Print coverage after
+        post = geocode_summary(city_id=city_arg)
+        if not post.empty:
+            print("\nCoverage after geocoding:")
+            print(post.to_string(index=False))
         return
 
     if args.step == "conformance":

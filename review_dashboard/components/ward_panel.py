@@ -19,39 +19,38 @@ from review_dashboard.ui_shell import (
     render_section_title,
     render_technical_json_expander,
 )
+from urban_platform.city_config import CITIES as _CITY_REGISTRY, PANEL_CITIES, get_centre
 
-_CITIES = {
-    "Bangalore (demo)": "bangalore_demo",
-    "Delhi (demo)":     "delhi_demo",
-    "Mumbai (demo)":    "mumbai_demo",
-}
-
-_CITY_CENTRES = {
-    "bangalore_demo": (12.97, 77.59),
-    "delhi_demo":     (28.65, 77.10),
-    "mumbai_demo":    (19.05, 72.88),
-}
+# Ward panel uses the legacy place module which expects a "_demo" suffix.
+# Map from canonical city_id → place-module city_id until place module is
+# migrated to the H3 store city IDs.
+_PLACE_ID: dict[str, str] = {k: f"{k}_demo" for k in _CITY_REGISTRY}
 
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
 def _city_selector() -> str:
+    """Return the canonical city_id (e.g. 'bangalore')."""
     c1, c2 = st.columns([3, 1])
     with c1:
-        label = st.selectbox("City", list(_CITIES.keys()), key="ward_city_selector")
+        label = st.selectbox("City", list(PANEL_CITIES.keys()), key="ward_city_selector")
     with c2:
-        st.button("↻ Refresh", key="ward_refresh",
-                  help="Re-read from feature store", use_container_width=True)
-    return _CITIES[label]
+        if st.button("↻ Refresh", key="ward_refresh",
+                     help="Re-read from feature store", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    return PANEL_CITIES[label]
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
 
 def _load_wards(city_id: str):
+    # The place module uses "<city>_demo" IDs; translate from canonical city_id.
+    place_id = _PLACE_ID.get(city_id, f"{city_id}_demo")
     try:
         from urban_platform.place import aggregate_city_wards
-        return aggregate_city_wards(city_id)
-    except Exception as exc:
+        return aggregate_city_wards(place_id)
+    except Exception:
         return None
 
 
@@ -113,7 +112,7 @@ def _build_geojson(result) -> dict:
 
 def _render_ward_map(result, city_id: str) -> None:
     geojson = _build_geojson(result)
-    lat_c, lon_c = _CITY_CENTRES.get(city_id, (20.0, 78.0))
+    lat_c, lon_c = get_centre(city_id) if city_id in _CITY_REGISTRY else (20.0, 78.0)
 
     layer = pdk.Layer(
         "GeoJsonLayer",
@@ -189,6 +188,53 @@ def _render_ward_table(wards_df: pd.DataFrame) -> None:
     )
 
 
+# ── Data quality callout ────────────────────────────────────────────────────
+
+def _render_data_quality_callout(city_id: str) -> None:
+    """Show a data quality alert for domains below 60% analysis-ready.
+
+    Imports defensively — shows nothing if the data_quality module is not
+    available yet (it is being built in parallel).
+    """
+    try:
+        from urban_platform.h3_knowledge.data_quality import get_city_quality_summary
+        summary = get_city_quality_summary(city_id)
+    except Exception:
+        return  # Module not yet available — stay silent
+
+    if summary is None:
+        return
+
+    overall_pct = summary.get("overall_pct_ready", 100)
+    if overall_pct >= 60:
+        return  # Everything fine — don't clutter the panel
+
+    domain_rows = summary.get("domains", [])
+    # Only show domains that are below 60%
+    problem_domains = [d for d in domain_rows if d.get("pct_ready", 100) < 60]
+    if not problem_domains:
+        return
+
+    lines = []
+    for d in domain_rows:
+        pct = d.get("pct_ready", 0)
+        name = d.get("domain", "Unknown")
+        gaps = d.get("sensor_gaps", 0)
+        if pct >= 60:
+            lines.append(f"**{name}:** {pct:.0f}% of cells analysis-ready ✓")
+        else:
+            critical = " &nbsp;`[critical]`" if pct < 30 else ""
+            gaps_str = f" · {gaps} sensor gap{'s' if gaps != 1 else ''} identified" if gaps else ""
+            lines.append(f"**{name}:** {pct:.0f}% of cells analysis-ready{gaps_str}{critical}")
+
+    body = "\n\n".join(lines)
+    body += (
+        "\n\n→ View sensor recommendations in **Operations → Sensor Coverage**"
+    )
+
+    st.warning(f"**Data Quality Alert**\n\n{body}")
+
+
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_ward_panel() -> None:
@@ -233,6 +279,9 @@ def render_ward_panel() -> None:
         ("Worst ward", worst_ward["ward_name"] if worst_ward is not None else "—"),
         ("City QoL avg", f"{wards_df['qol_index'].dropna().mean():.2f}" if "qol_index" in wards_df else "—"),
     )
+
+    # ── Data quality callout ──────────────────────────────────────────────────
+    _render_data_quality_callout(city_id)
 
     t_map, t_table = st.tabs(["Ward QoL Map", "Ward Detail Table"])
 

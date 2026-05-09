@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
+from urban_platform.rules import rules as _rules
+
 # ── Known noise sources per city ───────────────────────────────────────────
 # weight = source strength 0–1, radius_km = influence radius
 
@@ -121,9 +123,10 @@ def _proximity_score(cell_lat: float, cell_lon: float, sources: list[dict]) -> t
 
 
 def _nri_to_level(nri: float) -> str:
-    if nri >= 0.75: return "severe"
-    if nri >= 0.50: return "high"
-    if nri >= 0.25: return "moderate"
+    t = _rules.get("noise", "nri_risk_levels", default={"severe": 0.75, "high": 0.50, "moderate": 0.25})
+    if nri >= t["severe"]:   return "severe"
+    if nri >= t["high"]:     return "high"
+    if nri >= t["moderate"]: return "moderate"
     return "low"
 
 
@@ -170,15 +173,18 @@ def build_noise_risk(
         ) * 0.6  # construction contributes up to 0.6 of its CRI to noise
 
         # Fire boost: log-scaled FRP presence
+        _sw       = _rules.get("noise", "score_weights", default={"construction_cap": 0.3, "fire_cap": 0.2})
+        _fire_sat = _rules.get("noise", "fire_score_log_saturation_mw", default=100.0)
         frp = fire_h3_frp.get(h3_id, 0.0)
-        fire_score = min(0.4, math.log1p(frp) / math.log1p(100)) if frp > 0 else 0.0
+        fire_score = min(_sw["fire_cap"], math.log1p(frp) / math.log1p(_fire_sat)) if frp > 0 else 0.0
 
         # NRI: source proximity dominates; construction + fire add to it
-        nri = min(1.0, prox_score + construction_score * 0.3 + fire_score * 0.2)
+        nri = min(1.0, prox_score + construction_score * _sw["construction_cap"] + fire_score)
         nri = round(nri, 4)
 
         # Only return cells with meaningful noise risk
-        if nri < 0.10 and prox_score == 0.0:
+        _nri_floor = _rules.get("noise", "nri_minimum_filter", default=0.10)
+        if nri < _nri_floor and prox_score == 0.0:
             continue
 
         result[h3_id] = {
@@ -291,10 +297,13 @@ def build_noise_decision_packets(
         level = c["risk_level"]
         src   = c["nearest_source"]
 
+        _dt = _rules.get("noise", "dominant_source_thresholds", default={
+            "airport_proximity": 0.6, "construction_machinery": 0.3, "industrial_fire": 0.2,
+        })
         dominant = (
-            "airport_proximity"      if c["proximity_score"] > 0.6 else
-            "construction_machinery" if c["construction_score"] > 0.3 else
-            "industrial_fire"        if c["fire_score"] > 0.2 else
+            "airport_proximity"      if c["proximity_score"]    > _dt["airport_proximity"] else
+            "construction_machinery" if c["construction_score"] > _dt["construction_machinery"] else
+            "industrial_fire"        if c["fire_score"]         > _dt["industrial_fire"] else
             "traffic_corridor"
         )
 
@@ -312,7 +321,7 @@ def build_noise_decision_packets(
             "field_verification_required": level == "severe",
             "confidence": {
                 "confidence_score":       nri,
-                "recommendation_allowed": nri >= 0.5,
+                "recommendation_allowed": nri >= _rules.get("noise", "recommendation_nri_floor", default=0.5),
                 "caveat":                 "NRI is proxy-based — actual noise measurement required for enforcement.",
             },
             "evidence": {

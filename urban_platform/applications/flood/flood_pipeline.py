@@ -27,6 +27,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from urban_platform.rules import rules as _rules
+
 logger = logging.getLogger(__name__)
 
 _DECISION_PACKET_TOP_N = 5
@@ -94,12 +96,10 @@ def build_h3_grid_from_bbox(
 # ── Risk helpers ──────────────────────────────────────────────────────────
 
 def _risk_level(score: float) -> str:
-    if score >= 0.75:
-        return "severe"
-    if score >= 0.50:
-        return "high"
-    if score >= 0.25:
-        return "moderate"
+    t = _rules.get("flood", "risk_levels", default={"severe": 0.75, "high": 0.50, "moderate": 0.25})
+    if score >= t["severe"]:   return "severe"
+    if score >= t["high"]:     return "high"
+    if score >= t["moderate"]: return "moderate"
     return "low"
 
 
@@ -216,26 +216,31 @@ def _computation_trace(
     inc_count = int(h3_row["incident_count"])
     ast_count = int(h3_row["asset_count"])
 
-    rainfall_score = min(rain_val / 20.0, 1.0)
-    incident_score = min(inc_count / 3.0, 1.0)
-    drainage_factor = max(0.75, 1.0 - ast_count * 0.05)
-    final_score = (0.6 * rainfall_score + 0.4 * incident_score) * drainage_factor
+    _rain_sat = _rules.get("flood", "rainfall_score_saturation_mm_hr", default=20.0)
+    _inc_sat  = _rules.get("flood", "incident_score_saturation_count", default=3)
+    _w        = _rules.get("flood", "score_weights", default={"rainfall": 0.6, "incident": 0.4})
+    _df_min   = _rules.get("flood", "drainage_factor_min", default=0.75)
+    _df_dec   = _rules.get("flood", "drainage_factor_decrement_per_asset", default=0.05)
+    rainfall_score = min(rain_val / _rain_sat, 1.0)
+    incident_score = min(inc_count / _inc_sat, 1.0)
+    drainage_factor = max(_df_min, 1.0 - ast_count * _df_dec)
+    final_score = (_w["rainfall"] * rainfall_score + _w["incident"] * incident_score) * drainage_factor
 
     return {
         "algorithm": "IDW-weighted flood risk scoring (v1)",
-        "formula": "flood_risk_score = (0.6 × rainfall_score + 0.4 × incident_score) × drainage_factor",
+        "formula": f"flood_risk_score = ({_w['rainfall']} × rainfall_score + {_w['incident']} × incident_score) × drainage_factor",
         "steps": [
             {
                 "name": "rainfall_score",
-                "formula": "min(rainfall_mm_per_hr / 20.0, 1.0)",
+                "formula": f"min(rainfall_mm_per_hr / {_rain_sat}, 1.0)",
                 "inputs": {"rainfall_mm_per_hr": round(rain_val, 3),
                            "interpolation": f"IDW from {n_rain_points} sample points"},
                 "value": round(rainfall_score, 4),
-                "weight": 0.6,
+                "weight": _w["rainfall"],
             },
             {
                 "name": "incident_score",
-                "formula": "min(incident_count / 3.0, 1.0)",
+                "formula": f"min(incident_count / {_inc_sat}, 1.0)",
                 "inputs": {"incident_count_within_500m": inc_count},
                 "value": round(incident_score, 4),
                 "weight": 0.4,
@@ -333,23 +338,29 @@ def run_flood_pipeline(
 
         if has_rain:
             rain_val = _idw_interpolate(clat, clon, obs_lats, obs_lons, obs_rain)
-            rain_score = min(rain_val / 20.0, 1.0)   # 20 mm/hr → 1.0
+            _rain_sat = _rules.get("flood", "rainfall_score_saturation_mm_hr", default=20.0)
+            rain_score = min(rain_val / _rain_sat, 1.0)
         else:
             rain_val, rain_score = 0.0, 0.0
 
+        _prox   = _rules.get("flood", "proximity_radius_km", default=0.5)
+        _inc_sat = _rules.get("flood", "incident_score_saturation_count", default=3)
         inc_count = int(sum(
             1 for ilat, ilon in zip(inc_lats, inc_lons)
-            if _haversine_km(clat, clon, ilat, ilon) <= 0.5
+            if _haversine_km(clat, clon, ilat, ilon) <= _prox
         ))
-        inc_score = min(inc_count / 3.0, 1.0)
+        inc_score = min(inc_count / _inc_sat, 1.0)
 
         ast_count = int(sum(
             1 for alat, alon in zip(ast_lats, ast_lons)
-            if _haversine_km(clat, clon, alat, alon) <= 0.5
+            if _haversine_km(clat, clon, alat, alon) <= _prox
         ))
-        drainage_factor = max(0.75, 1.0 - ast_count * 0.05)
+        _df_min = _rules.get("flood", "drainage_factor_min", default=0.75)
+        _df_dec = _rules.get("flood", "drainage_factor_decrement_per_asset", default=0.05)
+        drainage_factor = max(_df_min, 1.0 - ast_count * _df_dec)
 
-        score = (0.6 * rain_score + 0.4 * inc_score) * drainage_factor
+        _w = _rules.get("flood", "score_weights", default={"rainfall": 0.6, "incident": 0.4})
+        score = (_w["rainfall"] * rain_score + _w["incident"] * inc_score) * drainage_factor
         level = _risk_level(score)
 
         rows.append({

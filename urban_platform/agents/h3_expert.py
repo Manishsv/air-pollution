@@ -40,6 +40,12 @@ from urban_platform.agents.llm_client import (
     make_parameters,
 )
 from urban_platform.agents.llm_config import LLMConfig, load_config
+from urban_platform.agents.web_search import (
+    WebSearchConfig,
+    load_web_search_config,
+    search as web_search,
+    format_results_for_llm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +59,14 @@ AGENT_TOOLS = [
         description=(
             "Retrieve the time-series of a specific signal for this H3 cell over the past N days. "
             "Use this to check trends, detect recent spikes, or compare current vs baseline. "
-            "Example: domain='air', signal='AQI', lookback_days=14 → two weeks of air quality."
+            "Example: domain='air', signal='AQI', lookback_days=14 → two weeks of air quality. "
+            "For weather context use domain='weather' with signals: WIND_SPEED_KMH, WIND_DIR_DEG, "
+            "HUMIDITY_PCT, PRESSURE_HPA, TEMPERATURE_C, PRECIP_MM."
         ),
         parameters=make_parameters(
             properties={
-                "domain":        {"type": "string", "description": "Domain: air, water, noise, fire, heat, flood, construction, green, waste"},
-                "signal":        {"type": "string", "description": "Signal name e.g. AQI, WQI, NRI, CRI, GCCI, LST, FRP"},
+                "domain":        {"type": "string", "description": "Domain: air, water, noise, fire, heat, flood, construction, green, waste, weather, buildings, roads, drains, crowd"},
+                "signal":        {"type": "string", "description": "Signal name e.g. AQI, WQI, NRI, CRI, GCCI, LST, FRP, WIND_SPEED_KMH, WIND_DIR_DEG, HUMIDITY_PCT, PRESSURE_HPA, BUILDING_DENSITY, ROAD_DENSITY, FLOOD_DRAIN_CAPACITY, CROWD_DENSITY, CROWD_INDEX, GATHERING_ALERT, PEOPLE_COUNT"},
                 "lookback_days": {"type": "integer", "description": "Days to look back (default 30)", "default": 30},
             },
             required=["domain", "signal"],
@@ -106,6 +114,33 @@ AGENT_TOOLS = [
         ),
     ),
     make_tool(
+        name="search_web",
+        description=(
+            "Search recent news and web sources to validate or contextualise a hypothesis "
+            "about this cell's location. Use ONLY when sensor signals suggest a specific "
+            "mechanism and you want to check whether known local events corroborate it. "
+            "Good queries: 'illegal waste dumping fire Bahadurgarh Haryana 2026', "
+            "'construction project Whitefield Bangalore', 'CAQM air quality alert Delhi NCR'. "
+            "Do NOT use for general background research — one targeted query per hypothesis. "
+            "Treat results as supporting context, not sensor-level evidence. "
+            "Cite the source and date in your causal chain if it affects your confidence."
+        ),
+        parameters=make_parameters(
+            properties={
+                "query": {
+                    "type":        "string",
+                    "description": "Focused search query. Include location, suspected mechanism, and year.",
+                },
+                "max_results": {
+                    "type":        "integer",
+                    "description": "Results to return (default 3, max 5)",
+                    "default":     3,
+                },
+            },
+            required=["query"],
+        ),
+    ),
+    make_tool(
         name="submit_insight",
         description=(
             "Submit your final cross-domain insight. Call this ONCE when analysis is complete. "
@@ -115,7 +150,13 @@ AGENT_TOOLS = [
             properties={
                 "finding": {
                     "type": "string",
-                    "description": "Single clear headline sentence describing the cross-domain pattern or risk (≤200 chars)",
+                    "description": (
+                        "Single clear headline describing the inferred risk condition (≤200 chars). "
+                        "Frame as a risk assessment, not an event report. "
+                        "Good: 'Elevated waste-fire risk — extreme heat, accumulated garbage, moderate wind.' "
+                        "Bad: 'Landfill fire is occurring.' "
+                        "The causal_chain is where you explain the mechanism in detail."
+                    ),
                 },
                 "confidence": {
                     "type": "number",
@@ -140,8 +181,23 @@ AGENT_TOOLS = [
                 },
                 "recommended_actions": {
                     "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Specific, actionable recommendations for city officers",
+                    "description": (
+                        "Specific, actionable recommendations. Each item is an object with: "
+                        "'action' (what to do, ≤120 chars), "
+                        "'details' (how/where/why, optional), "
+                        "'who' (role responsible: ward_engineer / zonal_officer / department), "
+                        "'urgency' (immediate / within_4h / within_24h / plan)."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "action":   {"type": "string"},
+                            "details":  {"type": "string"},
+                            "who":      {"type": "string"},
+                            "urgency":  {"type": "string"},
+                        },
+                        "required": ["action", "who", "urgency"],
+                    },
                 },
                 "uncertainty_notes": {
                     "type": "array",
@@ -160,9 +216,18 @@ AGENT_TOOLS = [
 
 _SYSTEM_PROMPT = """\
 You are an H3 Expert Agent embedded in the AirOS urban intelligence platform.
-You have been assigned cell {h3_id} in {city_id}. Your sole responsibility is to
-become the expert on this specific geographic cell — its terrain, environmental
-signals across all domains, its history, and how it relates to neighbouring cells.
+You have been assigned cell {h3_id} in the {city_id} data region. Your sole
+responsibility is to become the expert on this specific geographic cell — its
+terrain, environmental signals across all domains, its history, and how it
+relates to neighbouring cells.
+
+Important: `city_id` is a data collection region label, not an administrative
+boundary. For example, city_id="delhi" covers the broader NCR region and may
+include cells in Haryana (e.g. Bahadurgarh, Gurugram, Faridabad) or Uttar Pradesh
+(e.g. Noida, Ghaziabad). Always use the cell's centroid coordinates (lat/lon) to
+determine the actual geographic location. When the cell falls outside the named
+city's administrative boundary, note this in your analysis — it affects which
+government body has jurisdiction over recommended actions.
 
 Your analysis role
 ------------------
@@ -170,13 +235,15 @@ Domain-specific rule pipelines already flag individual risks (high AQI, flooding
 Your job is to go BEYOND single-domain rules and find:
 
 1. COMPOUND RISKS — when two or more domains interact to make each other worse.
-   Example: active construction (high CRI + BSI) + low wind + high AQI
+   Example: active construction (high CRI + BSI) + low wind (WIND_SPEED_KMH < 5) + high AQI
    → dust is re-suspended rather than dispersed, amplifying PM2.5 beyond what
    either domain would flag alone.
 
 2. CAUSAL CHAINS — the actual mechanism linking signals across domains.
    Example: upstream deforestation (GCCI loss) → reduced soil retention → elevated
    flood risk even on moderate rainfall days.
+   Example: WIND_DIR_DEG ≈ 45° (NE) + industrial cluster NE of cell → AQI elevation
+   is advected pollution, not a local source — different intervention needed.
 
 3. PERSISTENT vs TRANSIENT risks — is this a spike or a structural problem?
    Check signal history to distinguish.
@@ -187,21 +254,112 @@ Your job is to go BEYOND single-domain rules and find:
 5. EXPECTED vs ANOMALOUS signals — a high NRI near an airport is expected;
    flag only if it is anomalously higher than the baseline for that proximity band.
 
+Weather / wind signals
+----------------------
+Every cell always has weather signals in domain='weather':
+  WIND_SPEED_KMH  — wind speed at 10 m (low < 5, moderate 5–15, high > 15)
+  WIND_DIR_DEG    — meteorological direction (0=N, 90=E, 180=S, 270=W)
+  HUMIDITY_PCT    — relative humidity (high > 70% amplifies heat stress and corrosion)
+  PRESSURE_HPA    — surface pressure (drops often precede rainfall)
+  TEMPERATURE_C   — ambient temperature at 2 m
+  PRECIP_MM       — precipitation in the last hour
+
+Always consider weather context when reasoning about air quality, heat, fire, flood, or
+construction dust. Low wind speed suppresses pollution dispersion. Wind direction tells
+you whether elevated AQI is locally generated or advected from an upwind source.
+High humidity combined with heat produces extreme apparent-temperature stress.
+
+Urban infrastructure context (OSM-derived structural signals)
+-------------------------------------------------------------
+These static signals are ingested weekly from OpenStreetMap and appear in the initial
+context when available.  They do NOT have risk assessments — they are modifiers that
+amplify or contextualise environmental risks:
+
+  domain='buildings'  →  BUILDING_COUNT, BUILDING_DENSITY, AVG_FLOORS, COMMERCIAL_RATIO
+    • High BUILDING_DENSITY + high AVG_FLOORS → dense population exposure; AQI / heat
+      effects are more severe than in sparse areas.
+    • High COMMERCIAL_RATIO → daytime crowd peak; noise and air impacts during business hours.
+
+  domain='roads'      →  ROAD_LENGTH_M, ROAD_DENSITY, MAJOR_ROAD_RATIO, INTERSECTION_COUNT
+    • High ROAD_DENSITY + high MAJOR_ROAD_RATIO → major traffic source; AQI elevation
+      is likely traffic-generated, not advected or construction-driven.
+    • High INTERSECTION_COUNT → idling vehicles; PM2.5 hotspot at junctions.
+
+  domain='drains'     →  DRAIN_LENGTH_M, WATERWAY_COUNT, OPEN_DRAIN_RATIO, FLOOD_DRAIN_CAPACITY
+    • Low FLOOD_DRAIN_CAPACITY (< 0.3) + high PRECIP_MM → elevated flood risk even
+      without extreme rainfall — drainage is the bottleneck.
+    • High OPEN_DRAIN_RATIO → potential vector for waterborne disease spillover
+      adjacent to waste / water-quality risks.
+
+  domain='crowd'      →  PEOPLE_COUNT, CAMERA_COUNT, CROWD_DENSITY, CROWD_INDEX, GATHERING_ALERT
+    • Source: live CCTV cameras, 15-min cadence.  Only cells with active cameras appear.
+    • GATHERING_ALERT = 1.0 means CROWD_DENSITY ≥ 500 people/km² — an event or gathering
+      is likely.  This cell also has a risk_level="high" assessment you will see in context.
+    • High CROWD_DENSITY combined with any environmental risk (AQI, heat, noise) means
+      real-time public health exposure — recommend immediate field response, not "monitor".
+    • CAMERA_COUNT tells you how many cameras cover the cell; 1 camera is less reliable
+      than 3 — factor this into your confidence score.
+    • Absence of crowd signals means no camera coverage in that cell, not zero crowd.
+
+Use infrastructure signals to CALIBRATE severity, not as primary risk signals.
+When infrastructure signals are absent (domain not yet ingested), note the gap but
+do not let it block your analysis — reason from available evidence.
+
 How to use your tools
 ---------------------
-- Start by reviewing the initial context (signals, assessments, packets).
-- Call get_signal_history() if you need trends or to check recent changes.
+- Start by reviewing the initial context (signals, assessments, packets) — weather signals
+  appear under domain='weather' and are always present.
+- Check WIND_SPEED_KMH and WIND_DIR_DEG whenever assessing air, fire, heat, or construction.
+- Call get_signal_history() ONLY for domains already shown in the initial context with real
+  data — do NOT call it for domains with no signals.
 - Call get_neighbor_context() if you suspect spatial spillover.
 - Call get_city_summary() to contextualise against city-wide patterns.
-- Call get_packets_for_domain() to check prior alert outcomes.
-- End ALWAYS with submit_insight() — one call, one structured finding.
+- Call get_packets_for_domain() only if outcome history is needed.
+- ALWAYS finish with submit_insight() — this is mandatory. Budget: max 10 tool calls total.
+  Reserve the LAST call for submit_insight(). Do not exhaust your budget on data gathering.
+
+Risk assessment vs event reporting — CRITICAL DISTINCTION
+----------------------------------------------------------
+You have sensor-derived signals and statistical proxies. You do NOT have direct
+observation of events on the ground. This distinction must shape every finding.
+
+WRONG: "A major landfill fire is occurring in the northeast quadrant."
+RIGHT: "Conditions are consistent with elevated waste-fire risk: heat (LST=38°C ↑),
+        accumulated solid-waste signal elevated, moderate easterly wind (13 km/h)
+        would spread smoke toward residential areas if ignition occurs."
+
+WRONG: "Construction activity is causing the PM2.5 spike."
+RIGHT: "CRI=0.87 [↑40%] + PM2.5 trending 40% above 7d avg + WIND_SPEED < 5 km/h
+        suggest construction dust is the likely primary contributor to AQI elevation."
+
+The difference matters because:
+- Overstated findings trigger unnecessary field responses and erode officer trust.
+- Confidence must reflect whether you are observing a proxy signal or direct evidence.
+- 'immediate' urgency should be reserved for confirmed high-exposure events or
+  GATHERING_ALERT=1 combined with a live hazard signal — not inferred risk alone.
+
+Use language like: "risk is elevated", "conditions are consistent with",
+"signals suggest", "likely driven by" — not "X is occurring" or "X caused Y"
+unless a decision packet with outcome=verified confirms the event.
 
 Output quality bar
 ------------------
-- Be specific: name signals, their values, and the date range.
-- Calibrate confidence honestly: 0.9+ only with multiple corroborating signals.
-- Recommended actions must be concrete: "Dispatch field inspector to verify dust
-  source at construction site north of cell centroid" not "investigate further".
+- Be specific: name signals, their values, the date range, and trend direction.
+- Use the trend indicators in the initial context (↑/↓/→) to distinguish persistent
+  from transient risks before calling get_signal_history.
+- Confidence calibration:
+    ≥ 0.85 — multiple corroborating signals over 3+ days, consistent trend
+    0.65–0.84 — 2 signals align but trend is short or data is sparse
+    0.40–0.64 — single proxy signal, mechanism is plausible but unverified
+    < 0.40 — speculative; explicitly note what field verification is needed
+- Recommended actions must be structured objects with action, who, and urgency.
+  'action' must be concrete: "Dispatch field inspector to verify dust source at
+  construction site north of cell centroid" — not "investigate further".
+  'who': ward_engineer, zonal_officer, or a specific department name.
+  'urgency': immediate (confirmed live hazard), within_4h, within_24h, or plan.
+- Do not repeat prior recommended actions unless the situation has worsened.
+- uncertainty_notes must state exactly what data or field verification would
+  increase confidence — not generic disclaimers.
 - If nothing notable: say so clearly with confidence > 0.8 and a finding like
   "No cross-domain compound risk detected in this cell over the analysis window."
 """
@@ -228,7 +386,7 @@ class H3ExpertAgent:
         How many days of signal history to include in the initial context.
     """
 
-    MAX_TOOL_CALLS = 8
+    MAX_TOOL_CALLS = 12
 
     def __init__(
         self,
@@ -237,6 +395,7 @@ class H3ExpertAgent:
         *,
         config: LLMConfig | dict | None = None,
         signals_lookback_days: int = 7,
+        web_search_config: WebSearchConfig | None = None,
     ) -> None:
         self.h3_id   = h3_id
         self.city_id = city_id
@@ -250,16 +409,25 @@ class H3ExpertAgent:
             cfg = config
 
         self._client = LLMClient(cfg)
+
+        # Web search — load config once at init; omit tool if disabled
+        self._web_cfg = web_search_config or load_web_search_config()
+        self._tools   = list(AGENT_TOOLS)   # copy so we don't mutate the module-level list
+        if not self._web_cfg.enabled:
+            self._tools = [t for t in self._tools if t["function"]["name"] != "search_web"]
+
         logger.info(
-            "H3ExpertAgent init: %s/%s via %s (%s)",
+            "H3ExpertAgent init: %s/%s via %s (%s) | web_search=%s",
             h3_id, city_id, cfg.provider, cfg.model,
+            self._web_cfg.provider if self._web_cfg.enabled else "disabled",
         )
 
     # ------------------------------------------------------------------
     # Tool implementations
     # ------------------------------------------------------------------
 
-    def _tool_get_signal_history(self, domain: str, signal: str, lookback_days: int = 30) -> dict:
+    def _tool_get_signal_history(self, domain: str, signal: str, lookback_days: int = 30, **_) -> dict:
+        """Fetch signal history. Extra kwargs are silently ignored (model hallucination guard)."""
         from urban_platform.h3_knowledge.reader import get_signals_history
         df = get_signals_history(
             self.h3_id, self.city_id,
@@ -278,15 +446,32 @@ class H3ExpertAgent:
             "rows":   df[["hour_bucket", "value", "source"]].tail(20).to_dict(orient="records"),
         }
 
-    def _tool_get_neighbor_context(self, ring: int = 1) -> dict:
+    def _tool_get_neighbor_context(self, ring: int = 1, **_) -> dict:
         from urban_platform.h3_knowledge.reader import get_neighbors_summary
         return get_neighbors_summary(self.h3_id, self.city_id, ring=ring)
 
-    def _tool_get_city_summary(self, lookback_hours: int = 24) -> dict:
+    def _tool_get_city_summary(self, lookback_hours: int = 24, **_) -> dict:
         from urban_platform.h3_knowledge.reader import get_city_summary
         return get_city_summary(self.city_id, lookback_hours=lookback_hours)
 
-    def _tool_get_packets_for_domain(self, domain: str, limit: int = 5) -> dict:
+    def _tool_search_web(self, query: str, max_results: int = 3, **_) -> dict:
+        """Search the web for recent news. Returns empty if provider not configured."""
+        max_results = min(int(max_results), 5)
+        results = web_search(query, max_results=max_results, config=self._web_cfg)
+        if not results:
+            return {
+                "query":   query,
+                "results": [],
+                "note":    "No results returned. The query may be too specific or the provider rate-limited.",
+            }
+        return {
+            "query":        query,
+            "result_count": len(results),
+            "formatted":    format_results_for_llm(results),
+            "results":      [r.to_dict() for r in results],
+        }
+
+    def _tool_get_packets_for_domain(self, domain: str, limit: int = 5, **_) -> dict:
         from urban_platform.h3_knowledge.store import H3KnowledgeStore
         df = H3KnowledgeStore.get().fetchdf(
             f"""
@@ -311,17 +496,23 @@ class H3ExpertAgent:
     def _dispatch_tool(self, tool_call: ToolCall) -> Any:
         name  = tool_call.name
         args  = tool_call.arguments
-        if name == "get_signal_history":
-            return self._tool_get_signal_history(**args)
-        if name == "get_neighbor_context":
-            return self._tool_get_neighbor_context(**args)
-        if name == "get_city_summary":
-            return self._tool_get_city_summary(**args)
-        if name == "get_packets_for_domain":
-            return self._tool_get_packets_for_domain(**args)
-        if name == "submit_insight":
-            return {"status": "received"}
-        return {"error": f"Unknown tool: {name}"}
+        try:
+            if name == "get_signal_history":
+                return self._tool_get_signal_history(**args)
+            if name == "get_neighbor_context":
+                return self._tool_get_neighbor_context(**args)
+            if name == "get_city_summary":
+                return self._tool_get_city_summary(**args)
+            if name == "get_packets_for_domain":
+                return self._tool_get_packets_for_domain(**args)
+            if name == "search_web":
+                return self._tool_search_web(**args)
+            if name == "submit_insight":
+                return {"status": "received"}
+            return {"error": f"Unknown tool: {name}"}
+        except Exception as exc:
+            logger.warning("Tool %s raised %s — returning error to model", name, exc)
+            return {"error": str(exc)}
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -344,11 +535,42 @@ class H3ExpertAgent:
         tool_call_count = 0
 
         while tool_call_count < self.MAX_TOOL_CALLS:
-            response = self._client.chat_with_tools(
-                messages,
-                AGENT_TOOLS,
-                system=system,
-            )
+            # Warn the agent when it's running low on budget
+            remaining = self.MAX_TOOL_CALLS - tool_call_count
+
+            if remaining == 1 and insight_payload is None:
+                # Final slot: force submit_insight so analysis is never lost
+                messages.append(
+                    user_msg(
+                        "⚠️ FINAL CALL: This is your last tool call. "
+                        "You MUST call submit_insight() now. "
+                        "Summarise everything you have found so far."
+                    )
+                )
+                response = self._client.chat_with_tools(
+                    messages,
+                    self._tools,
+                    system=system,
+                    tool_choice={"type": "function", "function": {"name": "submit_insight"}},
+                )
+            elif remaining <= 3 and insight_payload is None:
+                messages.append(
+                    user_msg(
+                        f"⚠️ BUDGET WARNING: you have only {remaining} tool call(s) left. "
+                        "Stop gathering data. Call submit_insight() with your findings now."
+                    )
+                )
+                response = self._client.chat_with_tools(
+                    messages,
+                    self._tools,
+                    system=system,
+                )
+            else:
+                response = self._client.chat_with_tools(
+                    messages,
+                    self._tools,
+                    system=system,
+                )
 
             logger.debug("Response: %s", response)
 
@@ -388,11 +610,40 @@ class H3ExpertAgent:
             if insight_payload is not None:
                 break
 
-        # Fallback if agent never called submit_insight
+        # Guaranteed fallback: force submit_insight if agent stopped without calling it.
+        # This fires when the model exits the loop early (returned no tool calls before
+        # hitting the budget limit, or hit the budget limit before submitting).
+        if insight_payload is None:
+            logger.info(
+                "Agent exited without submit_insight — forcing final structured call"
+            )
+            messages.append(
+                user_msg(
+                    "You did not call submit_insight. Based on everything you found, "
+                    "call submit_insight() now with your best cross-domain assessment."
+                )
+            )
+            try:
+                forced = self._client.chat_with_tools(
+                    messages,
+                    self._tools,
+                    system=system,
+                    tool_choice={"type": "function", "function": {"name": "submit_insight"}},
+                )
+                if forced.has_tool_calls:
+                    for tc in forced.tool_calls:
+                        if tc.name == "submit_insight":
+                            insight_payload = tc.arguments
+                            tool_call_count += 1
+                            break
+            except Exception as exc:
+                logger.warning("Forced submit_insight call failed: %s", exc)
+
+        # Last-resort text fallback (should rarely fire now)
         if insight_payload is None:
             insight_payload = self._extract_text_insight(messages)
 
-        # Persist
+        # Persist — include all structured fields the agent generated
         insight_id = write_insight(
             h3_id=self.h3_id,
             city_id=self.city_id,
@@ -401,6 +652,8 @@ class H3ExpertAgent:
             finding=insight_payload.get("finding", "Agent completed without structured finding."),
             confidence=float(insight_payload.get("confidence", 0.3)),
             causal_chain=insight_payload.get("causal_chain", []),
+            recommended_actions=insight_payload.get("recommended_actions") or [],
+            uncertainty_notes=insight_payload.get("uncertainty_notes") or [],
         )
 
         return {
@@ -439,12 +692,41 @@ class H3ExpertAgent:
                 by_domain.setdefault(s.get("domain", "?"), []).append(s)
             parts.append(f"### Recent signals ({len(signals)} readings, last {self.signals_lookback_days}d)")
             for domain, rows in sorted(by_domain.items()):
-                latest = rows[0]
-                parts.append(
-                    f"**{domain}**: {latest['signal']}={latest['value']:.3g}"
-                    f" {latest.get('unit','') or ''}"
-                    f" (source={latest.get('source','?')}, {len(rows)} readings)"
-                )
+                if domain == "weather":
+                    # Show all weather signals individually — each one is a distinct measurement
+                    # that the agent needs for causal reasoning (wind speed ≠ wind direction ≠ humidity)
+                    latest_by_signal: dict[str, dict] = {}
+                    for r in rows:
+                        sig = r.get("signal", "?")
+                        if sig not in latest_by_signal:
+                            latest_by_signal[sig] = r   # rows are DESC, so first = latest
+                    sig_parts = [
+                        f"{sig}={r['value']:.3g} {r.get('unit','') or ''}"
+                        for sig, r in sorted(latest_by_signal.items())
+                    ]
+                    parts.append(
+                        f"**weather** (Open-Meteo, {len(rows)} readings): "
+                        + ", ".join(sig_parts)
+                    )
+                else:
+                    latest = rows[0]
+                    # Compute trend vs period mean — lets agent detect persistent vs transient
+                    # without burning a tool call on get_signal_history for every domain.
+                    values = [r["value"] for r in rows if r.get("value") is not None]
+                    trend_str = ""
+                    if len(values) >= 3:
+                        period_mean = sum(values) / len(values)
+                        latest_val  = values[0]   # rows are DESC → index 0 is most recent
+                        if period_mean > 0:
+                            pct = 100 * (latest_val - period_mean) / period_mean
+                            arrow = "↑" if pct > 10 else ("↓" if pct < -10 else "→")
+                            trend_str = f" [{arrow}{abs(pct):.0f}% vs {self.signals_lookback_days}d avg={period_mean:.3g}]"
+                    parts.append(
+                        f"**{domain}**: {latest['signal']}={latest['value']:.3g}"
+                        f" {latest.get('unit','') or ''}"
+                        f"{trend_str}"
+                        f" (source={latest.get('source','?')}, {len(rows)} readings)"
+                    )
             parts.append("")
 
         assessments = ctx.get("assessments", [])
@@ -470,12 +752,18 @@ class H3ExpertAgent:
 
         insights = ctx.get("insights", [])
         if insights:
-            parts.append("### Prior agent insights (context only — do not repeat)")
+            parts.append("### Prior agent insights (context only — do not repeat, do not contradict without new evidence)")
             for i in insights[:3]:
                 parts.append(
-                    f"- [{str(i.get('created_at','?'))[:10]}] {i['finding'][:120]}"
-                    f" (conf={i.get('confidence','?')})"
+                    f"- [{str(i.get('created_at','?'))[:10]}] (conf={i.get('confidence','?')}) "
+                    f"{i['finding']}"
                 )
+                # Surface prior actions so agent knows what was already recommended
+                prior_actions = i.get("recommended_actions") or []
+                if prior_actions:
+                    for a in prior_actions[:2]:
+                        action_text = a.get("action", str(a)) if isinstance(a, dict) else str(a)
+                        parts.append(f"  → previously recommended: {action_text}")
             parts.append("")
 
         parts.append(
@@ -526,20 +814,28 @@ def run_top_risk_cells(
 
     df = H3KnowledgeStore.get().fetchdf(
         f"""
-        SELECT h3_id, count(*) AS high_domain_count
+        SELECT
+            h3_id,
+            count(*) AS domain_count,
+            max(CASE risk_level
+                WHEN 'severe'   THEN 4
+                WHEN 'high'     THEN 3
+                WHEN 'moderate' THEN 2
+                WHEN 'low'      THEN 1
+                ELSE 0 END)     AS max_risk_score
         FROM h3_assessments
         WHERE city_id = ?
-          AND risk_level IN ('high', 'severe')
-          AND day_bucket >= current_date - INTERVAL '3 days'
+          AND risk_level IN ('severe', 'high', 'moderate')
+          AND day_bucket >= date('now', '-7 days')
           {domain_filter}
           AND h3_id NOT IN (
               SELECT h3_id FROM h3_insights
               WHERE city_id = ?
                 AND agent_type = 'h3_expert'
-                AND created_at >= now() - INTERVAL '6 hours'
+                AND created_at >= datetime('now', '-6 hours')
           )
         GROUP BY h3_id
-        ORDER BY high_domain_count DESC
+        ORDER BY max_risk_score DESC, domain_count DESC
         LIMIT {top_n}
         """,
         params + [city_id],

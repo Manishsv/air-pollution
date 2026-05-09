@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.water.water_pipeline import (
     build_water_dashboard,
-    build_water_decision_packets,
 )
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -31,6 +31,7 @@ from review_dashboard.formatters import (
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 from review_dashboard.data_cache import load_water_quality, h3_grid_for_bbox
 
+_DEFAULT_H3_RES = 8
 
 # ── Colour maps ────────────────────────────────────────────────────────────
 
@@ -101,22 +102,20 @@ def _demo_water_cells(city_id: str, h3_ids: tuple) -> dict:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int]:
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+def _city_selector() -> tuple[str, dict, bool, int]:
+    c1, c2, c3 = st.columns([2, 2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="water_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="water_h3_res")
-    with c3:
         live = st.toggle("Live data", value=True, key="water_live_toggle",
                          help="Requires GEE_PROJECT env var for Sentinel-2 access")
-    with c4:
+    with c3:
         lookback = st.selectbox("Lookback (days)", [5, 10, 20, 30], index=1,
                                 key="water_lookback",
                                 help="Sentinel-2 revisit ~5 days; 10d recommended")
     city_id = city_options[city_label]
-    return city_id, get_bbox(city_id), h3_res, live, int(lookback)
+    return city_id, get_bbox(city_id), live, int(lookback)
 
 
 # ── H3 hex layer ───────────────────────────────────────────────────────────
@@ -139,7 +138,7 @@ def _hex_layer(cells: list[dict]) -> pdk.Layer:
         })
     return pdk.Layer(
         "H3HexagonLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[255, 255, 255, 60],
@@ -163,7 +162,7 @@ def _known_water_bodies_layer(bodies: list[dict]) -> pdk.Layer:
         })
     return pdk.Layer(
         "ScatterplotLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_position="[lon, lat]",
         get_fill_color="color",
         get_radius=300,
@@ -380,7 +379,8 @@ def render_water_panel() -> None:
         caption="Sentinel-2 SR water quality indices (MNDWI / NDTI / CI / FAI) aggregated to H3 cells.",
     )
 
-    city_id, bbox, h3_res, live, lookback = _city_selector()
+    city_id, bbox, live, lookback = _city_selector()
+    h3_res = _DEFAULT_H3_RES
     lat_min, lon_min = bbox["lat_min"], bbox["lon_min"]
     lat_max, lon_max = bbox["lat_max"], bbox["lon_max"]
 
@@ -401,17 +401,12 @@ def render_water_panel() -> None:
         else:
             data_source = "live"
 
-        packets_water = build_water_decision_packets(
-            water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-        )
-
         st.session_state[ss_key] = {
             "water_cells": water_cells,
             "data_source": data_source,
             "dashboard": build_water_dashboard(
                 water_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets": packets_water,
         }
         if live and not water_cells:
             st.warning(
@@ -424,7 +419,6 @@ def render_water_panel() -> None:
     water_cells = cached["water_cells"]
     data_source = cached["data_source"]
     dashboard   = cached["dashboard"]
-    packets     = cached["packets"]
 
     summary = dashboard.get("risk_summary", {})
 
@@ -444,7 +438,6 @@ def render_water_panel() -> None:
         ("Max WQI",            f"{summary.get('max_wqi', 0):.3f}"),
         ("Avg WQI",            f"{summary.get('avg_wqi', 0):.3f}"),
         ("Data Source",        f"{'🟢' if data_source == 'live' else '🟡'} {data_source}"),
-        ("H3 Resolution",      h3_res),
     )
 
     # ── Signal availability info ──
@@ -458,8 +451,8 @@ def render_water_panel() -> None:
         """)
 
     # ── Tabs ──
-    t_map, t_bodies, t_signals, t_decisions = st.tabs([
-        "🗺️ Map", "💧 Water Bodies", "📊 Signal Breakdown", "📋 Decision Packets",
+    t_map, t_bodies, t_signals = st.tabs([
+        "🗺️ Map", "💧 Water Bodies", "📊 Signal Breakdown",
     ])
 
     with t_map:
@@ -468,5 +461,3 @@ def render_water_panel() -> None:
         _render_water_bodies_tab(dashboard)
     with t_signals:
         _render_signal_tab(dashboard)
-    with t_decisions:
-        _render_decisions_tab(packets, city_id)

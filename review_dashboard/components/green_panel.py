@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.applications.green.green_pipeline import (
     build_green_dashboard,
-    build_green_decision_packets,
 )
 from review_dashboard.ui_shell import (
     render_context_metrics,
@@ -31,6 +31,7 @@ from review_dashboard.formatters import (
 from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 from review_dashboard.data_cache import load_green_cover, h3_grid_for_bbox
 
+_DEFAULT_H3_RES = 8
 
 # ── Colour maps ────────────────────────────────────────────────────────────
 
@@ -116,26 +117,24 @@ def _demo_green_cells(city_id: str, h3_ids: tuple) -> dict:
 
 # ── Controls ───────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool, int, int]:
-    c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
+def _city_selector() -> tuple[str, dict, bool, int, int]:
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="green_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="green_h3_res")
-    with c3:
         live = st.toggle("Live data", value=True, key="green_live_toggle",
                          help="Requires GEE_PROJECT for Sentinel-2 access")
-    with c4:
+    with c3:
         recent = st.selectbox("Recent window (days)", [15, 30, 60], index=1,
                               key="green_recent_days",
                               help="Sentinel-2 composite window for current state")
-    with c5:
+    with c4:
         baseline = st.selectbox("Baseline (days)", [180, 365, 730], index=1,
                                 key="green_baseline_days",
                                 help="Historical window for change baseline")
     city_id = city_options[city_label]
-    return city_id, get_bbox(city_id), h3_res, live, int(recent), int(baseline)
+    return city_id, get_bbox(city_id), live, int(recent), int(baseline)
 
 
 # ── Map layers ─────────────────────────────────────────────────────────────
@@ -158,7 +157,7 @@ def _hex_layer(cells: list[dict], mode: str = "change") -> pdk.Layer:
         })
     return pdk.Layer(
         "H3HexagonLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[255, 255, 255, 30],
@@ -175,7 +174,7 @@ def _green_spaces_layer(spaces: list[dict]) -> pdk.Layer:
               "color": [0, 180, 80, 220]} for s in spaces]
     return pdk.Layer(
         "ScatterplotLayer",
-        data=rows,
+        data=clean_h3_data(rows),
         get_position="[lon, lat]",
         get_fill_color="color",
         get_radius=300,
@@ -396,7 +395,8 @@ def render_green_panel() -> None:
         ),
     )
 
-    city_id, bbox, h3_res, live, recent_days, baseline_days = _city_selector()
+    city_id, bbox, live, recent_days, baseline_days = _city_selector()
+    h3_res = _DEFAULT_H3_RES
     lat_min, lon_min = bbox["lat_min"], bbox["lon_min"]
     lat_max, lon_max = bbox["lat_max"], bbox["lon_max"]
 
@@ -427,23 +427,17 @@ def render_green_panel() -> None:
             green_cells = _demo_green_cells(city_id, h3_ids)
             data_source = "demo"
 
-        packets_green = build_green_decision_packets(
-            green_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
-        )
-
         st.session_state[ss_key] = {
             "green_cells": green_cells,
             "data_source": data_source,
             "dashboard":   build_green_dashboard(
                 green_cells, h3_res, city_id, lat_min, lon_min, lat_max, lon_max,
             ),
-            "packets":     packets_green,
         }
 
     cached      = st.session_state[ss_key]
     data_source = cached["data_source"]
     dashboard   = cached["dashboard"]
-    packets     = cached["packets"]
 
     summary = dashboard.get("risk_summary", {})
 
@@ -477,8 +471,8 @@ def render_green_panel() -> None:
                         horizontal=True, key="green_map_mode")
     mode = "change" if "Change" in map_mode else "coverage"
 
-    t_map, t_cover, t_signals, t_decisions = st.tabs([
-        "🗺️ Map", "🌳 Green Spaces", "📊 Signal Breakdown", "📋 Decision Packets",
+    t_map, t_cover, t_signals = st.tabs([
+        "🗺️ Map", "🌳 Green Spaces", "📊 Signal Breakdown",
     ])
 
     with t_map:
@@ -487,5 +481,3 @@ def render_green_panel() -> None:
         _render_cover_tab(dashboard)
     with t_signals:
         _render_signal_tab(dashboard)
-    with t_decisions:
-        _render_decisions_tab(packets, city_id)

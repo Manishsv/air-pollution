@@ -165,12 +165,12 @@ def _get_high_risk_cells(city_id: str, limit: int = 30) -> pd.DataFrame:
         return H3KnowledgeStore.get().fetchdf(
             """
             SELECT h3_id,
-                   string_agg(domain || '=' || risk_level, ', ' ORDER BY domain) AS domains_summary,
+                   GROUP_CONCAT(domain || '=' || risk_level) AS domains_summary,
                    count(*) AS high_count
             FROM h3_assessments
             WHERE city_id = ?
               AND risk_level IN ('high', 'severe')
-              AND day_bucket >= current_date - INTERVAL '3 days'
+              AND day_bucket >= date('now', '-3 days')
             GROUP BY h3_id
             ORDER BY high_count DESC
             LIMIT ?

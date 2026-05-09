@@ -15,12 +15,10 @@ from review_dashboard.ui_shell import (
     render_section_title,
     render_technical_json_expander,
 )
+from urban_platform.city_config import CITIES as _CITY_REGISTRY, PANEL_CITIES
 
-_CITIES = {
-    "Bangalore (demo)": "bangalore_demo",
-    "Delhi (demo)":     "delhi_demo",
-    "Mumbai (demo)":    "mumbai_demo",
-}
+# Ward decisions uses the legacy place module which expects a "_demo" suffix.
+_PLACE_ID: dict[str, str] = {k: f"{k}_demo" for k in _CITY_REGISTRY}
 
 _URGENCY_COLOR = {
     "immediate":  "#dc3545",
@@ -47,10 +45,12 @@ _DOMAIN_COLOR = {
 # ── Data loading ───────────────────────────────────────────────────────────────
 
 def _load_decisions(city_id: str) -> tuple[list[dict], object | None]:
+    # Translate canonical city_id → place-module ID (which uses "_demo" suffix).
+    place_id = _PLACE_ID.get(city_id, f"{city_id}_demo")
     try:
         from urban_platform.place import aggregate_city_wards
         from urban_platform.place.ward_decisions import generate_ward_decisions
-        result = aggregate_city_wards(city_id)
+        result = aggregate_city_wards(place_id)
         if result is None or result.wards_df.empty:
             return [], result
         return generate_ward_decisions(result), result
@@ -225,15 +225,46 @@ def _render_escalation_queue(packets: list[dict]) -> None:
     st.caption(f"{len(esc)} decision(s) require escalation beyond ward engineer authority.")
 
 
+# ── Coverage notice ───────────────────────────────────────────────────────────
+
+def _render_coverage_notice(city_id: str) -> None:
+    """Inline notice about cells excluded from analysis due to low DATA_CONFIDENCE.
+
+    Imports defensively — shows nothing if the data_quality module is not
+    available yet (it is being built in parallel).
+    """
+    try:
+        from urban_platform.h3_knowledge.data_quality import get_city_quality_summary
+        summary = get_city_quality_summary(city_id)
+    except Exception:
+        return  # Module not yet available — stay silent
+
+    if summary is None:
+        return
+
+    excluded = summary.get("excluded_cells", 0)
+    if not excluded:
+        return
+
+    st.caption(
+        f"ℹ️  Analysis coverage: decisions shown only for cells with DATA_CONFIDENCE ≥ 0.6. "
+        f"{excluded:,} cell{'s' if excluded != 1 else ''} in this city "
+        f"have insufficient sensor coverage and are excluded from analysis. "
+        f"[Sensor recommendations →]"
+    )
+
+
 # ── Main panel ────────────────────────────────────────────────────────────────
 
 def render_ward_decisions_panel() -> None:
     c1, c2 = st.columns([3, 1])
     with c1:
-        label   = st.selectbox("City", list(_CITIES.keys()), key="wd_city_selector")
+        label   = st.selectbox("City", list(PANEL_CITIES.keys()), key="wd_city_selector")
     with c2:
-        st.button("↻ Refresh", key="wd_refresh", use_container_width=True)
-    city_id = _CITIES[label]
+        if st.button("↻ Refresh", key="wd_refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    city_id = PANEL_CITIES[label]
 
     render_domain_header(
         title="Ward Decision Support",
@@ -262,6 +293,7 @@ def render_ward_decisions_panel() -> None:
         return
 
     _render_summary(packets)
+    _render_coverage_notice(city_id)
 
     # Filters
     fc1, fc2 = st.columns(2)

@@ -6,12 +6,12 @@ from typing import Any
 
 import pandas as pd
 import pydeck as pdk
+from review_dashboard.pydeck_utils import clean_h3_data
 import streamlit as st
 
 from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 from urban_platform.applications.flood.flood_pipeline import (
     build_flood_risk_dashboard,
-    build_flood_decision_packets,
 )
 from urban_platform.connectors.flood import fetch_rainfall_observations
 
@@ -36,20 +36,19 @@ from urban_platform.city_config import CITIES as _CITY_REGISTRY, get_bbox
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
-def _city_selector() -> tuple[str, dict, int, bool]:
-    c1, c2, c3 = st.columns([2, 2, 2])
+_DEFAULT_H3_RES = 8  # fixed at H3 Knowledge Store resolution
+
+def _city_selector() -> tuple[str, dict, bool]:
+    c1, c2 = st.columns([2, 2])
     city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
     with c1:
         city_label = st.selectbox("City", list(city_options.keys()), key="flood_city_selector")
     with c2:
-        h3_res = st.slider("H3 resolution", min_value=7, max_value=10, value=9, key="flood_h3_res",
-                           help="Higher = smaller cells, more detail, slower")
-    with c3:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="flood_live_toggle",
                          help="Uses GEE GPM IMERG if GEE_PROJECT is set, otherwise OpenMeteo")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
-    return city_id, bbox, h3_res, live
+    return city_id, bbox, live
 
 
 # ── Data loading ───────────────────────────────────────────────────────────
@@ -263,7 +262,7 @@ def _render_flood_map(
 
     risk_layer = pdk.Layer(
         "H3HexagonLayer",
-        data=grid_df,
+        data=clean_h3_data(grid_df),
         get_hexagon="h3_id",
         get_fill_color="color",
         get_line_color=[80, 80, 80],
@@ -303,7 +302,7 @@ def _render_flood_map(
 
         rain_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=rain_pts,
+            data=clean_h3_data(rain_pts),
             get_position=["longitude", "latitude"],
             get_radius=400,
             radius_min_pixels=5,
@@ -331,7 +330,7 @@ def _render_flood_map(
                 inc_df[f] = ""
         inc_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=inc_df,
+            data=clean_h3_data(inc_df),
             get_position=["longitude", "latitude"],
             get_radius=600,
             radius_min_pixels=7,
@@ -351,7 +350,7 @@ def _render_flood_map(
                 assets_df[f] = ""
         asset_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=assets_df,
+            data=clean_h3_data(assets_df),
             get_position=["longitude", "latitude"],
             get_radius=300,
             radius_min_pixels=4,
@@ -428,7 +427,8 @@ def _render_flood_map(
 # ── Main panel ─────────────────────────────────────────────────────────────
 
 def render_flood_panel() -> None:
-    city_id, bbox, h3_res, live = _city_selector()
+    city_id, bbox, live = _city_selector()
+    h3_res = _DEFAULT_H3_RES
 
     render_domain_header(
         title="Flood Risk Review",
@@ -467,42 +467,21 @@ def render_flood_panel() -> None:
             city_id=city_id,
             **bbox,
         )
-        packets = build_flood_decision_packets(
-            rainfall_df=rainfall_df,
-            incidents_df=incidents_df,
-            assets_df=assets_df,
-            h3_resolution=h3_res,
-            city_id=city_id,
-            **bbox,
-            top_n=10,
-        )
-        if live:
-            try:
-                from urban_platform.decision_events import emit_flood_decisions
-                emit_flood_decisions(packets, city_id=city_id)
-            except Exception:
-                pass
 
     # Schema validation
     validator_for_schema_file(
         str((SPEC_ROOT / "consumer_contracts" / "flood_risk_dashboard.v1.schema.json").resolve())
     ).validate(dashboard)
-    for p in packets:
-        validator_for_schema_file(
-            str((SPEC_ROOT / "consumer_contracts" / "flood_decision_packet.v1.schema.json").resolve())
-        ).validate(p)
 
     # ── Context metrics ────────────────────────────────────────────────────
     rs = dashboard.get("risk_summary", {})
     cells = dashboard.get("risk_cells", [])
     render_context_metrics(
         ("City", city_id),
-        ("H3 resolution", str(h3_res)),
         ("Total cells", str(len(cells))),
         ("Severe/high cells", str(sum(1 for c in cells if c.get("risk_level") in ("severe", "high")))),
         ("Overall risk", str(rs.get("overall_risk_level", "—"))),
         ("Data quality flag", dashboard.get("data_quality_flag", "—")),
-        ("Packets reviewed", str(len(packets))),
         ("Data source", data_note),
     )
 
@@ -513,8 +492,8 @@ def render_flood_panel() -> None:
 
     st.divider()
 
-    # ── Tabs: Map / Grid table / Decision packets ──────────────────────────
-    t_map, t_browse, t_detail = st.tabs(["🗺️ Map", "📊 Risk grid", "🎯 Decision packets"])
+    # ── Tabs: Map / Grid table ─────────────────────────────────────────────
+    t_map, t_browse = st.tabs(["🗺️ Map", "📊 Risk grid"])
 
     with t_map:
         _render_flood_map(dashboard, rainfall_df, incidents_df, assets_df, bbox=bbox, h3_res=h3_res)
@@ -550,69 +529,7 @@ def render_flood_panel() -> None:
         else:
             st.info("No H3 cells generated.")
 
-    with t_detail:
-        render_section_title("Decision packets (top-10 highest risk)")
-        if not packets:
-            st.info("No decision packets generated.")
-        else:
-            rows = [
-                {
-                    "Packet ID": str(p.get("packet_id") or ""),
-                    "H3 cell": str(p.get("h3_id") or "")[:16] + "…",
-                    "Risk level": str((p.get("risk_assessment") or {}).get("risk_level") or "—"),
-                    "Field verification": "Yes" if p.get("field_verification_required") else "No",
-                    "Rec. allowed": "Yes" if (p.get("confidence") or {}).get("recommendation_allowed") else "No",
-                }
-                for p in packets
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-            render_section_title("Drill-down")
-            ids = [str(p.get("packet_id")) for p in packets if p.get("packet_id")]
-            sel = st.selectbox("Select a packet for details", options=ids, index=0,
-                               key="flood_selected_packet")
-            selected = next((p for p in packets if str(p.get("packet_id")) == sel), None)
-            if selected:
-                ra = selected.get("risk_assessment") or {}
-                conf = selected.get("confidence") or {}
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Risk level", str(ra.get("risk_level", "—")))
-                    st.metric("Primary driver", str(ra.get("primary_driver", "—")))
-                with col2:
-                    st.metric("Confidence score", f"{conf.get('confidence_score', 0):.3f}")
-                    st.metric("Field verification required",
-                              "Yes" if selected.get("field_verification_required") else "No")
-
-                _render_evidence_chain(selected)
-
-                st.markdown("#### Evidence")
-                ev_rows = evidence_inputs_to_rows(selected.get("evidence"))
-                if not ev_rows:
-                    st.caption("No structured evidence rows.")
-                else:
-                    st.dataframe(pd.DataFrame(ev_rows), hide_index=True, use_container_width=True)
-
-                rg = selected.get("review_guidance") or {}
-                st.markdown("#### Review prompts")
-                for q in rg.get("review_prompts") or []:
-                    st.markdown(f"- {q}")
-                st.markdown("#### When not to act")
-                for q in rg.get("when_not_to_act") or []:
-                    st.markdown(f"- {q}")
-
-                st.markdown("#### Safety gates")
-                gdf = pd.DataFrame(safety_gates_to_rows(selected.get("safety_gates")))
-                if gdf.empty:
-                    st.caption("No safety gates listed.")
-                else:
-                    st.dataframe(gdf, hide_index=True, use_container_width=True)
-
-                st.markdown("#### Blocked uses")
-                for bu in selected.get("blocked_uses") or []:
-                    st.markdown(f"- {humanize_snake_sentence(str(bu))}")
-
     render_technical_json_expander(
-        title="Technical: Raw contract payloads",
-        payload={"flood_risk_dashboard": dashboard, "flood_decision_packets": packets},
+        title="Technical: Raw contract payload",
+        payload={"flood_risk_dashboard": dashboard},
     )
