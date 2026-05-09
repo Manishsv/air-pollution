@@ -1,0 +1,53 @@
+app_id: urban_heat_risk_review
+name: Urban Heat Risk Review
+version: v1
+status: draft_demo
+domain_id: urban_heat
+description: >
+  Review-support app for urban heat risk situational awareness and cooling intervention
+  planning. Fuses OpenMeteo temperature observations and OSM-derived green cover to
+  produce per-H3-cell heat risk scores, UHI intensity estimates, and ranked intervention
+  candidates for authorized human review.
+app_type: review_support
+input_contracts:
+  - provider_temperature_observation_feed
+  - provider_green_cover_feed
+output_contracts:
+  - consumer_heat_risk_dashboard
+  - consumer_heat_intervention_candidates
+decision_logic:
+  builder_ids:
+    - heat_risk_dashboard_payload
+    - heat_intervention_candidates
+  description: >
+    Combines temperature observations (IDW-interpolated to H3 grid) with OSM green cover
+    to compute UHI intensity and heat risk scores. Ranks cells by risk for cooling
+    intervention planning. Final decisions remain with authorized reviewers.
+  execution_model: allowlisted_python_builder
+deployment_examples:
+  - deployment_id: heat_local_demo
+    path: deployments/examples/heat_local_demo
+dashboard:
+  panels:
+    - Heat risk grid
+    - Intervention candidates
+    - Green cover deficit
+  supports_file_mode: true
+  supports_api_mode: true
+safety:
+  review_support_only: true
+  human_review_required: true
+  blocked_uses:
+    - automated_displacement_or_demolition
+    - public_heat_advisory_without_authorization
+    - enforcement_or_fines_from_pipeline_outputs
+    - operational_action_on_synthetic_data
+  notes:
+    - Decision support only; no enforcement or public advisory without authorized human review.
+    - Synthetic temperature data must never be used for operational heat emergency response.
+    - UHI estimates from IDW interpolation are indicative, not ground-truth measurements.
+    - Green cover fractions are OSM-derived and may lag real-world conditions.
+provenance:
+  publisher: AirOS repository
+  updated_at: "2026-05-07T00:00:00Z"
+  source: specifications/app_descriptors/urban_heat_risk_review.v1.yaml

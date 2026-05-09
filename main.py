@@ -7,7 +7,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from urban_platform.common.config import load_config
-from urban_platform.applications.air_pollution.pipeline import run_air_pollution_pipeline
 from urban_platform.specifications.audit import run_conformance_audit
 from urban_platform.specifications.engine import list_conformance_result_violations
 
@@ -28,7 +27,8 @@ def main() -> None:
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
     ap.add_argument(
         "--step",
-        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance"],
+        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance",
+                 "ingest-h3", "geocode-h3", "scheduler"],
         default="all",
         help="Stop after a step (sensor-siting reads existing outputs)",
     )
@@ -39,7 +39,60 @@ def main() -> None:
         help="Override config sensor_siting.mode (coverage prioritizes distant/interpolated; equity uses urban proxies)",
     )
     ap.add_argument("--no-recommendations", action="store_true", help="Disable operational recommendations")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="geocode-h3: re-geocode cells that already have an area name")
+    ap.add_argument("--city", default=None,
+                    help="geocode-h3: restrict to a single city id (e.g. bangalore)")
     args = ap.parse_args()
+
+    if args.step == "scheduler":
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        from urban_platform.scheduler import run_forever
+        run_forever()
+        return
+
+    if args.step == "ingest-h3":
+        import logging as _logging
+        _logging.basicConfig(level=_logging.INFO,
+                             format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                             datefmt="%H:%M:%S")
+        from urban_platform.h3_knowledge.ingestor import run as _h3_run, ALL_CITIES, ALL_DOMAINS
+        cities  = getattr(args, "cities",  None) or ALL_CITIES
+        domains = getattr(args, "domains", None) or ALL_DOMAINS
+        force   = getattr(args, "force",   False)
+        results = _h3_run(cities=cities, domains=domains, force=force)
+        total = sum(n for dm in results.values() for n in dm.values() if n > 0)
+        print(f"\nH3 ingest complete — {total} rows written across "
+              f"{len(results)} cities × {len(domains)} domains")
+        return
+
+    if args.step == "geocode-h3":
+        logging.basicConfig(level=logging.INFO,
+                            format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                            datefmt="%H:%M:%S")
+        from urban_platform.h3_knowledge.geocoder import geocode_all_cells, geocode_summary
+        overwrite = getattr(args, "overwrite", False)
+        city_arg  = getattr(args, "city", None)
+        # Print coverage before
+        pre = geocode_summary(city_id=city_arg)
+        if not pre.empty:
+            print("\nCurrent coverage (before geocoding):")
+            print(pre.to_string(index=False))
+        results = geocode_all_cells(city_id=city_arg, overwrite=overwrite)
+        if results:
+            print("\nGeocoding results:")
+            for city, counts in sorted(results.items()):
+                print(f"  {city}: {counts['done']} named, {counts['failed']} failed")
+        # Print coverage after
+        post = geocode_summary(city_id=city_arg)
+        if not post.empty:
+            print("\nCoverage after geocoding:")
+            print(post.to_string(index=False))
+        return
 
     if args.step == "conformance":
         log = logging.getLogger(__name__)
@@ -62,24 +115,11 @@ def main() -> None:
 
     cfg = load_config(Path(__file__).parent / "config.yaml")
     logging.getLogger(__name__).info(
-        "Running air-quality MVP for city=%s mode=%s h3r=%s lookback_days=%s horizon=%sh",
+        "Config loaded for city=%s mode=%s h3r=%s",
         cfg.city_name,
         cfg.spatial_mode,
         cfg.h3_resolution,
-        cfg.lookback_days,
-        cfg.forecast_horizon_hours,
     )
-    outputs = run_air_pollution_pipeline(
-        cfg,
-        step=args.step,
-        refresh_scope=args.force_refresh,
-        no_recommendations=bool(args.no_recommendations),
-        sample_mode_override=True if args.sample else None,
-        sensor_siting_mode=args.sensor_siting_mode,
-    )
-    logging.getLogger(__name__).info("Done. Outputs:")
-    for k, v in outputs.items():
-        logging.getLogger(__name__).info("  %s: %s", k, v)
 
 
 if __name__ == "__main__":

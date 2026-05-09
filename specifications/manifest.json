@@ -46,7 +46,7 @@
       "stability": "stable"
     },
     "source_reliability": {
-      "description": "Per-entity reliability table (variable-agnostic: pm25, speed_mph, water_depth_m, …).",
+      "description": "Per-entity reliability table (variable-agnostic: pm25, speed_mph, water_depth_m, \u2026).",
       "contract_type": "platform_object",
       "schema_path": "json_schema/v1/source_reliability.schema.json",
       "stability": "stable"
@@ -57,7 +57,6 @@
       "schema_path": "json_schema/v1/scale_analysis.schema.json",
       "stability": "stable"
     },
-
     "provider_air_quality_observation_feed": {
       "description": "Raw ingestion contract: AQ observations as emitted by providers.",
       "contract_type": "provider",
@@ -142,7 +141,6 @@
       "schema_path": "provider_contracts/satellite_change_signal_feed.v1.schema.json",
       "stability": "documented"
     },
-
     "platform_observation": {
       "description": "Normalized internal observation object (matches standards.schemas Observation).",
       "contract_type": "platform_object",
@@ -168,7 +166,7 @@
       "stability": "stable"
     },
     "platform_reference_catalog": {
-      "description": "Shared reference catalog (codes, labels, validity): administrative units, programs, reporting periods, etc. Declarative payloads for aligned state–city reporting.",
+      "description": "Shared reference catalog (codes, labels, validity): administrative units, programs, reporting periods, etc. Declarative payloads for aligned state\u2013city reporting.",
       "contract_type": "platform_object",
       "schema_path": "platform_objects/reference_catalog.v1.schema.json",
       "stability": "documented"
@@ -185,7 +183,6 @@
       "schema_path": "platform_objects/provider_adapter_descriptor.v1.schema.json",
       "stability": "documented"
     },
-
     "consumer_urban_decision_packet_core": {
       "description": "Consumer contract: core decision packet shell (copy of current core schema).",
       "contract_type": "consumer",
@@ -246,6 +243,18 @@
       "schema_path": "consumer_contracts/field_verification_task.v1.schema.json",
       "stability": "documented"
     },
+    "consumer_air_quality_dashboard": {
+      "description": "Consumer contract: air quality dashboard payload (situational awareness + review queue, PM2.5-based India AQI).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/air_quality_dashboard.v1.schema.json",
+      "stability": "draft_demo"
+    },
+    "consumer_air_quality_decision_packet": {
+      "description": "Consumer contract: air quality decision packet (domain_id=air_quality, India AQI bands).",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/air_quality_decision_packet.v1.schema.json",
+      "stability": "draft_demo"
+    },
     "consumer_property_building_dashboard": {
       "description": "Consumer contract: built-environment change dashboard (domain_id=property_buildings; open-data MVP path).",
       "contract_type": "consumer",
@@ -277,13 +286,13 @@
       "stability": "documented"
     },
     "network_message_envelope_v1": {
-      "description": "AirOS Network Layer: domain-agnostic envelope for routing contract-shaped payloads between agency nodes (transports attach separately—email/API/queue—not embedded here).",
+      "description": "AirOS Network Layer: domain-agnostic envelope for routing contract-shaped payloads between agency nodes (transports attach separately\u2014email/API/queue\u2014not embedded here).",
       "contract_type": "network_contract",
       "schema_path": "network_contracts/message_envelope.v1.schema.json",
       "stability": "documented"
     },
     "network_delivery_receipt_v1": {
-      "description": "AirOS Network Layer: delivery/acknowledgement receipt for envelope messages—transport and pipeline status without domain interpretation.",
+      "description": "AirOS Network Layer: delivery/acknowledgement receipt for envelope messages\u2014transport and pipeline status without domain interpretation.",
       "contract_type": "network_contract",
       "schema_path": "network_contracts/delivery_receipt.v1.schema.json",
       "stability": "documented"
@@ -312,7 +321,6 @@
       "schema_path": "registry_contracts/program_spec_registry.v1.schema.json",
       "stability": "documented"
     },
-
     "openapi_platform_api": {
       "description": "OpenAPI stub for consumer-facing platform API.",
       "contract_type": "openapi",
@@ -324,6 +332,30 @@
       "contract_type": "openapi",
       "schema_path": "openapi/provider_ingestion_api.v1.yaml",
       "stability": "documented"
+    },
+    "temperature_observation_feed": {
+      "description": "Provider contract: hourly temperature, apparent temperature, and relative humidity observations per city bounding box (OpenMeteo or compatible). Urban heat risk pipeline input.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/temperature_observation_feed.v1.schema.json",
+      "stability": "draft_demo"
+    },
+    "green_cover_feed": {
+      "description": "Provider contract: per-H3-cell green cover fraction and water proximity score derived from OpenStreetMap features. Urban heat risk pipeline input.",
+      "contract_type": "provider",
+      "schema_path": "provider_contracts/green_cover_feed.v1.schema.json",
+      "stability": "draft_demo"
+    },
+    "heat_risk_dashboard": {
+      "description": "Consumer contract: urban heat risk dashboard payload with per-H3 heat risk scores, UHI intensity, green cover deficit, and data quality flags.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/heat_risk_dashboard.v1.schema.json",
+      "stability": "draft_demo"
+    },
+    "heat_intervention_candidates": {
+      "description": "Consumer contract: ranked list of H3 cells as priority urban cooling intervention candidates, with risk score and green deficit.",
+      "contract_type": "consumer",
+      "schema_path": "consumer_contracts/heat_intervention_candidates.v1.schema.json",
+      "stability": "draft_demo"
     }
   },
   "examples": {
@@ -450,6 +482,26 @@
     "example_reference_data_reporting_periods": {
       "schema_name": "platform_reference_catalog",
       "path": "examples/reference_data/reporting_periods.sample.json"
+    },
+    "temperature_observation_feed_heat": {
+      "description": "Sample temperature observation feed for Bangalore demo (OpenMeteo grid points).",
+      "path": "examples/heat/temperature_observation_feed.sample.json",
+      "schema_name": "temperature_observation_feed"
+    },
+    "green_cover_feed_heat": {
+      "description": "Sample green cover feed for Bangalore demo (OSM-derived H3 cells).",
+      "path": "examples/heat/green_cover_feed.sample.json",
+      "schema_name": "green_cover_feed"
+    },
+    "heat_risk_dashboard_heat": {
+      "description": "Sample heat risk dashboard payload for Bangalore demo.",
+      "path": "examples/heat/heat_risk_dashboard.sample.json",
+      "schema_name": "heat_risk_dashboard"
+    },
+    "heat_intervention_candidates_heat": {
+      "description": "Sample heat intervention candidates for Bangalore demo.",
+      "path": "examples/heat/heat_intervention_candidates.sample.json",
+      "schema_name": "heat_intervention_candidates"
     }
   }
 }

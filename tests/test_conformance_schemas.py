@@ -18,7 +18,6 @@ from urban_platform.specifications.conformance import (
     schema_dir,
     validator_for_schema_file,
 )
-from urban_platform.applications.air_pollution.scale_analysis import analyze_h3_resolution
 
 
 def test_manifest_paths_exist():
@@ -100,24 +99,6 @@ def test_minimal_metrics():
         "provenance_summary": build_provenance_summary({}, audit),
     }
     assert_conforms(metrics, schema_name="metrics")
-
-
-def test_scale_analysis_from_analyzer():
-    # Omit ``h3_resolution`` column: ``analyze_h3_resolution`` uses ``getattr(..., "h3_resolution")``;
-    # a per-row Series makes ``int(series or -1)`` ambiguous.
-    grid = gpd.GeoDataFrame(
-        {"h3_id": ["a", "b"], "area_sqkm": [1.0, 1.0]},
-        geometry=[Polygon([(0, 0), (0, 0.1), (0.1, 0.1), (0.1, 0)])] * 2,
-        crs="EPSG:4326",
-    )
-    stations = pd.DataFrame(
-        {
-            "station_id": ["s1", "s2"],
-            "data_source": ["openaq", "openaq"],
-        }
-    )
-    scale = analyze_h3_resolution(grid, stations)
-    assert_conforms(scale, schema_name="scale_analysis")
 
 
 def test_source_reliability_file_shape():

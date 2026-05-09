@@ -1,0 +1,281 @@
+domain_id: urban_heat
+version: v1
+status: draft_demo
+
+purpose: >
+  Provide **urban heat risk observability** and **cooling intervention decision support**
+  over an H3 grid for city heat management. The reference application fuses OpenMeteo
+  weather data (temperature, apparent temperature, humidity) with OSM-derived green cover
+  (parks, forests, grass, water bodies) to estimate Urban Heat Island (UHI) intensity per
+  H3 cell and identify priority cells for cooling interventions. Outputs are **indicative**:
+  temperature observations may be IDW-interpolated across sparse grids, and green cover
+  fractions are OSM-derived proxies. **Human review** is required before any operational,
+  enforcement, or public-facing action.
+
+target_actors:
+  - city_heat_resilience_planner
+  - urban_greening_program_manager
+  - ward_health_officer
+  - parks_and_recreation_analyst
+  - emergency_management_heat_coordinator
+
+supported_decisions:
+  - decision_id: prioritize_cells_for_cooling_intervention
+    description: >
+      Rank H3 cells by heat risk score and green deficit to prioritize tree planting,
+      shade structure, or cool pavement investments.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: plan_heat_monitoring_sensor_placement
+    description: >
+      Identify cells with highest UHI intensity and lowest green cover for supplemental
+      temperature sensor siting.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: issue_internal_heat_operational_brief
+    description: >
+      Summarize heat risk conditions for internal coordination (green maintenance scheduling,
+      water distribution planning) when quality gates pass; subject to human review before
+      external messaging.
+    decision_scope: city
+    operational_risk: medium
+  - decision_id: authorize_public_heat_advisory
+    description: >
+      Any public advisory, health warning, or enforcement action requires authorized human
+      review outside AirOS and must not rely on synthetic or low-confidence data.
+    decision_scope: city
+    operational_risk: high
+
+canonical_entities:
+  - entity_type: h3_cell
+    description: H3 hexagonal analysis unit for gridded heat risk estimates and intervention ranking.
+    examples: [8928308280fffff]
+  - entity_type: city_boundary
+    description: Bounding box or place boundary used for OpenMeteo fetch and OSM query extent.
+    examples: [bbox:bangalore_central]
+  - entity_type: temperature_station
+    description: >
+      Virtual grid point from OpenMeteo representing temperature/humidity at a specific lat/lon
+      within the city bounding box.
+    examples: [openmeteo_12.97_77.59]
+  - entity_type: osm_green_feature
+    description: OSM polygon or point tagged as park, forest, grass, tree, water, or wetland.
+    examples: [osm_way_123456789]
+
+observations:
+  - observed_property: temperature
+    description: Dry-bulb temperature at 2m height in degrees Celsius.
+    typical_sources: [openmeteo, synthetic_demo]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: apparent_temperature
+    description: Feels-like temperature accounting for humidity and wind chill.
+    typical_sources: [openmeteo]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: relative_humidity
+    description: Relative humidity percentage at 2m height.
+    typical_sources: [openmeteo]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: green_cover
+    description: Fraction of H3 cell area covered by OSM-tagged green features.
+    typical_sources: [osm_via_osmnx]
+    required_provenance_fields: [source_id, source_type]
+
+features:
+  - feature_id: idw_interpolated_heat_index
+    description: Per-cell temperature estimated via IDW from nearby OpenMeteo grid points.
+    inputs: [temperature_c, station_coordinates, h3_cell]
+  - feature_id: uhi_intensity
+    description: Cell heat index minus city-wide median temperature (Urban Heat Island signal).
+    inputs: [idw_interpolated_heat_index, city_median_temperature_c]
+  - feature_id: green_cover_deficit
+    description: >
+      1.0 minus green_cover_fraction — higher values indicate cells most in need of greening.
+    inputs: [green_cover_fraction]
+  - feature_id: heat_risk_score
+    description: >
+      Composite score (0–1) combining UHI intensity (normalized) and green cover deficit.
+      Higher scores indicate higher heat stress and lower cooling capacity.
+    inputs: [uhi_intensity, green_cover_deficit]
+
+allowed_variables:
+  - variable: temperature_c
+    description: Dry-bulb temperature in degrees Celsius.
+    type: number
+    unit: celsius
+    value_range: -50..70
+  - variable: apparent_temperature_c
+    description: Apparent (feels-like) temperature in degrees Celsius.
+    type: number
+    unit: celsius
+    value_range: -50..80
+  - variable: relative_humidity_pct
+    description: Relative humidity percentage.
+    type: number
+    unit: percent
+    value_range: 0..100
+  - variable: heat_index_c
+    description: Cell-level heat index derived via IDW interpolation.
+    type: number
+    unit: celsius
+    value_range: -50..70
+  - variable: uhi_intensity
+    description: Urban Heat Island intensity (cell heat index minus city median).
+    type: number
+    unit: celsius
+    value_range: -20..20
+  - variable: green_cover_fraction
+    description: Fraction of cell area covered by OSM green features (0–1).
+    type: number
+    unit: none
+    value_range: 0..1
+  - variable: water_proximity_score
+    description: Cooling score based on proximity to water bodies (0–1).
+    type: number
+    unit: none
+    value_range: 0..1
+  - variable: heat_risk_score
+    description: Composite heat risk score per H3 cell (0–1).
+    type: number
+    unit: none
+    value_range: 0..1
+  - variable: green_deficit
+    description: 1.0 minus green_cover_fraction; intervention priority proxy.
+    type: number
+    unit: none
+    value_range: 0..1
+  - variable: heat_data_source_type
+    description: Provenance class for temperature inputs.
+    type: enum
+    unit: none
+    allowed_values: [real, synthetic, unavailable]
+
+units:
+  - unit: celsius
+    symbol: "°C"
+    description: Degrees Celsius for temperature measurements.
+  - unit: percent
+    symbol: "%"
+    description: Percentage for relative humidity.
+  - unit: none
+    symbol: ""
+    description: Unitless scores, fractions, or counts.
+
+thresholds_or_categories:
+  - id: heat_risk_levels
+    variable: heat_risk_score
+    type: categories
+    definition: >
+      Heat risk score bands for H3 cells based on combined UHI intensity and green cover deficit.
+      These are indicative thresholds for review triage, not certified heat-stress levels.
+    levels:
+      - level: low
+        criteria: "heat_risk_score in [0.0, 0.33)"
+        severity: low
+      - level: moderate
+        criteria: "heat_risk_score in [0.33, 0.66)"
+        severity: medium
+      - level: high
+        criteria: "heat_risk_score in [0.66, 1.0]"
+        severity: high
+
+source_reliability_requirements:
+  required_fields: [source_reliability_score, source_reliability_status]
+  minimum_reliability_for_operational_use:
+    score_gte: 0.8
+    allowed_statuses: [healthy]
+  notes: >
+    OpenMeteo is treated as reliable for demo/draft purposes; production deployments
+    should add source reliability scoring for the temperature data feed.
+
+decision_packet_profile:
+  profile_id: heat_risk_urban_decision_packet
+  based_on: urban_decision_packet_core
+  required_sections:
+    - situation_summary
+    - evidence
+    - provenance
+    - confidence_and_uncertainty
+    - recommended_next_actions
+    - do_not_act_conditions
+    - review_prompts
+  notes: >
+    Heat risk packets use the generic urban_decision_packet_core shell. A strict
+    JSON Schema profile will be added when the use case moves beyond draft_demo status.
+
+dashboard_consumer_requirements:
+  required_payload_sections:
+    - summary
+    - heat_cells
+    - provenance_summary
+    - data_quality_flag
+  required_warnings:
+    - show_synthetic_data_banner_if_present
+    - show_idw_interpolation_caveat_when_applicable
+    - show_draft_demo_disclaimer_always
+
+human_review_prompts:
+  - prompt: Is temperature data for this area **real** (OpenMeteo API) or **synthetic** (demo fallback)?
+    applies_when: any heat risk score or intervention candidate is shown
+    required_response: yes/no/free_text
+  - prompt: Are heat risk scores understood as **indicative estimates** (IDW-interpolated, OSM-proxied), not ground-truth measurements?
+    applies_when: heat risk grid is shown
+    required_response: yes
+  - prompt: Has an authorized officer approved any **public advisory** or **operational heat response**?
+    applies_when: decision may affect public behavior or emergency response
+    required_response: yes/no
+
+field_verification_requirements:
+  required_before_operational_action:
+    - confirm_on_site_temperature_measurement_from_calibrated_sensor
+    - verify_green_cover_status_in_field_if_OSM_data_is_stale
+    - record_work_order_or_intervention_request_when_escalating
+  evidence_to_capture: [field_temperature_reading, site_visit_note, photo, ticket_id]
+
+safety_gates:
+  - gate_id: block_operational_response_if_synthetic_temperature
+    description: >
+      When temperature data is synthetic, block operational heat emergency response outputs;
+      show visible synthetic data warning on all consumer surfaces.
+    when_to_block: operational_heat_emergency_response
+    required_evidence: [heat_data_source_type != synthetic]
+    override_policy: human_approval_only
+  - gate_id: no_enforcement_from_pipeline_outputs
+    description: >
+      Heat risk scores and intervention candidates must not trigger automated enforcement,
+      displacement, or demolition actions.
+    when_to_block: automated_enforcement_or_displacement
+    required_evidence: [authorized_human_review_completed]
+    override_policy: none
+  - gate_id: public_advisory_requires_authorized_human_review
+    description: >
+      Public heat advisories, warnings, or health orders are outside automated AirOS scope;
+      outputs support internal review only until authorized humans approve.
+    when_to_block: automated_public_advisory_without_authorization
+    required_evidence: [authorized human sign-off per municipal process]
+    override_policy: human_approval_only
+  - gate_id: idw_interpolation_caveats_required
+    description: >
+      When heat index values are IDW-interpolated (no in-cell temperature station), consumer
+      surfaces must display interpolation caveat; do not present as direct measurements.
+    when_to_block: presenting_interpolated_values_as_measurements
+    required_evidence: [heat_index_c is from in-cell observation, not interpolated]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields: [source_id, source_type, collected_at]
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing, offline_development]
+    must_be_flagged: true
+    operational_use: prohibited
+
+blocked_uses:
+  - automated_heat_emergency_response_without_human_review
+  - enforcement_or_fines_from_heat_risk_scores
+  - public_health_advisory_on_synthetic_or_low_confidence_data
+  - presenting_idw_interpolated_values_as_direct_measurements
+  - displacement_or_demolition_from_pipeline_outputs
+
+open_questions:
+  - Should water_proximity_score use a configurable radius (currently 500m hardcoded)?
+  - Which operational temperature feed replaces OpenMeteo for production deployments?
+  - What city-specific minimum station density is required before claiming high-confidence heat mapping?

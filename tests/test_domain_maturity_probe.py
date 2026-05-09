@@ -25,7 +25,7 @@ def test_flood_risk_checklist_loads() -> None:
     paths = required_paths_from_checklist(data)
     assert len(paths) == 24
     assert paths[0] == "specifications/domain_specs/flood_risk.v1.yaml"
-    assert paths[-1] == "tests/test_flood_dashboard_panel_demo.py"
+    assert paths[-1] == "tests/test_flood_pipeline.py"
 
 
 def test_property_buildings_checklist_loads() -> None:

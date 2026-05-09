@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/green_cover_feed",
+  "title": "Provider contract: green cover feed (v1)",
+  "description": "Per-H3-cell green cover fraction and water proximity score derived from OpenStreetMap features (parks, forests, grass, trees, water bodies). Used as cooling proxy input to the urban heat risk pipeline.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "city_id", "h3_resolution", "records", "license", "source_metadata"],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "city_id": { "type": "string", "minLength": 1 },
+    "h3_resolution": { "type": "integer", "minimum": 0, "maximum": 15 },
+    "license": { "type": "string" },
+    "source_metadata": { "type": "object", "additionalProperties": true },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["h3_id", "green_cover_fraction", "water_proximity_score"],
+        "properties": {
+          "h3_id": { "type": "string", "minLength": 1 },
+          "green_cover_fraction": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "water_proximity_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "osm_feature_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}
