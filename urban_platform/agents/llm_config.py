@@ -6,9 +6,11 @@ anywhere else.  Switch providers by changing .env variables, no code changes.
 Environment variables
 ---------------------
 LLM_PROVIDER     — Provider preset name (default: ollama)
-                   One of: ollama | openai | groq | together | openrouter | custom
+                   One of: ollama | anthropic | openai | groq | together | openrouter | custom
 LLM_BASE_URL     — Override the provider's default base URL
 LLM_API_KEY      — API key (use 'ollama' for local Ollama, not needed)
+                   For Anthropic: set to your ANTHROPIC_API_KEY (sk-ant-...)
+                   Fallback: ANTHROPIC_API_KEY env var is also checked automatically.
 LLM_MODEL        — Model name (overrides provider default)
 LLM_MAX_TOKENS   — Max tokens for agent responses (default: 4096)
 LLM_TEMPERATURE  — Sampling temperature (default: 0.1 — deterministic for analysis)
@@ -16,6 +18,11 @@ LLM_TIMEOUT      — HTTP timeout in seconds (default: 120)
 
 Supported providers and their defaults
 ---------------------------------------
+anthropic   Uses the native Anthropic Messages API (not OpenAI-compat).
+            default model: claude-3-5-haiku-latest  (fast + cheap, great tool-calling)
+            other models:  claude-opus-4, claude-sonnet-4-5, claude-3-5-sonnet-latest
+            API key:       set LLM_API_KEY or ANTHROPIC_API_KEY
+
 ollama      base_url=http://localhost:11434/v1   model=gpt-oss:20b-cloud
             Local inference, no API key needed.
             Tool-calling models: gpt-oss:20b-cloud, gpt-oss:120b-cloud, llama3.1, qwen2.5, mistral-nemo
@@ -32,6 +39,7 @@ together    base_url=https://api.together.xyz/v1   model=meta-llama/Llama-3.3-70
 
 openrouter  base_url=https://openrouter.ai/api/v1   model=google/gemini-flash-1.5
             Access any model via one key. Set LLM_API_KEY=sk-or-...
+            Also supports Claude: LLM_MODEL=anthropic/claude-3-5-sonnet
 
 lmstudio    base_url=http://localhost:1234/v1   model=<loaded-in-ui>
             Local LM Studio server.
@@ -49,6 +57,13 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 PROVIDER_PRESETS: dict[str, dict] = {
+    "anthropic": {
+        "base_url":      "https://api.anthropic.com",   # not /v1 — SDK appends path
+        "api_key_env":   "ANTHROPIC_API_KEY",           # also accepted via LLM_API_KEY
+        "default_model": "claude-haiku-4-5",
+        "label":         "Anthropic (Claude)",
+        "notes":         "Native Anthropic Messages API. Models: claude-haiku-4-5, claude-sonnet-4-5, claude-opus-4-5",
+    },
     "ollama": {
         "base_url":      "http://localhost:11434/v1",
         "api_key":       "ollama",           # Ollama ignores the key
@@ -152,10 +167,12 @@ def load_config(overrides: Optional[dict] = None) -> LLMConfig:
         or preset["base_url"]
     )
 
-    # API key: override → env → preset default
+    # API key: override → LLM_API_KEY → provider-specific env var → preset default
+    # For Anthropic, also check ANTHROPIC_API_KEY (standard SDK convention).
     api_key = (
         ov.get("api_key")
         or os.environ.get("LLM_API_KEY", "")
+        or os.environ.get(preset.get("api_key_env", ""), "")
         or preset.get("api_key", "")
     )
 

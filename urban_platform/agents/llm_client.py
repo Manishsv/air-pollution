@@ -1,12 +1,13 @@
 """Provider-agnostic LLM client for AirOS agents.
 
-Uses the OpenAI Python SDK as the transport layer — every major provider
-(Ollama, Groq, Together, OpenRouter, LM Studio, vLLM, …) exposes an
-OpenAI-compatible /v1/chat/completions endpoint.
+Uses the OpenAI Python SDK as the transport layer for all OpenAI-compatible
+providers (Ollama, Groq, Together, OpenRouter, LM Studio, vLLM, …).
 
-Tool-calling uses the standard OpenAI function-calling format, which is
-supported by all major providers and local models (llama3.1+, qwen2.5,
-mistral-nemo, etc.).
+For Anthropic (Claude), uses the native ``anthropic`` SDK with automatic
+format translation so the rest of the agent code is unaffected.
+
+Tool-calling throughout uses the OpenAI function-calling format; the Anthropic
+backend translates to/from Anthropic's Messages API format transparently.
 
 Usage
 -----
@@ -116,6 +117,145 @@ def tool_result_msg(tool_call_id: str, result: Any) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Anthropic format translators
+# ---------------------------------------------------------------------------
+
+def _oai_tools_to_anthropic(tools: list[dict]) -> list[dict]:
+    """Convert OpenAI tool defs → Anthropic tool defs.
+
+    OpenAI:     {"type": "function", "function": {"name": N, "description": D, "parameters": P}}
+    Anthropic:  {"name": N, "description": D, "input_schema": P}
+    """
+    result = []
+    for t in tools:
+        fn = t.get("function", t)   # handle both wrapped and unwrapped
+        result.append({
+            "name":         fn["name"],
+            "description":  fn.get("description", ""),
+            "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
+        })
+    return result
+
+
+def _oai_tool_choice_to_anthropic(tool_choice) -> dict | None:
+    """Convert OpenAI tool_choice → Anthropic tool_choice.
+
+    OpenAI  "auto"                                    → Anthropic {"type": "auto"}
+    OpenAI  "required" / "any"                        → Anthropic {"type": "any"}
+    OpenAI  {"type":"function","function":{"name":N}} → Anthropic {"type":"tool","name":N}
+    """
+    if tool_choice is None or tool_choice == "auto":
+        return {"type": "auto"}
+    if tool_choice in ("required", "any"):
+        return {"type": "any"}
+    if isinstance(tool_choice, dict):
+        fn_name = (tool_choice.get("function") or {}).get("name")
+        if fn_name:
+            return {"type": "tool", "name": fn_name}
+    return {"type": "auto"}
+
+
+def _oai_messages_to_anthropic(messages: list[dict]) -> tuple[str, list[dict]]:
+    """Split system prompt out and convert message history to Anthropic format.
+
+    Returns (system_text, anthropic_messages).
+
+    Translations:
+      - system messages   → extracted as ``system_text`` (Anthropic takes it separately)
+      - tool messages     → grouped into user messages with tool_result content blocks
+      - assistant messages with tool_calls → assistant messages with tool_use content blocks
+    """
+    system_parts: list[str] = []
+    out: list[dict] = []
+
+    for msg in messages:
+        role = msg.get("role")
+
+        if role == "system":
+            system_parts.append(msg.get("content", ""))
+            continue
+
+        if role == "tool":
+            # OpenAI tool result: {"role":"tool","tool_call_id":id,"content":result}
+            # Anthropic expects: {"role":"user","content":[{"type":"tool_result",...}]}
+            # Consecutive tool results should be merged into ONE user message.
+            block = {
+                "type":        "tool_result",
+                "tool_use_id": msg["tool_call_id"],
+                "content":     msg.get("content", ""),
+            }
+            # Merge with previous user message if it already holds tool_results
+            if out and out[-1]["role"] == "user" and isinstance(out[-1]["content"], list):
+                out[-1]["content"].append(block)
+            else:
+                out.append({"role": "user", "content": [block]})
+            continue
+
+        if role == "assistant":
+            content_blocks: list[dict] = []
+            text = msg.get("content")
+            if text:
+                content_blocks.append({"type": "text", "text": text})
+            for tc in msg.get("tool_calls") or []:
+                fn = tc.get("function", {})
+                args = fn.get("arguments", "{}")
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {"_raw": args}
+                content_blocks.append({
+                    "type":  "tool_use",
+                    "id":    tc["id"],
+                    "name":  fn.get("name", ""),
+                    "input": args,
+                })
+            out.append({"role": "assistant", "content": content_blocks or (text or "")})
+            continue
+
+        # user message — pass through (content may be str or list)
+        out.append({"role": role, "content": msg.get("content", "")})
+
+    return "\n\n".join(system_parts), out
+
+
+def _anthropic_response_to_llmresponse(msg) -> "LLMResponse":
+    """Parse an ``anthropic.types.Message`` → ``LLMResponse``."""
+    tool_calls: list[ToolCall] = []
+    text_parts: list[str] = []
+
+    for block in msg.content:
+        if block.type == "text":
+            text_parts.append(block.text)
+        elif block.type == "tool_use":
+            tool_calls.append(ToolCall(
+                id=block.id,
+                name=block.name,
+                arguments=block.input if isinstance(block.input, dict) else {},
+            ))
+
+    # stop_reason mapping
+    stop_map = {"end_turn": "stop", "tool_use": "tool_calls", "max_tokens": "length"}
+    stop_reason = stop_map.get(msg.stop_reason or "end_turn", msg.stop_reason or "stop")
+
+    usage = {}
+    if msg.usage:
+        usage = {
+            "prompt_tokens":     msg.usage.input_tokens,
+            "completion_tokens": msg.usage.output_tokens,
+            "total_tokens":      msg.usage.input_tokens + msg.usage.output_tokens,
+        }
+
+    return LLMResponse(
+        content="\n".join(text_parts) or None,
+        tool_calls=tool_calls,
+        stop_reason=stop_reason,
+        model=msg.model,
+        usage=usage,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main client
 # ---------------------------------------------------------------------------
 
@@ -131,9 +271,15 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig | None = None) -> None:
         self._cfg = config or load_config()
-        self._openai = self._build_client()
+        self._is_anthropic = (self._cfg.provider == "anthropic")
+        if self._is_anthropic:
+            self._anthropic = self._build_anthropic_client()
+            self._openai = None
+        else:
+            self._openai = self._build_openai_client()
+            self._anthropic = None
 
-    def _build_client(self):
+    def _build_openai_client(self):
         try:
             from openai import OpenAI
         except ImportError:
@@ -145,6 +291,23 @@ class LLMClient:
             api_key=self._cfg.api_key,
             timeout=self._cfg.timeout,
         )
+
+    def _build_anthropic_client(self):
+        try:
+            import anthropic as _anthropic_sdk
+        except ImportError:
+            raise ImportError(
+                "anthropic package is not installed. Run: pip install anthropic"
+            )
+        return _anthropic_sdk.Anthropic(
+            api_key=self._cfg.api_key,
+            timeout=self._cfg.timeout,
+        )
+
+    # keep old attribute name for any direct _openai references in tests
+    @property
+    def _openai_client(self):
+        return self._openai
 
     @property
     def config(self) -> LLMConfig:
@@ -164,6 +327,9 @@ class LLMClient:
         temperature: float | None = None,
     ) -> LLMResponse:
         """Single-turn chat without tool calling."""
+        if self._is_anthropic:
+            return self._anthropic_chat(messages, system=system, model=model,
+                                        max_tokens=max_tokens, temperature=temperature)
         full_messages = self._prepend_system(messages, system)
         raw = self._openai.chat.completions.create(
             model=model or self._cfg.model,
@@ -189,6 +355,12 @@ class LLMClient:
         tools must be in OpenAI format:
             [{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
         """
+        if self._is_anthropic:
+            return self._anthropic_chat_with_tools(
+                messages, tools, system=system, model=model,
+                max_tokens=max_tokens, temperature=temperature,
+                tool_choice=tool_choice,
+            )
         full_messages = self._prepend_system(messages, system)
         raw = self._openai.chat.completions.create(
             model=model or self._cfg.model,
@@ -199,6 +371,60 @@ class LLMClient:
             temperature=temperature if temperature is not None else self._cfg.temperature,
         )
         return self._parse_response(raw)
+
+    # ------------------------------------------------------------------
+    # Anthropic-specific call paths
+    # ------------------------------------------------------------------
+
+    def _anthropic_chat(
+        self,
+        messages: list[dict],
+        *,
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> LLMResponse:
+        sys_from_msgs, ant_messages = _oai_messages_to_anthropic(messages)
+        system_text = system or sys_from_msgs or ""
+        kwargs: dict = dict(
+            model=model or self._cfg.model,
+            messages=ant_messages,
+            max_tokens=max_tokens or self._cfg.max_tokens,
+            temperature=temperature if temperature is not None else self._cfg.temperature,
+        )
+        if system_text:
+            kwargs["system"] = system_text
+        raw = self._anthropic.messages.create(**kwargs)
+        return _anthropic_response_to_llmresponse(raw)
+
+    def _anthropic_chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tool_choice: str | dict = "auto",
+    ) -> LLMResponse:
+        sys_from_msgs, ant_messages = _oai_messages_to_anthropic(messages)
+        system_text = system or sys_from_msgs or ""
+        ant_tools = _oai_tools_to_anthropic(tools)
+        ant_tool_choice = _oai_tool_choice_to_anthropic(tool_choice)
+        kwargs: dict = dict(
+            model=model or self._cfg.model,
+            messages=ant_messages,
+            tools=ant_tools,
+            tool_choice=ant_tool_choice,
+            max_tokens=max_tokens or self._cfg.max_tokens,
+            temperature=temperature if temperature is not None else self._cfg.temperature,
+        )
+        if system_text:
+            kwargs["system"] = system_text
+        raw = self._anthropic.messages.create(**kwargs)
+        return _anthropic_response_to_llmresponse(raw)
 
     # ------------------------------------------------------------------
     # Connection test
