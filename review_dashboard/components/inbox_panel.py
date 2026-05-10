@@ -291,120 +291,24 @@ If asked for a document, produce one. Acknowledge uncertainty honestly."""
 # ---------------------------------------------------------------------------
 
 def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
-    risk       = row.get("risk_level", "unknown")
-    conf       = float(row.get("confidence") or 0)
-    tier       = row.get("priority_tier") or ("high" if conf >= 0.75 else "medium" if conf >= 0.45 else "low")
-    domains    = _parse_domains(row.get("domains_involved"))
-    finding    = str(row.get("finding") or "")
-    chain      = _parse_chain(row.get("hypothesis_chain_json") or row.get("causal_chain_json"))
-    actions    = row.get("recommended_actions") or []
-    notes      = row.get("uncertainty_notes") or []
+    from review_dashboard.components.evidence_panel import render_evidence_panel
+
     insight_id = str(row.get("insight_id", ""))
     h3_id      = str(row.get("h3_id", ""))
     city       = str(row.get("city_id", ""))
     outcome    = row.get("outcome_status", "open")
-    _an        = row.get("area_name")
-    area_name  = "" if (not _an or not pd.notna(_an)) else str(_an).strip()
-    land_use   = str(row.get("land_use_class") or "").strip()
-    loc_label  = area_name or land_use or h3_id[:10]
-    dot        = _RISK_DOT.get(risk, "⚪")
-    col        = _RISK_CSS.get(risk, "#6b7280")
-    _TIER_COLOR = {"high": "#b42318", "medium": "#92670a", "low": "#6b7280"}
-
-    # ── One-line header ───────────────────────────────────────────────────
-    domain_chips = "  ".join(
-        f'<span style="font-size:11px;padding:1px 7px;border-radius:10px;'
-        f'background:{col}18;color:{col};border:1px solid {col}33;">{d}</span>'
-        for d in domains
-    )
-    _OUTCOME_BADGE = {
-        "open":          '<span style="background:#e5e7eb;color:#374151;padding:2px 8px;border-radius:10px;font-size:11px;">open</span>',
-        "confirmed":     '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:11px;">✓ confirmed</span>',
-        "refuted":       '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;">✗ refuted</span>',
-        "unverifiable":  '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">? unverifiable</span>',
-    }
-    tier_col = _TIER_COLOR.get(tier, "#6b7280")
-    outcome_badge = _OUTCOME_BADGE.get(outcome, _OUTCOME_BADGE["open"])
-
-    st.markdown(f"""
-<div style="margin-bottom:12px;">
-  <div style="font-size:15px;font-weight:600;line-height:1.4;margin-bottom:6px;">{finding}</div>
-  <div style="font-size:12px;color:rgba(0,0,0,0.5);display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-    <span>{dot} <b style="color:{col};">{risk.upper()}</b></span>
-    <span>·</span>
-    <span style="background:{tier_col}18;color:{tier_col};padding:1px 7px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid {tier_col}33;">{tier.upper()} PRIORITY</span>
-    <span>·</span>
-    {outcome_badge}
-    <span>·</span>
-    <span>📍 {loc_label} · {city.title()}</span>
-    <span>·</span>
-    <span style="font-family:monospace;font-size:11px;">{h3_id}</span>
-  </div>
-  <div style="margin-top:6px;">{domain_chips}</div>
-</div>
-""", unsafe_allow_html=True)
+    scope      = f"{llm_key_prefix}_{insight_id[:12]}"
 
     # ── Tabs ──────────────────────────────────────────────────────────────
-    t_ev, t_act, t_close, t_ask = st.tabs(["Evidence", "Actions", "Close", "Ask agent"])
+    # Evidence tab is first and contains all 9 spec-required sections.
+    # Close tab is gated on blocked-uses acknowledgement from Evidence tab.
+    t_ev, t_close, t_ask = st.tabs(["📋 Evidence (9 sections)", "✅ Close", "💬 Ask agent"])
 
     with t_ev:
-        _render_causal_chain(chain)
-        if notes:
-            st.markdown(
-                '<div style="margin-top:12px;font-size:12px;font-weight:600;'
-                'color:rgba(0,0,0,0.4);text-transform:uppercase;letter-spacing:.06em;">'
-                'Uncertainty</div>',
-                unsafe_allow_html=True,
-            )
-            for n in notes:
-                text = n.get("note", n) if isinstance(n, dict) else n
-                st.markdown(
-                    f'<div style="font-size:12px;color:rgba(0,0,0,0.6);'
-                    f'padding-left:12px;border-left:2px solid rgba(0,0,0,0.12);'
-                    f'margin:4px 0;">{text}</div>',
-                    unsafe_allow_html=True,
-                )
-        lat, lon = row.get("centroid_lat"), row.get("centroid_lon")
-        if lat and lon:
-            coord_str = f"{float(lat):.4f}°N, {float(lon):.4f}°E"
-            prefix    = f"{area_name} · " if area_name else ""
-            st.caption(f"📍 {prefix}{coord_str}")
-
-    with t_act:
-        if not actions:
-            st.caption("No recommended actions recorded.")
-        else:
-            _URGENCY_COLOR = {
-                "immediate":  "#dc3545",
-                "within_4h":  "#fd7e14",
-                "within_24h": "#ffc107",
-                "plan":       "#6c757d",
-            }
-            for i, a in enumerate(actions):
-                if isinstance(a, dict):
-                    label   = a.get("action", str(a))
-                    details = a.get("details", "")
-                    who     = a.get("who", "")
-                    urgency = a.get("urgency", "")
-                else:
-                    label, details, who, urgency = str(a), "", "", ""
-
-                col_chk, col_badge = st.columns([6, 1])
-                with col_chk:
-                    st.checkbox(label, key=f"act_{llm_key_prefix}_{h3_id}_{i}")
-                with col_badge:
-                    if urgency:
-                        color = _URGENCY_COLOR.get(urgency, "#6c757d")
-                        st.markdown(
-                            f'<span style="background:{color};color:white;padding:2px 6px;'
-                            f'border-radius:3px;font-size:10px;font-weight:600">'
-                            f'{urgency.replace("_"," ")}</span>',
-                            unsafe_allow_html=True,
-                        )
-                if who:
-                    st.caption(f"   👤 {who}")
-                if details:
-                    st.caption(f"   ↳ {details}")
+        # render_evidence_panel returns True when blocked uses are acknowledged
+        blocked_ack = render_evidence_panel(row, scope=scope)
+        # Store ack state so Close tab can read it
+        st.session_state[f"ev_complete_{scope}"] = blocked_ack
 
     with t_close:
         if outcome != "open":
@@ -424,54 +328,63 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
                 "if conditions recur the agent will produce a new insight on the next sweep."
             )
         else:
-            st.markdown(
-                "**Record your field verdict on this hypothesis.**  \n"
-                "This closes the feedback loop — outcomes calibrate future agent confidence scores."
-            )
+            # REVIEW_CONTRACT §Completeness Requirement:
+            # reviewer MUST have seen full evidence (incl. blocked uses) before close.
+            blocked_ack = st.session_state.get(f"ev_complete_{scope}", False)
+            if not blocked_ack:
+                st.info(
+                    "Open the **📋 Evidence** tab first and review all sections — "
+                    "including any blocked uses — before submitting a verdict.",
+                    icon="👆",
+                )
+            else:
+                st.markdown(
+                    "**Record your field verdict on this hypothesis.**  \n"
+                    "This closes the feedback loop — outcomes calibrate future agent confidence scores."
+                )
 
-            # REVIEW_CONTRACT §Reviewer Identity: closed_by MUST be non-empty.
-            # The interface must not allow submission without a reviewer identity.
-            officer = st.text_input(
-                "Your officer ID",
-                key=f"officer_{llm_key_prefix}_{insight_id}",
-                placeholder="e.g. ward_engineer_42 or officer@city.gov",
-                help="Required. Must uniquely identify you within this deployment.",
-            )
+                # REVIEW_CONTRACT §Reviewer Identity: closed_by MUST be non-empty.
+                officer = st.text_input(
+                    "Your officer ID",
+                    key=f"officer_{llm_key_prefix}_{insight_id}",
+                    placeholder="e.g. ward_engineer_42 or officer@city.gov",
+                    help="Required. Must uniquely identify you within this deployment.",
+                )
 
-            verdict = st.radio(
-                "Verdict",
-                ["confirmed", "refuted", "unverifiable"],
-                format_func=lambda x: {
-                    "confirmed":    "✓ Confirmed — field check validated the hypothesis",
-                    "refuted":      "✗ Refuted — field check contradicted the hypothesis",
-                    "unverifiable": "? Unverifiable — cannot check (access, resources, etc.)",
-                }[x],
-                key=f"verdict_{llm_key_prefix}_{insight_id}",
-            )
+                verdict = st.radio(
+                    "Verdict",
+                    ["confirmed", "refuted", "unverifiable"],
+                    format_func=lambda x: {
+                        "confirmed":    "✓ Confirmed — field check validated the hypothesis",
+                        "refuted":      "✗ Refuted — field check contradicted the hypothesis",
+                        "unverifiable": "? Unverifiable — cannot check (access, resources, etc.)",
+                    }[x],
+                    key=f"verdict_{llm_key_prefix}_{insight_id}",
+                )
 
-            submit_disabled = not officer.strip()
-            if submit_disabled:
-                st.caption("⚠️ Enter your officer ID before submitting.")
+                submit_disabled = not officer.strip()
+                if submit_disabled:
+                    st.caption("⚠️ Enter your officer ID before submitting.")
 
-            if st.button(
-                "Submit verdict",
-                type="primary",
-                key=f"submit_verdict_{llm_key_prefix}_{insight_id}",
-                disabled=submit_disabled,
-            ):
-                try:
-                    from urban_platform.h3_knowledge.writer import close_insight
-                    close_insight(
-                        insight_id=insight_id,
-                        outcome_status=verdict,
-                        closed_by=officer.strip(),
-                    )
-                    st.success(f"Marked as **{verdict}**. Thank you — this improves future analysis.")
-                    st.rerun()
-                except ValueError as e:
-                    st.error(f"Submission rejected: {e}")
-                except Exception as e:
-                    st.error(f"Failed to save: {e}")
+                if st.button(
+                    "Submit verdict",
+                    type="primary",
+                    key=f"submit_verdict_{llm_key_prefix}_{insight_id}",
+                    disabled=submit_disabled,
+                ):
+                    try:
+                        from urban_platform.h3_knowledge.writer import close_insight
+                        close_insight(
+                            insight_id=insight_id,
+                            outcome_status=verdict,
+                            closed_by=officer.strip(),
+                        )
+                        st.success(f"Marked as **{verdict}**. Thank you — this improves future analysis.")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"Submission rejected: {e}")
+                    except Exception as e:
+                        st.error(f"Failed to save: {e}")
 
     with t_ask:
         _render_chat(row, llm_key_prefix=llm_key_prefix)
