@@ -319,7 +319,7 @@ def _ingest_noise(city_id: str, bbox: dict, *, force: bool = False) -> int:
         return 0
     cell_list = [{"h3_id": k, **v} for k, v in noise_cells.items()]
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="noise",
-                                      signal_key="nri", risk_key="risk_level",
+                                      signal_key="noise_risk_index", risk_key="risk_level",
                                       issue_key="dominant_source", unit="index",
                                       source="proximity_model")
     packets = build_noise_decision_packets(noise_cells, DEFAULT_H3_RES, city_id, **bbox)
