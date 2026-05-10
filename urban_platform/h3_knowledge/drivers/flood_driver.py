@@ -13,9 +13,12 @@ class FloodDriver(_InTreeDriver):
 
     signal_names = [
         "FLOOD_RISK_INDEX", "SAR_INUNDATION", "SLOPE_RISK",
-        "SOIL_MOISTURE", "DRAIN_CAPACITY", "DATA_CONFIDENCE",
+        "SOIL_MOISTURE", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Sentinel-2 SAR (GEE)", "SRTM DEM", "OSM drains domain"]
+    # DRAIN_CAPACITY removed: it belongs to the drains domain driver.
+    # Cross-domain joins (flood + drains) happen at App reasoning time, not in the Driver.
+    # See spec/drivers/DOMAIN_CATALOGUE.md §Flood and spec/drivers/DRIVER_INTERFACE.md §Isolation.
+    data_sources = ["Sentinel-2 SAR (GEE)", "SRTM DEM"]
     _required_env_vars = []
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:

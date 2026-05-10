@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS h3_signals (
     value           REAL,
     unit            TEXT,
     source          TEXT,
+    data_quality    TEXT NOT NULL DEFAULT 'unknown',
     level           INTEGER NOT NULL DEFAULT 1,
     observed_at     TEXT NOT NULL,
     fetched_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -109,6 +110,9 @@ CREATE TABLE IF NOT EXISTS h3_packets (
     field_verification_required INTEGER NOT NULL DEFAULT 0,
     packet_json                 TEXT NOT NULL,
     outcome_status              TEXT NOT NULL DEFAULT 'pending',
+    evidence_json               TEXT,
+    safety_gates_json           TEXT,
+    blocked_uses_json           TEXT,
     PRIMARY KEY (packet_id)
 );
 CREATE INDEX IF NOT EXISTS idx_h3_packets_cell   ON h3_packets (h3_id, city_id, domain);
@@ -125,9 +129,13 @@ CREATE TABLE IF NOT EXISTS h3_insights (
     domains_involved            TEXT,
     finding                     TEXT NOT NULL,
     confidence                  REAL,
-    causal_chain_json           TEXT,
+    priority_tier               TEXT NOT NULL DEFAULT 'medium',
+    hypothesis_chain_json       TEXT,
     recommended_actions_json    TEXT,
     uncertainty_notes_json      TEXT,
+    outcome_status              TEXT NOT NULL DEFAULT 'open',
+    closed_by                   TEXT,
+    closed_at                   TEXT,
     PRIMARY KEY (insight_id)
 );
 CREATE INDEX IF NOT EXISTS idx_h3_insights_cell ON h3_insights (h3_id, city_id, created_at DESC);
@@ -152,14 +160,31 @@ CREATE INDEX IF NOT EXISTS idx_h3_outcomes_cell   ON h3_outcomes (h3_id, city_id
 
 DDL_H3_INGEST_LOG = """
 CREATE TABLE IF NOT EXISTS h3_ingest_log (
-    city_id             TEXT NOT NULL,
-    domain              TEXT NOT NULL,
-    last_ingested_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-    rows_written        INTEGER,
-    status              TEXT NOT NULL DEFAULT 'ok',
-    error_msg           TEXT,
+    city_id              TEXT NOT NULL,
+    domain               TEXT NOT NULL,
+    last_ingested_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    rows_written         INTEGER,
+    status               TEXT NOT NULL DEFAULT 'ok',
+    error_msg            TEXT,
+    conformance_ok       INTEGER,
+    conformance_failures TEXT,
     PRIMARY KEY (city_id, domain)
 );
+"""
+
+DDL_CITY_PATTERNS = """
+CREATE TABLE IF NOT EXISTS city_patterns (
+    pattern_id      TEXT NOT NULL,
+    city_id         TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    lookback_hours  INTEGER NOT NULL,
+    n_insights      INTEGER NOT NULL,
+    theme_count     INTEGER NOT NULL,
+    summary_json    TEXT NOT NULL,
+    PRIMARY KEY (pattern_id)
+);
+CREATE INDEX IF NOT EXISTS idx_city_patterns_city
+    ON city_patterns (city_id, created_at DESC);
 """
 
 DDL_H3_SITING = """
@@ -230,6 +255,7 @@ ALL_DDL = [
     DDL_H3_INSIGHTS,
     DDL_H3_OUTCOMES,
     DDL_H3_INGEST_LOG,
+    DDL_CITY_PATTERNS,
     DDL_H3_SITING,
     DDL_H3_SITING_LOG,
     DDL_H3_ANALYSIS_REQUESTS,

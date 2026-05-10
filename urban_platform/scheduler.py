@@ -256,6 +256,41 @@ class Scheduler:
         except Exception as exc:
             logger.warning("Analysis request sweep error: %s", exc)
 
+        # 2c — City pattern synthesis (runs after agent sweep)
+        # SPEC: City Pattern Agent MUST be skipped if fewer than 3 new insights
+        # were produced in the current sweep (AGENT_INTERFACE §City Pattern Agent §Skip condition).
+        _MIN_INSIGHTS_FOR_PATTERN = 3
+        _total_new_insights = sum(agent_results.values())
+        city_pattern_results: dict[str, int] = {}
+        if self.run_agent and _total_new_insights >= _MIN_INSIGHTS_FOR_PATTERN:
+            try:
+                from urban_platform.agents.city_pattern_agent import CityPatternAgent
+                from urban_platform.agents.llm_config import load_config as _load_cfg2
+                try:
+                    _pcfg = _load_cfg2()
+                except Exception:
+                    _pcfg = None
+                for city_id in self.cities:
+                    try:
+                        pattern_agent = CityPatternAgent(
+                            city_id,
+                            lookback_hours=2,  # insights from this sweep + recent
+                            config=_pcfg,
+                        )
+                        result = pattern_agent.run()
+                        n_themes = len(result.get("themes", []))
+                        city_pattern_results[city_id] = n_themes
+                        if n_themes:
+                            logger.info(
+                                "[city-pattern] %s — %d theme(s) identified",
+                                city_id, n_themes,
+                            )
+                    except Exception as exc:
+                        logger.warning("[city-pattern] %s — error: %s", city_id, exc)
+                        city_pattern_results[city_id] = 0
+            except ImportError:
+                pass  # city_pattern_agent module not available — skip
+
         # 3 — Sensor siting batch (monthly cadence, self-gating via siting_log watermark)
         siting_results: dict = {}
         try:
@@ -303,6 +338,7 @@ class Scheduler:
             "last_sweep_rows": total_rows,
             "last_sweep_insights": sum(agent_results.values()),
             "last_analysis_completed": analysis_completed,
+            "last_city_pattern_themes": sum(city_pattern_results.values()),
             "last_siting_candidates": siting_candidates,
             "next_sweep_at":  _next_sweep_iso(self.sweep_interval),
             "cities":         self.cities,

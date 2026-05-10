@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import logging
 import math
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from urban_platform.sdk.driver_types import ConformanceResult
@@ -54,6 +55,44 @@ logger = logging.getLogger(__name__)
 
 # H3 resolution to check for. All AirOS signals must be at res 8.
 _EXPECTED_H3_RES = 8
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _load_signal_ranges(driver: "H3DataSourceDriver") -> dict[str, tuple[float, float]]:
+    """Return {signal_name: (min, max)} from the driver's signals.yaml, if available.
+
+    Used by Rule 5 to check value range violations. Returns an empty dict if
+    the driver has no signals.yaml or if PyYAML is not installed.
+    """
+    ranges: dict[str, tuple[float, float]] = {}
+    try:
+        import yaml
+        import inspect
+        signals_yaml: str | None = getattr(driver, "signals_yaml_path", None)
+        if signals_yaml is None:
+            driver_file = inspect.getfile(type(driver))
+            candidate = Path(driver_file).parent / "signals.yaml"
+            if candidate.exists():
+                signals_yaml = str(candidate)
+        if signals_yaml and Path(signals_yaml).exists():
+            with open(signals_yaml, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            for sig in data.get("signals", []):
+                name = sig.get("name")
+                rng  = sig.get("range")
+                if name and isinstance(rng, (list, tuple)) and len(rng) == 2:
+                    try:
+                        ranges[name] = (float(rng[0]), float(rng[1]))
+                    except (TypeError, ValueError):
+                        pass
+    except ImportError:
+        pass  # PyYAML not installed — Rule 5 is skipped silently
+    except Exception:
+        pass
+    return ranges
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +193,28 @@ def validate_signal_rows(
             f"[WARN] [{domain_tag}] {null_value_count}/{len(rows)} rows have null/NaN value. "
             "These rows will be skipped by write_signals()."
         )
+
+    # ── NON-BLOCKING RULE 5: value range violations ───────────────────────
+    if driver:
+        signal_ranges = _load_signal_ranges(driver)
+        if signal_ranges:
+            # Collect out-of-range values per signal
+            range_violations: dict[str, list] = {}
+            for row in rows:
+                sig = row.get("signal")
+                val = row.get("value")
+                if sig and val is not None and sig in signal_ranges:
+                    if not (isinstance(val, float) and math.isnan(val)):
+                        lo, hi = signal_ranges[sig]
+                        if not (lo <= float(val) <= hi):
+                            range_violations.setdefault(sig, []).append(round(float(val), 4))
+            for sig, bad_vals in range_violations.items():
+                lo, hi = signal_ranges[sig]
+                sample = bad_vals[:3]
+                warnings.append(
+                    f"[WARN] [{domain_tag}] {len(bad_vals)} row(s) for signal {sig!r} have "
+                    f"values outside declared range [{lo}, {hi}] (sample: {sample})."
+                )
 
     ok = len(failures) == 0
     return ConformanceResult(ok=ok, failures=failures, warnings=warnings)

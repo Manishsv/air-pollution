@@ -107,6 +107,51 @@ def upsert_metadata(
 # Level 0/1 — signals (one row per cell/signal/hour — deduped)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Data quality classification — derived from source name automatically.
+# Callers can override per-row via r["data_quality"].
+# ---------------------------------------------------------------------------
+_SOURCE_DATA_QUALITY: dict[str, str] = {
+    # Real monitoring stations
+    "cpcb":         "real_station",
+    "openaq":       "real_station",
+    "iudx":         "real_station",
+    # Satellite / remote sensing
+    "gee":          "satellite_derived",
+    "firms":        "satellite_derived",
+    "modis":        "satellite_derived",
+    "sentinel":     "satellite_derived",
+    "viirs":        "satellite_derived",
+    # Numerical weather / reanalysis models
+    "openmeteo":    "model_estimate",
+    "imd":          "model_estimate",
+    "era5":         "model_estimate",
+    "pipeline":     "model_estimate",
+}
+
+def _infer_data_quality(source: str) -> str:
+    """Return data_quality tag for a source string, falling back to 'unknown'."""
+    if not source:
+        return "unknown"
+    src = source.lower()
+    # Exact match first, then prefix match
+    if src in _SOURCE_DATA_QUALITY:
+        return _SOURCE_DATA_QUALITY[src]
+    for key, quality in _SOURCE_DATA_QUALITY.items():
+        if src.startswith(key):
+            return quality
+    return "unknown"
+
+
+def _get_active_driver(domain: str):
+    """Return the active driver for a domain, or None if not available."""
+    try:
+        from urban_platform.sdk.driver_loader import get_active_drivers
+        return get_active_drivers().get(domain)
+    except Exception:
+        return None
+
+
 def write_signals(
     rows: list[dict[str, Any]],
     *,
@@ -114,14 +159,40 @@ def write_signals(
     domain: str,
     level: int = 1,
     source: str = "pipeline",
+    skip_conformance: bool = False,
 ) -> int:
     """Upsert signal rows.  One row per (h3_id, signal, hour).
 
     Each dict must have: h3_id, signal, value
-    Optional: unit, observed_at (ISO string), source, level
+    Optional: unit, observed_at (ISO string), source, level, data_quality
+
+    data_quality is automatically inferred from the source name if not
+    explicitly provided per-row.  Values: real_station | satellite_derived |
+    model_estimate | unknown
+
+    Conformance gate runs automatically unless skip_conformance=True.
+    BLOCKING failures (e.g. missing DATA_CONFIDENCE) abort the write and
+    return 0. Non-blocking warnings are logged but the write proceeds.
     """
     if not rows:
         return 0
+
+    # ── Conformance gate ──────────────────────────────────────────────────
+    if not skip_conformance:
+        try:
+            from urban_platform.sdk.conformance import validate_and_log
+            driver = _get_active_driver(domain)
+            result = validate_and_log(rows, driver=driver, domain=domain)
+            if not result.ok:
+                # Record the conformance failure in the ingest log
+                _record_conformance(city_id, domain, ok=False, failures=result.failures)
+                return 0
+            if result.ok and (result.failures or result.warnings):
+                _record_conformance(city_id, domain, ok=True, failures=result.warnings)
+        except Exception as exc:
+            logger.debug("Conformance gate raised (non-fatal): %s", exc)
+    # ─────────────────────────────────────────────────────────────────────
+    default_quality = _infer_data_quality(source)
     inserted = 0
     try:
         s = _store()
@@ -131,23 +202,26 @@ def write_signals(
             if not h3_id or r.get("value") is None:
                 continue
             observed_at = r.get("observed_at", now)
+            row_source = r.get("source", source)
+            data_quality = r.get("data_quality") or _infer_data_quality(row_source) or default_quality
             s.execute(
                 """
                 INSERT INTO h3_signals
                     (h3_id, city_id, domain, signal, hour_bucket,
-                     value, unit, source, level, observed_at, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     value, unit, source, data_quality, level, observed_at, fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (h3_id, city_id, domain, signal, hour_bucket) DO UPDATE SET
-                    value       = excluded.value,
-                    source      = excluded.source,
-                    observed_at = excluded.observed_at,
-                    fetched_at  = excluded.fetched_at
+                    value        = excluded.value,
+                    source       = excluded.source,
+                    data_quality = excluded.data_quality,
+                    observed_at  = excluded.observed_at,
+                    fetched_at   = excluded.fetched_at
                 """,
                 [
                     h3_id, r.get("city_id", city_id), r.get("domain", domain),
                     r["signal"], _hour_bucket(observed_at),
                     float(r["value"]),
-                    r.get("unit"), r.get("source", source),
+                    r.get("unit"), row_source, data_quality,
                     r.get("level", level), observed_at, now,
                 ],
             )
@@ -219,8 +293,19 @@ def write_packet(
     field_verification_required: bool = False,
     packet: dict,
     created_at: str | None = None,
+    evidence: list | dict | None = None,
+    safety_gates: list | None = None,
+    blocked_uses: list | None = None,
 ) -> None:
-    """Insert a decision packet.  Duplicate packet_id is silently ignored."""
+    """Insert a decision packet.  Duplicate packet_id is silently ignored.
+
+    Parameters
+    ----------
+    packet              : Full packet payload (stored as JSON blob for backward compat)
+    evidence            : Structured evidence list for the Review Interface (§Evidence Panel)
+    safety_gates        : List of safety gate evaluations — each with status/evidence
+    blocked_uses        : List of prohibited use descriptions for reviewer acknowledgement
+    """
     if not packet_id or not h3_id:
         return
     try:
@@ -229,8 +314,9 @@ def write_packet(
             INSERT INTO h3_packets
                 (packet_id, h3_id, city_id, domain, created_at,
                  risk_level, confidence_score, field_verification_required,
-                 packet_json, outcome_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                 packet_json, outcome_status,
+                 evidence_json, safety_gates_json, blocked_uses_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
             ON CONFLICT (packet_id) DO NOTHING
             """,
             [
@@ -240,6 +326,9 @@ def write_packet(
                 float(confidence_score) if confidence_score is not None else None,
                 1 if field_verification_required else 0,
                 _safe_json(packet),
+                _safe_json(evidence) if evidence is not None else None,
+                _safe_json(safety_gates) if safety_gates is not None else None,
+                _safe_json(blocked_uses) if blocked_uses is not None else None,
             ],
         )
     except Exception as exc:
@@ -268,20 +357,35 @@ def write_insight(
     domains_involved: list[str],
     finding: str,
     confidence: float | None = None,
-    causal_chain: list[dict] | None = None,
+    hypothesis_chain: list[dict] | None = None,
     recommended_actions: list | None = None,
     uncertainty_notes: list | None = None,
     created_at: str | None = None,
+    # Legacy alias — accepted for backward compat, mapped to hypothesis_chain
+    causal_chain: list[dict] | None = None,
 ) -> str:
     insight_id = str(uuid.uuid4())
+    # Derive priority_tier from confidence float so the UI can display it
+    # without treating confidence as a calibrated probability.
+    resolved_chain = hypothesis_chain or causal_chain
+    if confidence is not None:
+        if confidence >= 0.75:
+            tier = "high"
+        elif confidence >= 0.45:
+            tier = "medium"
+        else:
+            tier = "low"
+    else:
+        tier = "medium"
     try:
         _store().execute(
             """
             INSERT INTO h3_insights
                 (insight_id, h3_id, city_id, agent_type, created_at,
-                 domains_involved, finding, confidence, causal_chain_json,
+                 domains_involved, finding, confidence, priority_tier,
+                 hypothesis_chain_json,
                  recommended_actions_json, uncertainty_notes_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 insight_id, h3_id, city_id, agent_type,
@@ -289,7 +393,8 @@ def write_insight(
                 ",".join(domains_involved) if domains_involved else None,
                 finding,
                 float(confidence) if confidence is not None else None,
-                _safe_json(causal_chain),
+                tier,
+                _safe_json(resolved_chain),
                 _safe_json(recommended_actions),
                 _safe_json(uncertainty_notes),
             ],
@@ -297,6 +402,93 @@ def write_insight(
     except Exception as exc:
         logger.warning("write_insight failed: %s", exc)
     return insight_id
+
+
+def write_city_pattern(
+    *,
+    city_id: str,
+    lookback_hours: int,
+    n_insights: int,
+    theme_count: int,
+    summary: dict,
+    pattern_id: str | None = None,
+    created_at: str | None = None,
+) -> str:
+    """Write a City Pattern Agent synthesis result to city_patterns.
+
+    Each call always inserts a new row — city patterns are historical records,
+    not upserts.  Returns the pattern_id.
+
+    Parameters
+    ----------
+    city_id        : City partition key
+    lookback_hours : Time window of insights analysed
+    n_insights     : Number of h3_expert insights included
+    theme_count    : Number of themes identified by the agent
+    summary        : Full JSON output from the City Pattern Agent
+    pattern_id     : Optional UUID; generated if not supplied
+    created_at     : Optional ISO timestamp; system UTC if not supplied
+    """
+    pid = pattern_id or str(uuid.uuid4())
+    try:
+        _store().execute(
+            """
+            INSERT INTO city_patterns
+                (pattern_id, city_id, created_at,
+                 lookback_hours, n_insights, theme_count, summary_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [pid, city_id, created_at or _now_iso(),
+             lookback_hours, n_insights, theme_count,
+             _safe_json(summary)],
+        )
+        logger.debug(
+            "write_city_pattern: %s themes for %s (n_insights=%d)",
+            theme_count, city_id, n_insights,
+        )
+    except Exception as exc:
+        logger.warning("write_city_pattern failed: %s", exc)
+    return pid
+
+
+def close_insight(
+    *,
+    insight_id: str,
+    outcome_status: str,
+    closed_by: str,
+) -> None:
+    """Record an officer's closure decision on an insight.
+
+    outcome_status : confirmed | refuted | unverifiable
+    closed_by      : Non-empty reviewer identity string (email, officer ID, etc.)
+                     An empty or missing closed_by is rejected — anonymous closure
+                     is a spec violation (REVIEW_CONTRACT §Close Operation Requirements).
+    """
+    if not closed_by or not closed_by.strip():
+        raise ValueError(
+            "close_insight: closed_by must be a non-empty reviewer identity string. "
+            "Anonymous closure is prohibited by the Review Contract."
+        )
+    _VALID_OUTCOMES = {"confirmed", "refuted", "unverifiable"}
+    if outcome_status not in _VALID_OUTCOMES:
+        raise ValueError(
+            f"close_insight: outcome_status must be one of {sorted(_VALID_OUTCOMES)}, "
+            f"got {outcome_status!r}."
+        )
+    try:
+        _store().execute(
+            """
+            UPDATE h3_insights
+               SET outcome_status = ?,
+                   closed_by      = ?,
+                   closed_at      = ?
+             WHERE insight_id = ?
+               AND outcome_status = 'open'
+            """,
+            [outcome_status, closed_by.strip(), _now_iso(), insight_id],
+        )
+    except Exception as exc:
+        logger.warning("close_insight failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +527,34 @@ def write_outcome(
 # Ingest log — watermark per (city, domain)
 # ---------------------------------------------------------------------------
 
+def _record_conformance(
+    city_id: str,
+    domain: str,
+    *,
+    ok: bool,
+    failures: list[str],
+) -> None:
+    """Persist conformance result to h3_ingest_log (best-effort)."""
+    try:
+        failures_json = json.dumps(failures) if failures else None
+        _store().execute(
+            """
+            INSERT INTO h3_ingest_log
+                (city_id, domain, last_ingested_at, rows_written, status,
+                 conformance_ok, conformance_failures)
+            VALUES (?, ?, ?, 0, ?, ?, ?)
+            ON CONFLICT (city_id, domain) DO UPDATE SET
+                conformance_ok       = excluded.conformance_ok,
+                conformance_failures = excluded.conformance_failures
+            """,
+            [city_id, domain, _now_iso(),
+             "conformance_fail" if not ok else "ok",
+             int(ok), failures_json],
+        )
+    except Exception as exc:
+        logger.debug("_record_conformance failed (non-fatal): %s", exc)
+
+
 def record_ingest(
     *,
     city_id: str,
@@ -342,20 +562,28 @@ def record_ingest(
     rows_written: int = 0,
     status: str = "ok",
     error_msg: str | None = None,
+    conformance_ok: bool | None = None,
+    conformance_failures: list[str] | None = None,
 ) -> None:
     try:
+        cf_json = json.dumps(conformance_failures) if conformance_failures else None
+        cf_int = int(conformance_ok) if conformance_ok is not None else None
         _store().execute(
             """
             INSERT INTO h3_ingest_log
-                (city_id, domain, last_ingested_at, rows_written, status, error_msg)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (city_id, domain, last_ingested_at, rows_written, status, error_msg,
+                 conformance_ok, conformance_failures)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (city_id, domain) DO UPDATE SET
-                last_ingested_at = excluded.last_ingested_at,
-                rows_written     = excluded.rows_written,
-                status           = excluded.status,
-                error_msg        = excluded.error_msg
+                last_ingested_at     = excluded.last_ingested_at,
+                rows_written         = excluded.rows_written,
+                status               = excluded.status,
+                error_msg            = excluded.error_msg,
+                conformance_ok       = COALESCE(excluded.conformance_ok, conformance_ok),
+                conformance_failures = COALESCE(excluded.conformance_failures, conformance_failures)
             """,
-            [city_id, domain, _now_iso(), rows_written, status, error_msg],
+            [city_id, domain, _now_iso(), rows_written, status, error_msg,
+             cf_int, cf_json],
         )
     except Exception as exc:
         logger.warning("record_ingest failed: %s", exc)

@@ -197,49 +197,74 @@ AGENT_TOOLS = [
                     "type": "array",
                     "description": (
                         "Ordered reasoning steps from evidence to hypothesis. "
-                        "Each step is a testable proposition, not a causal assertion. "
-                        "Use 'consistent with', 'suggests', 'hypothesis: X → Y' — not 'X caused Y'."
+                        "Each item is a HypothesisItem with exactly three fields: "
+                        "'proposition' (a falsifiable statement — use 'consistent with', "
+                        "'suggests', not 'caused'), "
+                        "'testable_by' (how a field officer could verify or refute it), "
+                        "'confidence' (float 0.0–1.0 for this specific step). "
+                        "MUST NOT be empty."
                     ),
                     "items": {
                         "type": "object",
                         "properties": {
-                            "step":       {"type": "integer"},
-                            "evidence":   {"type": "string"},
-                            "hypothesis": {"type": "string"},
+                            "proposition": {
+                                "type": "string",
+                                "description": "Falsifiable statement. No causal language.",
+                            },
                             "testable_by": {
                                 "type": "string",
-                                "description": "How a field officer could verify or refute this step",
+                                "description": "How a field officer could verify or refute this",
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence in this specific step (0.0–1.0)",
                             },
                         },
+                        "required": ["proposition", "testable_by", "confidence"],
                     },
+                    "minItems": 1,
                 },
                 "recommended_actions": {
                     "type": "array",
                     "description": (
-                        "Specific, actionable recommendations. Each item is an object with: "
+                        "Specific, actionable recommendations. Each item is a RecommendedAction: "
                         "'action' (what to do, ≤120 chars), "
-                        "'details' (how/where/why, optional), "
-                        "'who' (role responsible: ward_engineer / zonal_officer / department), "
-                        "'urgency' (immediate / within_4h / within_24h / plan)."
+                        "'actor' (role: ward_engineer / zonal_officer / department), "
+                        "'urgency' (immediate / within_4h / within_24h / this_week / plan), "
+                        "'condition' (when this action applies), "
+                        "'blocked_if' (optional — circumstance that would prevent this action)."
                     ),
                     "items": {
                         "type": "object",
                         "properties": {
-                            "action":   {"type": "string"},
-                            "details":  {"type": "string"},
-                            "who":      {"type": "string"},
-                            "urgency":  {"type": "string"},
+                            "action":     {"type": "string"},
+                            "actor":      {"type": "string"},
+                            "urgency":    {"type": "string"},
+                            "condition":  {"type": "string"},
+                            "blocked_if": {"type": "string"},
                         },
-                        "required": ["action", "who", "urgency"],
+                        "required": ["action", "actor", "urgency", "condition"],
                     },
                 },
                 "uncertainty_notes": {
                     "type": "array",
-                    "items": {"type": "string"},
-                    "description": "What you are unsure about; what data would increase confidence",
+                    "description": (
+                        "What you are unsure about and what data would increase confidence. "
+                        "Each item has 'note' (description) and 'impact' (low/medium/high). "
+                        "MUST NOT be empty — at least one uncertainty note is always required."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "note":   {"type": "string"},
+                            "impact": {"type": "string", "enum": ["low", "medium", "high"]},
+                        },
+                        "required": ["note", "impact"],
+                    },
+                    "minItems": 1,
                 },
             },
-            required=["finding", "confidence", "domains_involved", "hypothesis_chain"],
+            required=["finding", "confidence", "domains_involved", "hypothesis_chain", "uncertainty_notes"],
         ),
     ),
 ]
@@ -1030,20 +1055,40 @@ class H3ExpertAgent:
         return "\n".join(parts)
 
     def _extract_text_insight(self, messages: list[dict]) -> dict:
+        """Last-resort fallback: extract a minimal spec-compliant insight from raw text.
+
+        Both hypothesis_chain and uncertainty_notes MUST be non-empty per spec
+        (AGENT_INTERFACE §submit_insight, INSIGHT_SCHEMA §Required fields).
+        """
+        _fallback_chain = [
+            {
+                "proposition": "Insufficient tool calls completed — finding is based on partial context.",
+                "testable_by": "Run a full agent sweep on this cell with a clean tool budget.",
+                "confidence": 0.1,
+            }
+        ]
+        _fallback_notes = [
+            {
+                "note": "Agent exhausted tool budget or stopped before calling submit_insight. "
+                        "Finding confidence is low; treat as a prompt for field verification only.",
+                "impact": "high",
+            }
+        ]
         for msg in reversed(messages):
             if msg.get("role") == "assistant" and msg.get("content"):
                 return {
                     "finding": str(msg["content"])[:200],
                     "confidence": 0.2,
                     "domains_involved": [],
-                    "hypothesis_chain": [],
-                    "uncertainty_notes": ["Agent did not call submit_insight."],
+                    "hypothesis_chain": _fallback_chain,
+                    "uncertainty_notes": _fallback_notes,
                 }
         return {
             "finding": "Agent completed without producing a finding.",
             "confidence": 0.0,
             "domains_involved": [],
-            "hypothesis_chain": [],
+            "hypothesis_chain": _fallback_chain,
+            "uncertainty_notes": _fallback_notes,
         }
 
 
