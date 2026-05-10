@@ -1,0 +1,31 @@
+"""AirOS built-in water quality driver — Sentinel-2 spectral indices."""
+from __future__ import annotations
+
+import os
+from urban_platform.h3_knowledge.drivers._base import _InTreeDriver
+from urban_platform.sdk.driver_types import ConformanceResult
+
+
+class WaterDriver(_InTreeDriver):
+    domain = "water"
+    cadence_hours = 1.0
+    produces_assessments = True
+
+    signal_names = [
+        "MNDWI", "NDTI", "CI", "FAI",
+        "WATER_QUALITY_INDEX", "DATA_CONFIDENCE",
+    ]
+    data_sources = ["Sentinel-2 (GEE) — MNDWI / NDTI / CI / FAI"]
+    _required_env_vars = []
+
+    def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
+        from urban_platform.h3_knowledge.ingestor import _ingest_water
+        return _ingest_water(city_id, bbox, force=force)
+
+    def conformance_check(self) -> ConformanceResult:
+        result = super().conformance_check()
+        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+            result.warnings.append(
+                "GOOGLE_APPLICATION_CREDENTIALS not set — satellite water quality unavailable"
+            )
+        return result

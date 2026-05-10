@@ -42,8 +42,18 @@ def get_h3_context(
     max_packets: int = 10,
     max_insights: int = 5,
     include_neighbors: bool = True,
+    prefetched_forecast: dict | None = None,
 ) -> dict[str, Any]:
-    """Return a rich context dict for an H3 Expert Agent."""
+    """Return a rich context dict for an H3 Expert Agent.
+
+    Parameters
+    ----------
+    prefetched_forecast:
+        If provided, skip the OpenMeteo forecast API call and use this dict
+        directly (format: {"weather": {...}, "aq": {...}}).  Pass this when
+        running multiple cells for the same city so the forecast is only
+        fetched once per sweep.
+    """
     s = _store()
 
     # --- metadata
@@ -108,11 +118,13 @@ def get_h3_context(
             row["packet"] = _parse_json(row.pop("packet_json"))
         packets.append(row)
 
-    # --- insights
+    # --- insights (with outcome tracking + hypothesis framing)
     insights_df = s.fetchdf(
         f"""
         SELECT insight_id, agent_type, created_at, domains_involved,
-               finding, confidence, causal_chain_json
+               finding, confidence, priority_tier, outcome_status,
+               hypothesis_chain_json,
+               recommended_actions_json, uncertainty_notes_json
         FROM h3_insights
         WHERE h3_id = ? AND city_id = ?
         ORDER BY created_at DESC
@@ -122,11 +134,247 @@ def get_h3_context(
     )
     insights = []
     for row in insights_df.to_dict(orient="records"):
-        if row.get("causal_chain_json"):
-            row["causal_chain"] = _parse_json(row.pop("causal_chain_json"))
+        if row.get("hypothesis_chain_json"):
+            row["hypothesis_chain"] = _parse_json(row.pop("hypothesis_chain_json"))
+        else:
+            row.pop("hypothesis_chain_json", None)
+        if row.get("recommended_actions_json"):
+            row["recommended_actions"] = _parse_json(row.pop("recommended_actions_json"))
+        else:
+            row.pop("recommended_actions_json", None)
+        if row.get("uncertainty_notes_json"):
+            row["uncertainty_notes"] = _parse_json(row.pop("uncertainty_notes_json"))
+        else:
+            row.pop("uncertainty_notes_json", None)
         if row.get("domains_involved"):
             row["domains_involved"] = row["domains_involved"].split(",")
         insights.append(row)
+
+    # --- data staleness — last observed_at per domain for this cell
+    # Surfaces to the agent so it knows if an assessment is based on stale data.
+    staleness_df = s.fetchdf(
+        """
+        SELECT domain,
+               MAX(observed_at)  AS last_observed_at,
+               COUNT(*)          AS reading_count
+        FROM h3_signals
+        WHERE h3_id = ? AND city_id = ?
+        GROUP BY domain
+        """,
+        [h3_id, city_id],
+    )
+    staleness: dict[str, dict] = {}
+    if not staleness_df.empty:
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        for row in staleness_df.to_dict(orient="records"):
+            try:
+                last = datetime.fromisoformat(
+                    row["last_observed_at"].replace("Z", "+00:00")
+                )
+                age_h = (now_utc - last).total_seconds() / 3600
+            except Exception:
+                age_h = None
+            staleness[row["domain"]] = {
+                "last_observed_at": row["last_observed_at"],
+                "age_hours": round(age_h, 1) if age_h is not None else None,
+                "stale": age_h is not None and age_h > 24,
+            }
+
+    # --- 30-day historical baseline — per-domain percentile context
+    # Lets the agent tell apart "bad week" from "genuinely anomalous vs cell history"
+    # N-guard: require >= 30 readings before reporting percentile rank —
+    # below that threshold the rank is statistically unreliable.
+    _BASELINE_MIN_N = 30
+
+    def _pct(vals: list[float], p: float) -> float:
+        """Return the p-th percentile of a pre-sorted list."""
+        if not vals:
+            return 0.0
+        idx = max(0, int(len(vals) * p / 100) - 1)
+        return round(vals[idx], 3)
+
+    # Build latest-value lookup (domain → (signal_name, value)) once —
+    # reused by both all-day and circadian baseline sections.
+    latest_by_domain: dict[str, tuple[str, float]] = {}
+    for sig in signals:
+        d = sig.get("domain", "?")
+        if d not in latest_by_domain and sig.get("value") is not None:
+            latest_by_domain[d] = (sig.get("signal", "?"), sig["value"])
+
+    baseline_df = s.fetchdf(
+        """
+        SELECT domain, signal,
+               COUNT(*)                            AS n_readings,
+               AVG(value)                          AS mean,
+               MIN(value)                          AS min_val,
+               MAX(value)                          AS max_val,
+               GROUP_CONCAT(value)                 AS values_csv,
+               SUM(CASE WHEN data_quality = 'real_station'     THEN 1 ELSE 0 END) AS n_real_station,
+               SUM(CASE WHEN data_quality = 'model_estimate'   THEN 1 ELSE 0 END) AS n_model_estimate,
+               SUM(CASE WHEN data_quality = 'satellite_derived' THEN 1 ELSE 0 END) AS n_satellite
+        FROM h3_signals
+        WHERE h3_id = ? AND city_id = ?
+          AND observed_at >= datetime('now', '-30 days')
+          AND value IS NOT NULL
+        GROUP BY domain, signal
+        """,
+        [h3_id, city_id],
+    )
+    historical_baseline: dict[str, dict] = {}
+    if not baseline_df.empty:
+        for row in baseline_df.to_dict(orient="records"):
+            domain = row["domain"]
+            signal_name = row["signal"]
+            n = row["n_readings"]
+            if n < 5:
+                continue  # fewer than 5 readings — not worth reporting at all
+
+            # Parse and sort values to compute percentiles
+            # (GROUP_CONCAT without ORDER BY — sort in Python for portability)
+            try:
+                sorted_vals = sorted(
+                    float(v) for v in (row.get("values_csv") or "").split(",") if v
+                )
+            except Exception:
+                sorted_vals = []
+
+            # Provenance mix — what fraction of readings are real vs modelled
+            n_real = row.get("n_real_station", 0) or 0
+            n_model = row.get("n_model_estimate", 0) or 0
+            n_sat = row.get("n_satellite", 0) or 0
+            provenance_note = None
+            if n > 0:
+                mix_parts = []
+                if n_real:
+                    mix_parts.append(f"{n_real/n*100:.0f}% real_station")
+                if n_sat:
+                    mix_parts.append(f"{n_sat/n*100:.0f}% satellite_derived")
+                if n_model:
+                    mix_parts.append(f"{n_model/n*100:.0f}% model_estimate")
+                provenance_note = ", ".join(mix_parts) if mix_parts else "unknown provenance"
+
+            entry: dict[str, Any] = {
+                "signal": signal_name,
+                "n": n,
+                "mean": round(row["mean"], 3),
+                "min": round(row["min_val"], 3),
+                "max": round(row["max_val"], 3),
+                "p75": _pct(sorted_vals, 75),
+                "p90": _pct(sorted_vals, 90),
+                "provenance": provenance_note,
+                "percentile_rank_reliable": n >= _BASELINE_MIN_N,
+            }
+            # Attach current value + percentile rank only if N meets the guard
+            if domain in latest_by_domain:
+                cur_sig, cur_val = latest_by_domain[domain]
+                if cur_sig == signal_name:
+                    entry["current"] = round(cur_val, 3)
+                    if n >= _BASELINE_MIN_N and sorted_vals:
+                        pct_rank = (
+                            sum(1 for v in sorted_vals if v <= cur_val)
+                            / len(sorted_vals) * 100
+                        )
+                        entry["percentile_rank"] = round(pct_rank, 0)
+                    else:
+                        # Too few readings — report raw value without a rank
+                        entry["percentile_rank"] = None
+            historical_baseline[domain] = entry
+
+    # --- circadian baseline — same-hour-of-day stats over 30 days
+    # Compares the current reading against readings taken at a similar time of
+    # day (±2 hours UTC) over the past 30 days.  Removes the diurnal cycle so
+    # a 2am PM2.5 spike is judged against other 2am readings rather than the
+    # all-day mean.  Returned as a parallel dict keyed by domain.
+    #
+    # Hour window: current UTC hour ± 2 (wraps modulo 24 → 5 candidate hours).
+    # N-guard: same _BASELINE_MIN_N threshold as all-day baseline.
+    from datetime import datetime, timezone as _tz
+    _now_h = datetime.now(_tz.utc).hour
+    _circ_hours = [(_now_h + d) % 24 for d in range(-2, 3)]  # 5 hours
+    _circ_placeholders = ",".join(str(h) for h in _circ_hours)
+
+    circ_df = s.fetchdf(
+        f"""
+        SELECT domain, signal,
+               COUNT(*)                            AS n_readings,
+               AVG(value)                          AS mean,
+               MIN(value)                          AS min_val,
+               MAX(value)                          AS max_val,
+               GROUP_CONCAT(value)                 AS values_csv
+        FROM h3_signals
+        WHERE h3_id = ? AND city_id = ?
+          AND observed_at >= datetime('now', '-30 days')
+          AND value IS NOT NULL
+          AND CAST(strftime('%H', observed_at) AS INTEGER) IN ({_circ_placeholders})
+        GROUP BY domain, signal
+        """,
+        [h3_id, city_id],
+    )
+    circadian_baseline: dict[str, dict] = {}
+    if not circ_df.empty:
+        for row in circ_df.to_dict(orient="records"):
+            domain = row["domain"]
+            signal_name = row["signal"]
+            n = row["n_readings"]
+            if n < 5:
+                continue
+
+            try:
+                sorted_vals = sorted(
+                    float(v) for v in (row.get("values_csv") or "").split(",") if v
+                )
+            except Exception:
+                sorted_vals = []
+
+            entry: dict[str, Any] = {
+                "signal": signal_name,
+                "n": n,
+                "hour_window_utc": f"{_circ_hours[0]:02d}–{_circ_hours[-1]:02d}",
+                "mean": round(row["mean"], 3),
+                "min": round(row["min_val"], 3),
+                "max": round(row["max_val"], 3),
+                "p75": _pct(sorted_vals, 75),
+                "p90": _pct(sorted_vals, 90),
+                "percentile_rank_reliable": n >= _BASELINE_MIN_N,
+            }
+            # Attach current value + same-hour percentile rank
+            if domain in latest_by_domain:
+                cur_sig, cur_val = latest_by_domain[domain]
+                if cur_sig == signal_name:
+                    entry["current"] = round(cur_val, 3)
+                    if n >= _BASELINE_MIN_N and sorted_vals:
+                        pct_rank = (
+                            sum(1 for v in sorted_vals if v <= cur_val)
+                            / len(sorted_vals) * 100
+                        )
+                        entry["percentile_rank"] = round(pct_rank, 0)
+                    else:
+                        entry["percentile_rank"] = None
+            circadian_baseline[domain] = entry
+
+    # --- forecast — weather + AQ for next 48 h (OpenMeteo, no key needed)
+    # If a pre-fetched city-level forecast is supplied (e.g. from run_top_risk_cells
+    # which fetches once per city), use it directly — no HTTP call needed.
+    # Otherwise fetch from the cell centroid; fails silently on network issues.
+    if prefetched_forecast is not None:
+        forecast: dict[str, Any] = prefetched_forecast
+    else:
+        forecast = {}
+        centroid_lat = metadata.get("centroid_lat")
+        centroid_lon = metadata.get("centroid_lon")
+        if centroid_lat is None or centroid_lon is None:
+            try:
+                import h3
+                centroid_lat, centroid_lon = h3.cell_to_latlng(h3_id)
+            except Exception:
+                pass
+        if centroid_lat is not None and centroid_lon is not None:
+            try:
+                from urban_platform.connectors.weather.open_meteo_forecast import fetch_cell_forecast
+                forecast = fetch_cell_forecast(centroid_lat, centroid_lon, hours=48)
+            except Exception as exc:
+                logger.debug("Forecast fetch skipped: %s", exc)
 
     context: dict[str, Any] = {
         "h3_id": h3_id,
@@ -136,6 +384,10 @@ def get_h3_context(
         "assessments": assessments,
         "packets": packets,
         "insights": insights,
+        "staleness": staleness,
+        "historical_baseline": historical_baseline,
+        "circadian_baseline": circadian_baseline,
+        "forecast": forecast,
     }
 
     if include_neighbors:
@@ -319,13 +571,99 @@ def get_city_summary(
 
 
 # ---------------------------------------------------------------------------
+# Domain-filtered packet lookup (used by H3 Expert Agent tool)
+# ---------------------------------------------------------------------------
+
+def get_packets_for_domain(
+    h3_id: str,
+    city_id: str,
+    domain: str,
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the most recent decision packets for a specific cell+domain.
+
+    Used by the H3 Expert Agent's ``get_packets_for_domain`` tool to calibrate
+    the current insight against prior reviewer decisions for the same domain.
+
+    Parameters
+    ----------
+    h3_id  : Target H3 cell index
+    city_id: City partition key
+    domain : Domain filter (e.g. "air", "flood")
+    limit  : Maximum rows to return (default 5, per Agent Interface spec)
+
+    Returns
+    -------
+    List of packet dicts, each with packet_id, domain, created_at,
+    risk_level, confidence_score, field_verification_required,
+    outcome_status, and decoded packet payload.
+    """
+    df = _store().fetchdf(
+        f"""
+        SELECT packet_id, domain, created_at, risk_level, confidence_score,
+               field_verification_required, outcome_status, packet_json
+        FROM h3_packets
+        WHERE h3_id = ? AND city_id = ? AND domain = ?
+        ORDER BY created_at DESC
+        LIMIT {int(limit)}
+        """,
+        [h3_id, city_id, domain],
+    )
+    result = []
+    for row in df.to_dict(orient="records"):
+        if row.get("packet_json"):
+            row["packet"] = _parse_json(row.pop("packet_json"))
+        else:
+            row.pop("packet_json", None)
+        result.append(row)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Store health
 # ---------------------------------------------------------------------------
 
-def get_store_stats() -> dict[str, int]:
+def get_store_stats(city_id: str | None = None) -> dict[str, Any]:
+    """Return row counts for all Knowledge Store tables.
+
+    Parameters
+    ----------
+    city_id : Optional city filter.  When provided, counts are scoped to that
+              city's partition only (for tables that have a city_id column).
+              Tables without a city_id column (e.g. city_patterns) return
+              global counts regardless of this parameter.
+    """
     try:
         from urban_platform.h3_knowledge.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().table_counts()
+        store = H3KnowledgeStore.get()
+        counts = store.table_counts()
+
+        if city_id:
+            # Augment with city-scoped counts for the primary partitioned tables
+            _CITY_TABLES = [
+                "h3_signals",
+                "h3_assessments",
+                "h3_packets",
+                "h3_insights",
+                "h3_ingest_log",
+                "h3_metadata",
+                "h3_analysis_requests",
+                "h3_siting_candidates",
+            ]
+            city_counts: dict[str, Any] = {}
+            for table in _CITY_TABLES:
+                try:
+                    row = store.fetchone(
+                        f"SELECT COUNT(*) FROM {table} WHERE city_id = ?",
+                        [city_id],
+                    )
+                    city_counts[table] = int(row[0]) if row else 0
+                except Exception:
+                    pass  # table may not exist in this schema version
+            counts = {**counts, "city_id": city_id, "city_counts": city_counts}
+
+        return counts
     except Exception as exc:
         logger.warning("get_store_stats failed: %s", exc)
         return {}
@@ -424,3 +762,158 @@ def get_request_status(h3_id: str, city_id: str) -> dict:
     if df.empty:
         return {}
     return df.iloc[0].to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Cross-domain co-occurrence statistics
+# ---------------------------------------------------------------------------
+
+def get_domain_cross_correlation(
+    city_id: str,
+    domain_a: str,
+    domain_b: str,
+    *,
+    risk_threshold: str = "high",
+    lookback_days: int = 30,
+    min_cells: int = 5,
+) -> dict:
+    """Return co-occurrence stats between two domains across all H3 cells.
+
+    Answers: "In how many cells does elevated domain_a co-occur with
+    elevated domain_b, compared to what random chance would predict?"
+
+    Uses h3_assessments (latest assessment per domain per cell) to count:
+      - n_a:    cells with domain_a ≥ risk_threshold
+      - n_b:    cells with domain_b ≥ risk_threshold
+      - n_both: cells where BOTH are elevated simultaneously
+      - n_total: total assessed cells in city
+
+    Returns a lift score: lift = (n_both / n_total) / ((n_a / n_total) * (n_b / n_total))
+      lift > 1.5 → strong co-occurrence (meaningful)
+      lift > 3.0 → very strong (worth flagging)
+      lift ≈ 1.0 → independent (no relationship)
+      lift < 0.7 → anti-correlated (rare)
+
+    Parameters
+    ----------
+    risk_threshold:
+        Minimum risk level to count as "elevated". One of: low, moderate, high, severe.
+        Default "high" — only severe/high cells count.
+    min_cells:
+        Minimum number of co-occurring cells required before reporting stats
+        (prevents spurious lift from tiny samples).
+    """
+    s = _store()
+
+    # Numeric threshold for comparison (CASE value)
+    _RISK_SCORE = {"low": 1, "moderate": 2, "high": 3, "severe": 4}
+    threshold_score = _RISK_SCORE.get(risk_threshold, 3)
+
+    # Build threshold IN clause: include all levels >= threshold
+    valid_levels = [k for k, v in _RISK_SCORE.items() if v >= threshold_score]
+    level_phs = ",".join(f"'{lv}'" for lv in valid_levels)
+
+    # Latest assessment per (h3_id, domain) using ROW_NUMBER.
+    # n_both uses an INNER JOIN on elevated cells — SQLite INTERSECT inside a
+    # scalar subquery is unreliable (can return NULL).
+    base_sql = f"""
+        WITH latest AS (
+            SELECT h3_id, domain, risk_level
+            FROM (
+                SELECT h3_id, domain, risk_level,
+                       ROW_NUMBER() OVER (PARTITION BY h3_id, domain ORDER BY assessed_at DESC) AS rn
+                FROM h3_assessments
+                WHERE city_id = ?
+                  AND assessed_at >= date('now', '-{lookback_days} days')
+            ) WHERE rn = 1
+        ),
+        elevated_a AS (
+            SELECT DISTINCT h3_id FROM latest
+            WHERE domain = ? AND risk_level IN ({level_phs})
+        ),
+        elevated_b AS (
+            SELECT DISTINCT h3_id FROM latest
+            WHERE domain = ? AND risk_level IN ({level_phs})
+        ),
+        co_elevated AS (
+            SELECT a.h3_id FROM elevated_a a JOIN elevated_b b ON a.h3_id = b.h3_id
+        )
+        SELECT
+            (SELECT COUNT(*) FROM elevated_a)  AS n_a,
+            (SELECT COUNT(*) FROM elevated_b)  AS n_b,
+            (SELECT COUNT(*) FROM co_elevated) AS n_both,
+            COUNT(DISTINCT h3_id)              AS n_total
+        FROM latest
+    """
+
+    df = s.fetchdf(base_sql, [city_id, domain_a, domain_b])
+    if df.empty:
+        return {"error": "No assessment data found", "city_id": city_id}
+
+    row = df.iloc[0]
+    n_a    = int(row["n_a"]    or 0)
+    n_b    = int(row["n_b"]    or 0)
+    n_both = int(row["n_both"] or 0)
+    n_total = int(row["n_total"] or 0)
+
+    # Lift calculation (avoid division by zero)
+    if n_total == 0 or n_a == 0 or n_b == 0:
+        lift = None
+        interpretation = "insufficient data"
+    else:
+        p_a = n_a / n_total
+        p_b = n_b / n_total
+        p_both = n_both / n_total
+        lift = round(p_both / (p_a * p_b), 2) if (p_a * p_b) > 0 else None
+        if lift is None:
+            interpretation = "insufficient data"
+        elif n_both < min_cells:
+            interpretation = f"too few co-occurring cells (n={n_both} < {min_cells}) — unreliable"
+        elif lift >= 3.0:
+            interpretation = "very strong co-occurrence — likely causal link"
+        elif lift >= 1.5:
+            interpretation = "moderate co-occurrence — worth investigating"
+        elif lift >= 0.7:
+            interpretation = "near-independent — domains not strongly linked"
+        else:
+            interpretation = "anti-correlated — elevated A associates with lower B"
+
+    # Also fetch example cells where both are elevated (for spatial grounding)
+    example_df = s.fetchdf(
+        f"""
+        WITH latest AS (
+            SELECT h3_id, domain, risk_level
+            FROM (
+                SELECT h3_id, domain, risk_level,
+                       ROW_NUMBER() OVER (PARTITION BY h3_id, domain ORDER BY assessed_at DESC) AS rn
+                FROM h3_assessments
+                WHERE city_id = ?
+                  AND assessed_at >= date('now', '-{lookback_days} days')
+            ) WHERE rn = 1
+        )
+        SELECT DISTINCT h3_id
+        FROM latest
+        WHERE domain = ? AND risk_level IN ({level_phs})
+          AND h3_id IN (
+              SELECT h3_id FROM latest WHERE domain = ? AND risk_level IN ({level_phs})
+          )
+        LIMIT 5
+        """,
+        [city_id, domain_a, domain_b],
+    )
+    example_cells = example_df["h3_id"].tolist() if not example_df.empty else []
+
+    return {
+        "city_id": city_id,
+        "domain_a": domain_a,
+        "domain_b": domain_b,
+        "risk_threshold": risk_threshold,
+        "lookback_days": lookback_days,
+        "n_total_cells": n_total,
+        "n_elevated_a": n_a,
+        "n_elevated_b": n_b,
+        "n_co_elevated": n_both,
+        "lift": lift,
+        "interpretation": interpretation,
+        "example_co_elevated_cells": example_cells,
+    }

@@ -10,41 +10,52 @@ From the **repo root**:
 streamlit run review_dashboard/app.py
 ```
 
-### What it shows
+---
 
-- **Areas Needing Review**: a prioritized list of areas that may require attention based on forecast category, confidence, interpolation, and sensor reliability.
-- **Map View**: spatial context for the selected area and nearby sensors.
-- **Review Summary**: plain-language summary of forecasted PM2.5, category, confidence, data type, and suggested handling.
-- **Supporting Evidence**: tables for nearby sensors, weather, area characteristics, and sensor reliability (technical details hidden behind expanders).
-- **System Data Quality**: run-level trust indicators (shown in the sidebar).
-- **Reviewer Decision**: the reviewer records the next step and a required note (session-only action log).
+### Panels
 
-### Layered evidence map
+#### Inbox
 
-The **Map View** includes a layered evidence map. Reviewers can turn layers on/off to inspect:
+A prioritised list of AI-generated insights awaiting human review.
 
-- forecast category, confidence, and uncertainty
-- observed vs estimated (interpolated) PM2.5 areas
-- nearby sensors and sensor reliability
-- static urban characteristics (e.g., road density, built-up ratio, green area)
-- optional planning layers (sensor siting candidates, when available)
+- **Priority tiers** — each insight is labelled high / medium / low (derived from agent confidence: ≥ 0.75 = high, 0.45–0.74 = medium, < 0.45 = low).
+- **Outcome badges** — open (pending review), confirmed ✓, refuted ✗, or unverifiable ?.
+- **Sort options** — by newest, highest confidence, or priority tier.
+- **Detail modal** — clicking a row opens a four-tab dialog:
+  - **Evidence** — signals, assessment summary, testable hypotheses.
+  - **Recommended Actions** — agent-suggested interventions.
+  - **Close** — field officer records a verdict (confirmed / refuted / unverifiable) and name; the outcome is written back to the knowledge store and surfaces to the agent on its next run.
+  - **Ask agent** — re-run the H3 Expert Agent on-demand for this cell.
 
-This helps reviewers understand not only forecast hotspots, but also the underlying evidence and uncertainty.
+#### City Map
 
-### What it must NOT be used for
+Spatial view of H3 cells with colour-coded risk levels.
+
+- **Insights only toggle** (default on) — shows only cells that have at least one agent insight, matching what is in the Inbox. Toggle off to see all assessed cells.
+- Cell colour reflects the highest risk level across all domains for that cell.
+
+#### Infrastructure / Sensor Coverage
+
+Sensor siting recommendations computed monthly. Shows coverage gaps by domain.
+
+#### Ward Decisions / Reports
+
+Aggregated summaries by administrative ward for briefings and reporting.
+
+---
+
+### What the dashboard must NOT be used for
 
 - It must not be treated as automated decision-making.
-- It must not claim causal attribution (“the AI found the cause”).
+- It must not claim causal attribution ("the AI found the cause").
 - It must not be used for enforcement without field verification.
 
 ### Accountability note
 
-The dashboard **does not automate government action**. It helps officials review evidence, confidence, and suggested next steps.
-The reviewer remains accountable for the final decision.
+The dashboard **does not automate government action**. It helps officials review evidence, confidence, and suggested next steps. The reviewer remains accountable for the final decision.
 
 ### Future integration (placeholder)
 
 Decision actions can later be mapped to workflow systems (e.g. DIGIT/Airawat) by:
 - sending the chosen action + reviewer note + packet_id
 - attaching the decision packet JSON as evidence
-

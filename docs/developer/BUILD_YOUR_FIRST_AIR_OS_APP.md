@@ -1,237 +1,420 @@
-# Build Your First AirOS App
+# Build Your First AirOS Decision Support App
 
-This tutorial is for developers who want to understand the **governed AirOS app-development workflow**.
+A practical guide to building a domain-specific Decision Support App on top of the H3 Knowledge Store and agent layer — illustrated by building a **School Air Quality Monitor**.
 
-**Important:** This tutorial does **not** create a runnable production app. It shows how to scaffold, edit, validate, package, and inspect an AirOS App **without** executing it. Execution requires review, registration, and allowlisting later.
+---
 
-## What you will build
+## 1. What is an AirOS Decision Support App?
 
-A fictional **Streetlight Maintenance Review** app.
+An AirOS Decision Support App is a purpose-built view over the H3 Knowledge Store. Rather than showing every cell in a city with equal weight, an App narrows focus to a specific set of cells that matter for a particular use case — schools, hospitals, industrial zones, flood-prone wards — and presents findings to a specific audience in the language they use. The platform already has the signals; your App decides *which cells to surface*, *what context to emphasise*, and *how to present the output* to a school inspector rather than a general ward officer.
 
-Conceptually, it ingests streetlight status records and produces **review outputs** such as:
+---
 
-- lights needing inspection
-- likely outage clusters
-- proposed next steps for maintenance teams
-- `blocked_uses` and safety notes that prevent misuse
+## 2. What you will build
 
-AirOS outputs are **review support only**. This app does **not** dispatch work orders automatically, and it does **not** authorize any government action.
+The **School Air Quality Monitor** will:
 
-## AirOS development loop (high level)
+1. Query the H3 Knowledge Store to find cells that contain schools (using the `known_features` field in `h3_metadata`).
+2. Run the H3 Expert Agent on those cells, with emphasis on air quality, heat, and green cover signals that affect children's health.
+3. Display findings in a dedicated Streamlit panel (`school_aq_panel.py`) wired into the existing Review Dashboard, showing priority tiers, a filtered map, and outcome tracking.
 
-In AirOS, the beginner-friendly loop is:
+By the end you will have a working panel visible at `streamlit run review_dashboard/app.py` under the Domains tab.
 
-`apps scaffold`
-→ edit descriptor + contracts + examples + decision logic (your repo/workspace)
-→ `apps validate`
-→ `apps package`
-→ `apps inspect-package`
-→ `catalog add-package` (local metadata)
-→ request review + registration + allowlisting later (so it can run safely)
+---
 
-## Step 1: Scaffold
+## 3. Step 1: Understand the data available
 
-Scaffold a new local app folder (this does **not** register or execute anything):
+The primary query entry point is `get_h3_context()` in `urban_platform/h3_knowledge/reader.py`. Call it for any H3 cell to get a structured dict covering signals, assessments, packets, and prior insights.
 
-```bash
-python tools/airos_cli.py apps scaffold streetlight_maintenance_review \
-  --domain-id streetlight_maintenance \
-  --output-dir /tmp/streetlight_maintenance_review
+```python
+from urban_platform.h3_knowledge.reader import get_h3_context
+
+# Pull the last 7 days of signals for a cell
+ctx = get_h3_context(
+    h3_id="8a1b00000007fff",
+    city_id="bangalore",
+    signals_lookback_days=7,
+    max_insights=5,
+)
+
+# What comes back
+print(ctx["metadata"])       # known_features, ward, lat/lon centroid
+print(ctx["signals"])        # list of signal dicts: domain, signal, value, level, observed_at
+print(ctx["assessments"])    # latest risk_level per domain
+print(ctx["insights"])       # prior H3 Expert Agent findings with outcome_status
 ```
 
-## Step 2: Inspect the generated structure
+For a city-wide overview — e.g. to understand how many cells have elevated air risk right now — use `get_store_stats()`:
 
-Your scaffolded folder should look like this (names may evolve, but the intent stays consistent):
+```python
+from urban_platform.h3_knowledge.reader import get_store_stats
 
-- `README.md`: app purpose, safety posture, and how to validate/package
-- `app_descriptor.yaml`: governed metadata (what the app is, what it consumes/produces, safety notes)
-- `contracts/`: **local** contract drafts you’ll later upstream into `specifications/`
-- `examples/`: sample JSON payloads (fixtures) you’ll later upstream into `specifications/examples/`
-- `builders/`: decision logic code (should be pure, reviewable, testable)
-- `dashboard/`: optional UI wiring notes (presentation only)
-- `deployments/`: example deployment wiring placeholders (declarative configuration)
-- `tests/`: local tests you’ll later adapt into repo CI tests
+stats = get_store_stats()
+print(stats["total_cells"], stats["domains_active"])
+```
 
-**Reminder:** A scaffold is a template. It’s expected to have placeholders and warnings until you fill in contracts, examples, and builder logic.
+The underlying store is SQLite. You can run raw queries via `H3KnowledgeStore.get().fetchdf(sql, params)` if you need something the helpers don't expose.
 
-## Step 3: Define an input contract (conceptual)
+---
 
-For Streetlight Maintenance Review, imagine a provider sends a feed of status events.
+## 4. Step 2: Identify target cells
 
-Conceptual contract key (illustrative): `provider_streetlight_status_feed`
+School cells are flagged in `h3_metadata.known_features_json`. The ingestor encodes them as a JSON array of feature strings, e.g. `["school", "park"]`. Query for cells that contain `"school"`:
 
-Example shape (illustrative only; not a real repo contract file):
+```python
+from urban_platform.h3_knowledge.store import H3KnowledgeStore
 
-```json
-{
-  "provider_id": "utility_portal_demo",
-  "source_name": "Utility streetlight portal",
-  "source_type": "city_portal",
-  "license": "demo_fixture_only",
-  "source_metadata": { "ingested_at": "2026-05-01T10:00:00Z" },
-  "city_id": "city_demo_a",
-  "reporting_period": "2026_Q2",
-  "streetlight_id": "sl_ward_12_0001",
-  "ward_id": "ward_12",
-  "status": "suspected_outage",
-  "last_seen_at": "2026-05-01T09:55:00Z",
-  "quality_flag": "unverified",
-  "provenance": {
-    "fixture_only": true,
-    "contains_real_pii": false,
-    "notes": "Synthetic tutorial payload."
-  }
+store = H3KnowledgeStore.get()
+
+school_cells_df = store.fetchdf(
+    """
+    SELECT h3_id, city_id, ward, lat, lon, known_features_json
+    FROM h3_metadata
+    WHERE city_id = ?
+      AND known_features_json LIKE '%school%'
+    ORDER BY h3_id
+    """,
+    ["bangalore"],
+)
+
+print(f"Found {len(school_cells_df)} cells containing schools")
+print(school_cells_df[["h3_id", "ward", "lat", "lon"]].head())
+```
+
+If your deployment does not yet have `known_features_json` populated for school locations, you can seed it by cross-referencing an OpenStreetMap extract. The `urban_platform/h3_knowledge/geocoder.py` module provides `tag_h3_cells_from_geojson()` for exactly this purpose.
+
+Alternatively, if you have air quality assessments already, you can find school cells that also have elevated air risk:
+
+```python
+high_risk_school_cells_df = store.fetchdf(
+    """
+    SELECT m.h3_id, m.city_id, a.risk_level, a.primary_value
+    FROM h3_metadata m
+    JOIN (
+        SELECT h3_id, city_id, risk_level, primary_value,
+               ROW_NUMBER() OVER (PARTITION BY h3_id, city_id ORDER BY assessed_at DESC) AS rn
+        FROM h3_assessments
+        WHERE domain = 'air' AND city_id = ?
+    ) a ON a.h3_id = m.h3_id AND a.city_id = m.city_id AND a.rn = 1
+    WHERE m.known_features_json LIKE '%school%'
+      AND a.risk_level IN ('high', 'severe')
+    ORDER BY a.primary_value DESC
+    """,
+    ["bangalore"],
+)
+```
+
+---
+
+## 5. Step 3: Run the agent on target cells
+
+`H3ExpertAgent` takes a single cell and runs a multi-turn LLM analysis, then writes its finding to `h3_insights`. Run it for each school cell:
+
+```python
+from urban_platform.agents.h3_expert import H3ExpertAgent
+
+def analyse_school_cells(city_id: str, h3_ids: list[str]) -> list[dict]:
+    """Run the H3 Expert Agent on a list of school cells and return insights."""
+    results = []
+    for h3_id in h3_ids:
+        try:
+            agent = H3ExpertAgent(
+                h3_id=h3_id,
+                city_id=city_id,
+                signals_lookback_days=7,
+            )
+            insight = agent.run()
+            results.append({"h3_id": h3_id, "status": "ok", "insight": insight})
+            print(f"  {h3_id}: {insight['priority_tier']} -- {insight['finding'][:80]}")
+        except Exception as exc:
+            results.append({"h3_id": h3_id, "status": "error", "error": str(exc)})
+            print(f"  {h3_id}: ERROR -- {exc}")
+    return results
+
+
+if __name__ == "__main__":
+    from urban_platform.h3_knowledge.store import H3KnowledgeStore
+
+    store = H3KnowledgeStore.get()
+    df = store.fetchdf(
+        "SELECT h3_id FROM h3_metadata WHERE city_id = ? AND known_features_json LIKE '%school%'",
+        ["bangalore"],
+    )
+    school_h3_ids = df["h3_id"].tolist()
+
+    print(f"Analysing {len(school_h3_ids)} school cells...")
+    results = analyse_school_cells("bangalore", school_h3_ids)
+    ok      = sum(1 for r in results if r["status"] == "ok")
+    print(f"Done: {ok}/{len(results)} succeeded.")
+```
+
+The agent writes its insight to `h3_insights` automatically via `write_insight()` in `urban_platform/h3_knowledge/writer.py`. You do not need to call the writer yourself.
+
+**Tip:** For a large number of cells you can pre-fetch the city-level weather forecast once and pass it as the `forecast` argument to each agent to avoid redundant API calls:
+
+```python
+# forecast is a dict with keys "weather" and "aq" — fetched once per city per sweep
+for h3_id in school_h3_ids:
+    agent = H3ExpertAgent(h3_id, "bangalore", forecast=forecast)
+    agent.run()
+```
+
+---
+
+## 6. Step 4: Create a dashboard panel
+
+Create the file `review_dashboard/components/school_aq_panel.py`. This panel queries `h3_insights` for school cells and displays them with priority tiers, a summary table, and a map of flagged cells.
+
+```python
+"""School Air Quality Monitor panel -- AirOS Decision Support App.
+
+Displays H3 Expert Agent insights for cells containing schools,
+filtered by priority tier and outcome status.
+"""
+from __future__ import annotations
+
+import pandas as pd
+import streamlit as st
+
+from urban_platform.h3_knowledge.store import H3KnowledgeStore
+
+
+# ---------------------------------------------------------------------------
+# Data loaders
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_school_insights(city_id: str) -> pd.DataFrame:
+    """Load insights for cells tagged with 'school' in h3_metadata."""
+    store = H3KnowledgeStore.get()
+    return store.fetchdf(
+        """
+        SELECT i.insight_id,
+               i.h3_id,
+               i.created_at,
+               i.priority_tier,
+               i.confidence,
+               i.finding,
+               i.domains_involved,
+               i.outcome_status,
+               m.ward,
+               m.lat,
+               m.lon
+        FROM h3_insights i
+        JOIN h3_metadata m
+          ON i.h3_id = m.h3_id AND i.city_id = m.city_id
+        WHERE i.city_id = ?
+          AND m.known_features_json LIKE '%school%'
+          AND i.agent_type = 'h3_expert'
+        ORDER BY i.created_at DESC
+        LIMIT 200
+        """,
+        [city_id],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Priority tier colours (matches inbox_panel.py conventions)
+# ---------------------------------------------------------------------------
+
+_TIER_COLOUR = {
+    "P1": "#b42318",
+    "P2": "#c4520a",
+    "P3": "#92670a",
+    "P4": "#1a7f37",
+}
+
+
+# ---------------------------------------------------------------------------
+# Main render function
+# ---------------------------------------------------------------------------
+
+def render_school_aq_panel(city_id: str = "bangalore") -> None:
+    st.markdown("### School Air Quality Monitor")
+    st.caption(
+        "H3 Expert Agent insights for cells containing schools. "
+        "Findings are cross-domain -- air quality, heat, and green cover are "
+        "all considered together. Review each finding before acting."
+    )
+
+    df = _load_school_insights(city_id)
+
+    if df.empty:
+        st.info(
+            "No school-cell insights found. "
+            "Run the agent on school cells first:\n\n"
+            "```\npython -m urban_platform.agents.h3_expert "
+            "--city bangalore --top-risk 20\n```\n\n"
+            "Then tag school cells in h3_metadata.known_features_json."
+        )
+        return
+
+    # Filters
+    col_tier, col_outcome, col_metric = st.columns(3)
+
+    with col_tier:
+        tier_opts = ["All"] + sorted(df["priority_tier"].dropna().unique().tolist())
+        tier = st.selectbox("Priority tier", tier_opts, key="school_tier")
+
+    with col_outcome:
+        outcome_opts = ["All"] + sorted(df["outcome_status"].dropna().unique().tolist())
+        outcome = st.selectbox("Outcome", outcome_opts, key="school_outcome")
+
+    with col_metric:
+        st.metric("School cells with insights", df["h3_id"].nunique())
+
+    filtered = df.copy()
+    if tier != "All":
+        filtered = filtered[filtered["priority_tier"] == tier]
+    if outcome != "All":
+        filtered = filtered[filtered["outcome_status"] == outcome]
+
+    # Summary table
+    st.divider()
+    if filtered.empty:
+        st.caption("No insights match the selected filters.")
+        return
+
+    display_cols = ["priority_tier", "h3_id", "ward", "finding", "confidence",
+                    "outcome_status", "created_at"]
+    display_cols = [c for c in display_cols if c in filtered.columns]
+
+    st.dataframe(
+        filtered[display_cols].rename(columns={
+            "priority_tier":  "Tier",
+            "h3_id":          "H3 Cell",
+            "ward":           "Ward",
+            "finding":        "Finding",
+            "confidence":     "Confidence",
+            "outcome_status": "Outcome",
+            "created_at":     "Generated",
+        }),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    # Map
+    map_df = filtered.dropna(subset=["lat", "lon"])
+    if not map_df.empty:
+        st.divider()
+        st.markdown("**Cell locations**")
+        st.map(map_df[["lat", "lon"]], zoom=11)
+
+    # Selected row detail
+    st.divider()
+    st.markdown("**Insight detail**")
+    cell_options = filtered["h3_id"].unique().tolist()
+    selected_cell = st.selectbox("Select cell", cell_options, key="school_cell_select")
+
+    cell_rows = filtered[filtered["h3_id"] == selected_cell]
+    if not cell_rows.empty:
+        row = cell_rows.iloc[0]
+        tier_colour = _TIER_COLOUR.get(str(row.get("priority_tier", "")), "#6b7280")
+        st.markdown(
+            f'<span style="color:{tier_colour};font-weight:600;">'
+            f'{row.get("priority_tier", "--")}</span> &nbsp; '
+            f'Confidence: {row.get("confidence", "--")}',
+            unsafe_allow_html=True,
+        )
+        st.markdown(row.get("finding", "No finding text."))
+
+        domains = row.get("domains_involved", "")
+        if domains:
+            st.caption(f"Domains involved: {domains}")
+
+        current_outcome = row.get("outcome_status", "pending")
+        outcome_options = ["pending", "verified", "false_positive", "actioned"]
+        new_outcome = st.selectbox(
+            "Record outcome",
+            outcome_options,
+            index=outcome_options.index(current_outcome)
+                  if current_outcome in outcome_options else 0,
+            key="school_outcome_record",
+        )
+        if st.button("Save outcome", key="school_save_outcome"):
+            from urban_platform.h3_knowledge.writer import close_insight
+            close_insight(row["insight_id"], outcome_status=new_outcome)
+            st.success(f"Outcome recorded: {new_outcome}")
+            st.cache_data.clear()
+```
+
+---
+
+## 7. Step 5: Wire it into the dashboard
+
+Open `review_dashboard/app.py`. Add three lines — one import at the top with the other component imports, and one entry in the `_DOMAIN_PANELS` dict.
+
+**Add the import** near the other domain panel imports (around line 40):
+
+```python
+from review_dashboard.components.school_aq_panel import render_school_aq_panel
+```
+
+**Register the panel** in the `_DOMAIN_PANELS` dict (around line 318):
+
+```python
+_DOMAIN_PANELS = {
+    # ... existing entries ...
+    "School AQ Monitor": render_school_aq_panel,
 }
 ```
 
-In the real AirOS workflow, you would later:
+That is all. The selectbox-based navigation means the panel only renders when selected, so there is no performance cost for other views.
 
-- formalize this as a JSON Schema under `specifications/provider_contracts/`
-- add one or more fixtures under `specifications/examples/`
-- register both in `specifications/manifest.json`
+---
 
-## Step 4: Define an output contract (conceptual)
+## 8. Step 6: Run and verify
 
-The output should be a review payload that’s safe for officials to read and act on through existing processes.
-
-Conceptual contract key (illustrative): `consumer_streetlight_maintenance_review`
-
-Example shape (illustrative only; not a real repo contract file):
-
-```json
-{
-  "review_id": "streetlight_review_demo_001",
-  "city_id": "city_demo_a",
-  "reporting_period": "2026_Q2",
-  "generated_at": "2026-05-01T10:05:00Z",
-  "lights_needing_inspection": [
-    { "streetlight_id": "sl_ward_12_0001", "ward_id": "ward_12", "reason": "repeated_outage_reports" }
-  ],
-  "outage_clusters": [
-    { "ward_id": "ward_12", "suspected_outages": 17, "note": "cluster suggests feeder issue; confirm on ground" }
-  ],
-  "proposed_actions": [
-    { "action_type": "inspection", "target": "ward_12", "priority": "high", "notes": "dispatch field team for verification" }
-  ],
-  "blocked_uses": ["automatic_work_order_dispatch", "public_outage_shaming"],
-  "human_review_required": true,
-  "provenance": {
-    "builder_id": "streetlight_maintenance_review",
-    "inputs": ["provider_streetlight_status_feed"],
-    "contains_real_pii": false,
-    "notes": "Tutorial output; review support only."
-  }
-}
-```
-
-Key safety choices:
-
-- **Explicit `blocked_uses`** to prevent automation beyond review support.
-- **`human_review_required: true`** to reinforce governance.
-- Proposed actions are **suggestions** for authorized teams, not automatic dispatch.
-
-## Step 5: Add sample fixtures (conceptual)
-
-Before anyone can trust an app, it needs sample inputs and outputs:
-
-- Sample inputs help reviewers and CI see what “valid provider data” looks like.
-- Sample outputs help reviewers and CI see what “review-ready output” looks like.
-
-In AirOS, fixtures are generally:
-
-- synthetic (demo-only)
-- non-secret
-- non-PII (or explicitly authorized, which is not Phase 1 default)
-
-## Step 6: Write decision logic (conceptual)
-
-For Streetlight Maintenance Review, your decision logic might:
-
-- group outage records by `ward_id`
-- flag repeated failures for the same `streetlight_id`
-- detect clusters where many streetlights show `suspected_outage` in a short window
-- propose **inspection and verification** steps
-
-**Guardrails:**
-
-- outputs must be review-oriented (clear next human step)
-- no enforcement language
-- no automatic dispatch
-- clear uncertainty and data quality signals (`quality_flag`, warnings, provenance)
-
-## Step 7: Validate the local app (read-only)
-
-Validate your local app package folder:
+**1. Seed the knowledge store** — run the full ingest pipeline if you haven't already:
 
 ```bash
-python tools/airos_cli.py apps validate /tmp/streetlight_maintenance_review
+python main.py --step ingest-h3
 ```
 
-For scaffolds, **`valid_with_warnings`** is expected until you replace placeholders with real contracts/examples and decision logic.
+**2. Tag school cells** — if `known_features_json` is not yet populated, seed it manually for a test cell:
 
-Validation does **not** execute your builder code.
+```python
+from urban_platform.h3_knowledge.store import H3KnowledgeStore
 
-## Step 8: Package (review artifact)
+store = H3KnowledgeStore.get()
+store.execute(
+    "UPDATE h3_metadata SET known_features_json = ? WHERE h3_id = ? AND city_id = ?",
+    ['["school"]', "8a1b00000007fff", "bangalore"],
+)
+store.commit()
+```
 
-Create a portable zip package:
+**3. Run the agent on school cells**:
 
 ```bash
-python tools/airos_cli.py apps package /tmp/streetlight_maintenance_review --output-dir /tmp/airos_dist
+python -m urban_platform.agents.h3_expert --city bangalore --top-risk 20
 ```
 
-Packaging does **not** install, register, or execute the app.
+Or run the targeted script from Step 3.
 
-## Step 9: Inspect the package (read-only)
-
-Inspect the zip package:
+**4. Launch the dashboard**:
 
 ```bash
-python tools/airos_cli.py apps inspect-package /tmp/airos_dist/streetlight_maintenance_review-v1.zip
+streamlit run review_dashboard/app.py
 ```
 
-Inspection is read-only and focuses on:
+Navigate to **Domains -> School AQ Monitor**. You should see the insight table and map populated with findings for school cells.
 
-- package metadata
-- descriptor presence and safety fields
-- suspicious/secret-like files
-- basic structure
-
-## Step 10: Add to a local catalog (metadata only)
-
-Add the package metadata to a local catalog index:
+**5. Check the conformance suite** to confirm the store is valid:
 
 ```bash
-python tools/airos_cli.py catalog add-package /tmp/airos_dist/streetlight_maintenance_review-v1.zip --catalog-dir /tmp/airos_catalog
-
-python tools/airos_cli.py catalog list --catalog-dir /tmp/airos_catalog
-python tools/airos_cli.py catalog show streetlight_maintenance_review --catalog-dir /tmp/airos_catalog
+python main.py --step conformance
+python tools/airos_cli.py doctor
 ```
 
-The local catalog is **metadata only**. It does not make the app runnable.
+---
 
-## Step 11: What is still required before execution
+## 9. Going further
 
-To run an app in AirOS demos/pilots, additional governance steps are required. Typically:
+**Scheduled sweeps for school cells.** The scheduler in `urban_platform/scheduler.py` runs the H3 Expert Agent for high-risk cells each sweep cycle. Add a school-specific pass that always analyses school cells regardless of their current assessed risk level — because even moderate risk near a school warrants officer attention.
 
-- **Real contracts** added under `specifications/` (provider + consumer as needed)
-- **Examples/fixtures** added under `specifications/examples/` (synthetic) and registered in `specifications/manifest.json`
-- **App descriptor** registered (governed metadata, not a dynamic plugin)
-- **Tests** added/updated so CI validates outputs against schemas
-- **Builder implementation review** (safety, correctness, provenance, blocked uses)
-- **Safe builder registry allowlisting** (explicit, fail-closed; no dynamic loading)
-- **Deployment example** (declarative registries + profile) if you want a runnable demo path
-- **Conformance pass** (`python main.py --step conformance`)
-- **Safety review** (ensure outputs are review support only and don’t imply automated authority)
+**Custom thresholds for schools.** The Rules Registry at `data/config/rules_registry.yaml` controls the risk level thresholds for every domain. Add a `school_proximity` override section to lower the AQI threshold that triggers a `high` risk level when a school is present in the cell. No code change required — the ingestors read the registry at runtime.
 
-## Safety posture (repeat)
+**Outcome tracking workflow for school health officers.** The `close_insight()` function in `urban_platform/h3_knowledge/writer.py` accepts an `outcome_status` of `verified`, `false_positive`, or `actioned`. Build a weekly digest that queries all school-cell insights with `outcome_status = 'pending'` and routes the list to the school health officer for review. The data is already there — it just needs a reporting skin.
 
-AirOS supports **review**. It does **not** authorize or automate:
-
-- penalties / recovery
-- emergency orders / evacuations
-- blacklisting
-- public disclosure without authorization
-- any final government decision
-
-Streetlight Maintenance Review outputs are **proposed next steps** for authorized human teams and must be treated as decision support, not automatic action.
-
+**Cross-domain compound risks specific to schools.** The H3 Expert Agent already looks for compound risks across domains. To make it more school-aware, extend the system prompt in `urban_platform/agents/h3_expert.py` with a school-context addendum that instructs the model to weight air + heat + noise compound risks more heavily when a school is present in the cell metadata.

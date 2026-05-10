@@ -218,8 +218,14 @@ def _ingest_water(city_id: str, bbox: dict, *, force: bool = False) -> int:
                       error_msg="no live GEE water data")
         return 0
     cell_list = [{"h3_id": k, **v} for k, v in cells_dict.items()]
+    # Alias: internal pipeline uses "water_quality_index"; DB stores the
+    # more accurate name "optical_water_clarity_index" to reflect that this
+    # is a Sentinel-2 optical proxy, not a regulatory WQI.
+    for cell in cell_list:
+        if "optical_water_clarity_index" not in cell:
+            cell["optical_water_clarity_index"] = cell.get("water_quality_index")
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="water",
-                                      signal_key="water_quality_index", risk_key="risk_level",
+                                      signal_key="optical_water_clarity_index", risk_key="risk_level",
                                       issue_key="dominant_issue", unit="index", source="gee")
     packets = build_water_decision_packets(
         cells_dict, DEFAULT_H3_RES, city_id, **bbox,
@@ -849,6 +855,69 @@ def _check_interval(domain: str, city_id: str, force: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Domain dispatch — driver-aware
+# ---------------------------------------------------------------------------
+
+def _run_domain(
+    domain: str,
+    city_id: str,
+    bbox: dict,
+    *,
+    force: bool = False,
+) -> int:
+    """Run one domain for one city.
+
+    Dispatch priority:
+      1. Active driver pool (loaded from drivers_registry.yaml via driver_loader).
+         These are driver instances satisfying H3DataSourceDriver Protocol.
+      2. Legacy _DOMAIN_FN dict (thin wrappers, kept for backward compat until
+         Phase 2 packaging is complete).
+
+    Returns rows written (0 = error/no data, -1 = skipped due to watermark).
+    """
+    # Try the driver pool first
+    try:
+        from urban_platform.sdk.driver_loader import get_active_drivers
+        drivers = get_active_drivers()
+        driver = drivers.get(domain)
+    except Exception:
+        driver = None
+
+    if driver is not None:
+        try:
+            n = driver.fetch(city_id, bbox, force=force)
+            logger.info("[%s/%s] ingested %d rows (driver: %s)", city_id, domain, n, type(driver).__name__)
+            return n
+        except _TooRecentError as e:
+            logger.debug("Skipped: %s", e)
+            return -1
+        except Exception as exc:
+            logger.error("[%s/%s] driver fetch failed: %s", city_id, domain, exc)
+            record_ingest(city_id=city_id, domain=domain, rows_written=0,
+                          status="error", error_msg=str(exc))
+            return 0
+
+    # Fallback: legacy dispatch table
+    fn = _DOMAIN_FN.get(domain)
+    if not fn:
+        logger.warning("Unknown domain '%s' — no driver or legacy function found.", domain)
+        return 0
+
+    try:
+        n = fn(city_id, bbox, force=force)
+        logger.info("[%s/%s] ingested %d rows (legacy)", city_id, domain, n)
+        return n
+    except _TooRecentError as e:
+        logger.debug("Skipped: %s", e)
+        return -1
+    except Exception as exc:
+        logger.error("[%s/%s] ingest failed: %s", city_id, domain, exc)
+        record_ingest(city_id=city_id, domain=domain, rows_written=0,
+                      status="error", error_msg=str(exc))
+        return 0
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -877,22 +946,8 @@ def run(
             continue
         results[city_id] = {}
         for domain in domains:
-            fn = _DOMAIN_FN.get(domain)
-            if not fn:
-                logger.warning("Unknown domain '%s' — skipping.", domain)
-                continue
-            try:
-                n = fn(city_id, bbox, force=force)
-                results[city_id][domain] = n
-                logger.info("[%s/%s] ingested %d rows", city_id, domain, n)
-            except _TooRecentError as e:
-                logger.debug("Skipped: %s", e)
-                results[city_id][domain] = -1  # -1 = skipped
-            except Exception as exc:
-                logger.error("[%s/%s] ingest failed: %s", city_id, domain, exc)
-                record_ingest(city_id=city_id, domain=domain, rows_written=0,
-                              status="error", error_msg=str(exc))
-                results[city_id][domain] = 0
+            n = _run_domain(domain, city_id, bbox, force=force)
+            results[city_id][domain] = n
 
     return results
 

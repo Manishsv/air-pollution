@@ -1,0 +1,33 @@
+# signals.yaml — declare every signal your driver writes to h3_signals.
+#
+# This file is read by the AirOS conformance gate to verify your driver's
+# output before it reaches the Knowledge Store.
+#
+# Rules:
+#   - Every signal written by fetch() must appear here.
+#   - DATA_CONFIDENCE is REQUIRED. Range: [0.0, 1.0].
+#   - dtype must be one of: float, int, str
+#   - range is optional; violations produce a WARNING (not a block).
+#   - nullable: true means the signal may be absent for some cells/hours.
+#
+# Rename "template_domain" to your actual domain name.
+
+domain: template_domain
+
+signals:
+  - name: MY_PRIMARY_SIGNAL
+    unit: index           # e.g. µg/m³, °C, MW, ratio, count, 0-1 index
+    dtype: float
+    range: [0.0, 1.0]    # optional; remove if unbounded
+    nullable: true
+    description: "Replace with a one-line description for dashboard labels."
+
+  - name: DATA_CONFIDENCE
+    unit: ratio
+    dtype: float
+    range: [0.0, 1.0]
+    nullable: false
+    description: >
+      Confidence in the signal value for this cell. Decays with distance from
+      the nearest observation, cloud cover, or model uncertainty. The H3 Expert
+      Agent uses this to weight signals in its reasoning.

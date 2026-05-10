@@ -53,15 +53,26 @@ AirOS does not issue government decisions. It produces decision packets — stru
                     ▼
 ┌─────────────────────────────────────────────────────┐
 │           H3 Expert Agent                            │
-│  Claude-backed reasoning agent that reads all        │
-│  signals for a requested cell and produces a         │
-│  cross-domain insight with causal chain              │
+│  LLM-backed reasoning agent that reads temporal      │
+│  context (30d baseline, circadian window, 48h        │
+│  forecast) and produces a cross-domain insight with  │
+│  testable hypotheses and confidence-derived tier     │
+└───────────────────┬─────────────────────────────────┘
+                    │  (run_top_risk_cells: risk pool + coverage pool)
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│           City Pattern Agent                         │
+│  Second-pass sweep synthesiser — reads all cell      │
+│  insights from the last sweep, identifies city-wide  │
+│  themes, computes cross-domain co-elevation stats,   │
+│  and writes a structured summary to city_patterns    │
 └───────────────────┬─────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────┐
 │           Review Dashboard (Streamlit)               │
-│  Per-domain tabs · H3 cell explorer · Infrastructure │
+│  Inbox (priority tiers, outcome tracking, close tab) │
+│  City Map (insights-only toggle) · Infrastructure    │
 │  panel · Ward decisions · Expert agent chat          │
 └─────────────────────────────────────────────────────┘
 ```
@@ -76,14 +87,15 @@ This is the central database. Everything in AirOS flows into and out of it.
 
 | Table | Dedup key | What it holds |
 |-------|-----------|---------------|
-| `h3_signals` | `(h3_id, city_id, domain, signal, hour_bucket)` | One row per cell/signal/hour. Newer value wins on conflict. Accumulates history across hours/days. |
+| `h3_signals` | `(h3_id, city_id, domain, signal, hour_bucket)` | One row per cell/signal/hour. Newer value wins on conflict. Accumulates history across hours/days. Includes `data_quality` field (real_station / satellite_derived / model_estimate / unknown), auto-inferred from source name. |
 | `h3_assessments` | `(h3_id, city_id, domain, day_bucket)` | Risk level per cell per domain per day. Newer assessment wins within the same day. |
 | `h3_metadata` | `(h3_id, city_id)` | Cell centroid lat/lon, first_seen, last_active. |
 | `h3_packets` | `packet_id` | Decision packets (idempotent — duplicate packet_id ignored). |
-| `h3_insights` | append-only | Agent findings with causal chains. |
+| `h3_insights` | append-only | Agent findings. Key columns: `finding`, `confidence`, `priority_tier` (high/medium/low, derived from confidence), `hypothesis_chain_json` (testable propositions with `testable_by` field), `outcome_status` (open/confirmed/refuted/unverifiable), `closed_by`, `closed_at`. |
 | `h3_ingest_log` | `(city_id, domain)` | Last ingest timestamp per domain — gates the cadence check. |
 | `h3_siting_candidates` | `(city_id, domain, h3_id, period_start)` | Recommended sensor siting locations. |
 | `h3_analysis_requests` | `request_id` | Queue of human-triggered expert agent runs. |
+| `city_patterns` | `pattern_id` | City-level pattern summaries produced by the City Pattern Agent after each sweep. Holds executive summary, themed findings, and evidence JSON. |
 
 ### H3 Resolution
 
@@ -174,6 +186,50 @@ Each satellite pixel/derived cell has a centroid lat/lon → `h3.latlng_to_cell(
 
 ---
 
+## Agent Intelligence Layer
+
+The agent layer sits between the H3 Knowledge Store and the review dashboard. It has two tiers.
+
+### Tier 1 — H3 Expert Agent (cell-level)
+
+The H3 Expert Agent runs for one H3 cell at a time. For each cell it assembles **three temporal horizons**:
+
+| Horizon | What | How |
+|---------|------|-----|
+| Past | 30-day all-day baseline (mean, p75, p90, provenance mix) | SQL over `h3_signals` |
+| Past (circadian) | Same-hour-of-day baseline (±2h UTC window, 30 days) | SQL filtered to same hour-of-day; removes diurnal cycle so 2am readings are compared against other 2am readings |
+| Present | Latest 7-day signals + staleness flags | Existing `h3_signals` query |
+| Future | 48-hour weather + AQ forecast (wind, precip, temp, PM2.5, PM10) | OpenMeteo API, fetched once per city per sweep and shared across all cells |
+
+The agent has **six tools**:
+
+| Tool | Purpose |
+|------|---------|
+| `get_signal_history` | Time-series for a specific domain/signal |
+| `get_neighbor_context` | Risk assessments in the surrounding k-ring |
+| `get_city_summary` | City-wide risk distribution and top insights |
+| `get_packets_for_domain` | Outcome history of prior decision packets |
+| `get_domain_cross_correlation` | City-wide lift score between two domains (validates cross-domain hypotheses before submission) |
+| `submit_insight` | Structured output written to `h3_insights` |
+
+Insights use **testable hypotheses** (not causal chains) — each proposition includes a `testable_by` field stating what evidence would confirm or refute it. Confidence maps to a `priority_tier` (high ≥ 0.75, medium 0.45–0.74, low < 0.45). Outcomes are tracked: field officers close insights with `confirmed`, `refuted`, or `unverifiable` verdicts. The agent reads prior outcomes on subsequent runs.
+
+**Cell selection — two-pool sweep:** `run_top_risk_cells()` splits its budget into a **risk pool** (70% of budget — highest-risk cells, 6h cooldown) and a **coverage pool** (30% — cells never analysed or with the oldest insight, ordered never-analysed first). This prevents the agent from clustering on the same hot-spot cells repeatedly and ensures city-wide baseline coverage builds over time.
+
+### Tier 2 — City Pattern Agent (sweep-level)
+
+After each cell sweep that produces new insights, the **City Pattern Agent** runs once per city. It reads all insights from the last 2 hours and synthesises:
+
+- **Domain frequency** — which domains appear most across insights
+- **Co-occurrence pairs** — which domain combinations appear in the same insight
+- **Cross-domain co-elevation** — lift scores from `get_domain_cross_correlation` for the top pairs
+- **Hotspot cells** — cells appearing in multiple insights
+- **City risk distribution** — cell counts by risk level across all domains (last 24h)
+
+Output is a structured JSON (executive summary + 2–5 themed findings with evidence, confidence, city-level actions) written to `city_patterns`. This is the first layer of analysis above the individual-cell level.
+
+---
+
 ## Safety Posture
 
 AirOS does not authorize or automate government decisions. Every output is:
@@ -199,6 +255,17 @@ The review dashboard is explicitly a decision support tool. Officers review evid
 | `urban_platform/rules/registry.py` | Rules registry singleton |
 | `data/config/rules_registry.yaml` | Operator threshold overrides |
 | `data/config/camera_registry.json` | CCTV camera → lat/lon registry |
-| `urban_platform/agents/h3_expert.py` | H3 Expert Agent (Claude-backed) |
+| `urban_platform/agents/h3_expert.py` | H3 Expert Agent — cell-level cross-domain reasoning |
+| `urban_platform/agents/city_pattern_agent.py` | City Pattern Agent — sweep-level synthesis across cells |
+| `urban_platform/connectors/weather/open_meteo_forecast.py` | 48-hour weather + AQ forecast (OpenMeteo, no key required) |
 | `review_dashboard/app.py` | Streamlit dashboard entry point |
 | `review_dashboard/components/` | Per-domain dashboard panels |
+
+---
+
+## Further Reading
+
+- **Intelligence methodology (academic)**: [`INTELLIGENCE_METHODOLOGY.md`](INTELLIGENCE_METHODOLOGY.md) — spatial framework, temporal context, agent architecture, lift scores, coverage sampling, limitations, evaluation framework
+- **Federation and Network Layer**: [`FEDERATED_DEPLOYMENT_ARCHITECTURE.md`](FEDERATED_DEPLOYMENT_ARCHITECTURE.md), [`AGENCY_NODE_MODEL.md`](AGENCY_NODE_MODEL.md)
+- **Specs-first development**: `specifications/ARCHITECTURE_NOTE.md`, [`../developer/DOMAIN_DEVELOPMENT_PLAYBOOK.md`](../developer/DOMAIN_DEVELOPMENT_PLAYBOOK.md)
+- **Multi-container deployment**: [`CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md`](CONTAINERIZED_DEPLOYMENT_ARCHITECTURE.md)

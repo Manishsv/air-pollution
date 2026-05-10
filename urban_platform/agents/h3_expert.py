@@ -141,6 +141,28 @@ AGENT_TOOLS = [
         ),
     ),
     make_tool(
+        name="get_domain_cross_correlation",
+        description=(
+            "Query how strongly two domains co-occur at elevated risk across the CITY over the "
+            "past N days. Returns a lift score: lift > 1.5 means the domains co-elevate more "
+            "than chance; lift > 3.0 is very strong. Use this to validate or challenge a "
+            "cross-domain hypothesis before submitting. "
+            "Example: domain_a='air', domain_b='heat' → 'Do high-air-risk cells also have "
+            "high heat risk more than chance?' "
+            "IMPORTANT: this is a city-wide signal, not cell-specific — interpret it as prior "
+            "probability context, not proof for this cell."
+        ),
+        parameters=make_parameters(
+            properties={
+                "domain_a":       {"type": "string", "description": "First domain (e.g. air, heat, flood, noise, waste, water, drains, buildings, roads)"},
+                "domain_b":       {"type": "string", "description": "Second domain to correlate against domain_a"},
+                "risk_threshold": {"type": "string", "description": "Minimum risk level to count as elevated: 'low', 'moderate', 'high' (default), 'severe'", "default": "high"},
+                "lookback_days":  {"type": "integer", "description": "Days of assessment history to include (default 30)", "default": 30},
+            },
+            required=["domain_a", "domain_b"],
+        ),
+    ),
+    make_tool(
         name="submit_insight",
         description=(
             "Submit your final cross-domain insight. Call this ONCE when analysis is complete. "
@@ -155,27 +177,39 @@ AGENT_TOOLS = [
                         "Frame as a risk assessment, not an event report. "
                         "Good: 'Elevated waste-fire risk — extreme heat, accumulated garbage, moderate wind.' "
                         "Bad: 'Landfill fire is occurring.' "
-                        "The causal_chain is where you explain the mechanism in detail."
+                        "The hypothesis_chain is where you explain the mechanism and how to test it."
                     ),
                 },
                 "confidence": {
                     "type": "number",
-                    "description": "Confidence 0.0–1.0. Be honest — lower if data is sparse or proxy-derived.",
+                    "description": (
+                        "Confidence 0.0–1.0. Be honest — lower if data is sparse or proxy-derived. "
+                        "This drives priority_tier: ≥0.75=high, 0.45–0.74=medium, <0.45=low. "
+                        "Do not inflate — this score is calibrated against field outcomes over time."
+                    ),
                 },
                 "domains_involved": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Which domains are part of this finding e.g. ['air', 'construction', 'noise']",
                 },
-                "causal_chain": {
+                "hypothesis_chain": {
                     "type": "array",
-                    "description": "Ordered reasoning steps from evidence to conclusion",
+                    "description": (
+                        "Ordered reasoning steps from evidence to hypothesis. "
+                        "Each step is a testable proposition, not a causal assertion. "
+                        "Use 'consistent with', 'suggests', 'hypothesis: X → Y' — not 'X caused Y'."
+                    ),
                     "items": {
                         "type": "object",
                         "properties": {
-                            "step":      {"type": "integer"},
-                            "evidence":  {"type": "string"},
-                            "inference": {"type": "string"},
+                            "step":       {"type": "integer"},
+                            "evidence":   {"type": "string"},
+                            "hypothesis": {"type": "string"},
+                            "testable_by": {
+                                "type": "string",
+                                "description": "How a field officer could verify or refute this step",
+                            },
                         },
                     },
                 },
@@ -205,7 +239,7 @@ AGENT_TOOLS = [
                     "description": "What you are unsure about; what data would increase confidence",
                 },
             },
-            required=["finding", "confidence", "domains_involved", "causal_chain"],
+            required=["finding", "confidence", "domains_involved", "hypothesis_chain"],
         ),
     ),
 ]
@@ -239,11 +273,15 @@ Your job is to go BEYOND single-domain rules and find:
    → dust is re-suspended rather than dispersed, amplifying PM2.5 beyond what
    either domain would flag alone.
 
-2. CAUSAL CHAINS — the actual mechanism linking signals across domains.
-   Example: upstream deforestation (GCCI loss) → reduced soil retention → elevated
-   flood risk even on moderate rainfall days.
-   Example: WIND_DIR_DEG ≈ 45° (NE) + industrial cluster NE of cell → AQI elevation
-   is advected pollution, not a local source — different intervention needed.
+2. TESTABLE HYPOTHESES — the mechanism linking signals across domains, stated as a
+   falsifiable hypothesis, not a causal claim.
+   Example: "Hypothesis: upstream deforestation (GCCI loss) → reduced soil retention →
+   elevated flood risk on moderate rainfall days. Test: check whether flood risk is
+   elevated in cells with GCCI loss vs not, controlling for precipitation."
+   Example: "Hypothesis: WIND_DIR_DEG ≈ 45° (NE) + industrial cluster NE of cell →
+   AQI elevation is advected, not local. Test: field measurement upwind vs downwind."
+   Use language like "consistent with", "suggests", "hypothesis: X drives Y" —
+   never assert causation from sensor data alone.
 
 3. PERSISTENT vs TRANSIENT risks — is this a spike or a structural problem?
    Check signal history to distinguish.
@@ -315,6 +353,10 @@ How to use your tools
 - Call get_neighbor_context() if you suspect spatial spillover.
 - Call get_city_summary() to contextualise against city-wide patterns.
 - Call get_packets_for_domain() only if outcome history is needed.
+- Call get_domain_cross_correlation(domain_a, domain_b) to test whether two domains
+  co-elevate city-wide before asserting a causal link. A lift > 1.5 strengthens a
+  hypothesis; lift ≈ 1.0 suggests the co-occurrence in this cell may be coincidental.
+  Use ONCE per cross-domain hypothesis — it consumes one tool call.
 - ALWAYS finish with submit_insight() — this is mandatory. Budget: max 10 tool calls total.
   Reserve the LAST call for submit_insight(). Do not exhaust your budget on data gathering.
 
@@ -396,10 +438,12 @@ class H3ExpertAgent:
         config: LLMConfig | dict | None = None,
         signals_lookback_days: int = 7,
         web_search_config: WebSearchConfig | None = None,
+        forecast: dict | None = None,
     ) -> None:
         self.h3_id   = h3_id
         self.city_id = city_id
         self.signals_lookback_days = signals_lookback_days
+        self._forecast = forecast  # pre-fetched city-level forecast; None = fetch per cell
 
         if isinstance(config, dict):
             cfg = load_config(overrides=config)
@@ -493,6 +537,24 @@ class H3ExpertAgent:
             rows.append(r)
         return {"domain": domain, "packets": rows}
 
+    def _tool_get_domain_cross_correlation(
+        self,
+        domain_a: str,
+        domain_b: str,
+        risk_threshold: str = "high",
+        lookback_days: int = 30,
+        **_,
+    ) -> dict:
+        """Return city-wide co-occurrence lift score for two domains."""
+        from urban_platform.h3_knowledge.reader import get_domain_cross_correlation
+        return get_domain_cross_correlation(
+            self.city_id,
+            domain_a,
+            domain_b,
+            risk_threshold=risk_threshold,
+            lookback_days=lookback_days,
+        )
+
     def _dispatch_tool(self, tool_call: ToolCall) -> Any:
         name  = tool_call.name
         args  = tool_call.arguments
@@ -507,6 +569,8 @@ class H3ExpertAgent:
                 return self._tool_get_packets_for_domain(**args)
             if name == "search_web":
                 return self._tool_search_web(**args)
+            if name == "get_domain_cross_correlation":
+                return self._tool_get_domain_cross_correlation(**args)
             if name == "submit_insight":
                 return {"status": "received"}
             return {"error": f"Unknown tool: {name}"}
@@ -527,6 +591,7 @@ class H3ExpertAgent:
             self.h3_id, self.city_id,
             signals_lookback_days=self.signals_lookback_days,
             include_neighbors=False,
+            prefetched_forecast=self._forecast,
         )
         system   = _SYSTEM_PROMPT.format(h3_id=self.h3_id, city_id=self.city_id)
         messages = [user_msg(self._build_context_message(ctx))]
@@ -651,7 +716,7 @@ class H3ExpertAgent:
             domains_involved=insight_payload.get("domains_involved", []),
             finding=insight_payload.get("finding", "Agent completed without structured finding."),
             confidence=float(insight_payload.get("confidence", 0.3)),
-            causal_chain=insight_payload.get("causal_chain", []),
+            hypothesis_chain=insight_payload.get("hypothesis_chain") or insight_payload.get("causal_chain", []),
             recommended_actions=insight_payload.get("recommended_actions") or [],
             uncertainty_notes=insight_payload.get("uncertainty_notes") or [],
         )
@@ -729,13 +794,23 @@ class H3ExpertAgent:
                     )
             parts.append("")
 
+        staleness = ctx.get("staleness", {})
+
         assessments = ctx.get("assessments", [])
         if assessments:
             parts.append("### Current domain assessments")
             for a in assessments:
+                domain = a["domain"]
                 issue = f" — {a['dominant_issue']}" if a.get("dominant_issue") else ""
                 val   = f" ({a['primary_index']}={a['primary_value']:.3g})" if a.get("primary_value") else ""
-                parts.append(f"- **{a['domain']}**: {a['risk_level'].upper()}{val}{issue}")
+                # Staleness indicator
+                stale_info = staleness.get(domain, {})
+                age_h = stale_info.get("age_hours")
+                if stale_info.get("stale"):
+                    stale_flag = f" ⚠ DATA STALE ({age_h:.0f}h ago — satellite gap or sensor outage)"
+                else:
+                    stale_flag = ""
+                parts.append(f"- **{domain}**: {a['risk_level'].upper()}{val}{issue}{stale_flag}")
             parts.append("")
         else:
             parts.append("### Current domain assessments\n_No assessments in store for this cell._\n")
@@ -752,23 +827,204 @@ class H3ExpertAgent:
 
         insights = ctx.get("insights", [])
         if insights:
-            parts.append("### Prior agent insights (context only — do not repeat, do not contradict without new evidence)")
+            parts.append(
+                "### Prior agent hypotheses\n"
+                "_Do not repeat hypotheses already captured below. "
+                "Only revise them if new signal evidence justifies it — "
+                "if so, explicitly state what changed and why the hypothesis is updated._"
+            )
             for i in insights[:3]:
-                parts.append(
-                    f"- [{str(i.get('created_at','?'))[:10]}] (conf={i.get('confidence','?')}) "
-                    f"{i['finding']}"
+                domains_str = (
+                    ", ".join(i["domains_involved"]) if i.get("domains_involved") else "?"
                 )
-                # Surface prior actions so agent knows what was already recommended
+                tier = i.get("priority_tier", "?")
+                outcome = i.get("outcome_status", "open")
+                outcome_flag = (
+                    " ✓ confirmed" if outcome == "confirmed"
+                    else " ✗ refuted" if outcome == "refuted"
+                    else " ? unverifiable" if outcome == "unverifiable"
+                    else ""  # open — no flag
+                )
+                parts.append(
+                    f"- [{str(i.get('created_at','?'))[:10]}]"
+                    f" priority={tier}"
+                    f" domains=[{domains_str}]"
+                    f"{outcome_flag}\n"
+                    f"  {i['finding']}"
+                )
+                # Surface prior recommended actions so agent knows what was already proposed
                 prior_actions = i.get("recommended_actions") or []
                 if prior_actions:
-                    for a in prior_actions[:2]:
+                    for a in prior_actions[:3]:
                         action_text = a.get("action", str(a)) if isinstance(a, dict) else str(a)
-                        parts.append(f"  → previously recommended: {action_text}")
+                        urgency = (
+                            f" [{a.get('urgency', a.get('priority', '?'))}]"
+                            if isinstance(a, dict)
+                            else ""
+                        )
+                        parts.append(f"  → recommended{urgency}: {action_text}")
+                # Surface prior uncertainty notes so agent can track what was unresolved
+                notes = i.get("uncertainty_notes") or []
+                if notes:
+                    parts.append(f"  ⚠ unresolved: {notes[0]}")
+            parts.append("")
+
+        # ------------------------------------------------------------------
+        # Historical baseline (30-day percentile context)
+        # ------------------------------------------------------------------
+        baseline = ctx.get("historical_baseline", {})
+        if baseline:
+            parts.append("### Historical baseline (30-day context)")
+            for domain, b in sorted(baseline.items()):
+                cur = b.get("current")
+                pct = b.get("percentile_rank")
+                n = b.get("n", 0)
+                reliable = b.get("percentile_rank_reliable", False)
+                provenance = b.get("provenance", "")
+                prov_note = f" [{provenance}]" if provenance else ""
+
+                if cur is not None and pct is not None and reliable:
+                    if pct >= 90:
+                        flag = " 🔴 ANOMALOUS (≥90th pct)"
+                    elif pct >= 75:
+                        flag = " 🟠 ELEVATED (≥75th pct)"
+                    elif pct <= 10:
+                        flag = " 🔵 UNUSUALLY LOW (≤10th pct)"
+                    else:
+                        flag = ""
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): current={cur}"
+                        f" → {int(pct)}th pct vs 30d"
+                        f" (avg={b['mean']}, p90={b['p90']}, max={b['max']}, n={n})"
+                        f"{flag}{prov_note}"
+                    )
+                elif cur is not None and not reliable:
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): current={cur}"
+                        f" — 30d avg={b['mean']}, max={b['max']}"
+                        f" ⚠ percentile rank unreliable (n={n} < 30){prov_note}"
+                    )
+                else:
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): "
+                        f"30d avg={b['mean']}, p90={b['p90']}, max={b['max']} (n={n}){prov_note}"
+                    )
+            parts.append("")
+
+        # ------------------------------------------------------------------
+        # Circadian baseline — same-hour-of-day context (±2 h UTC window)
+        # Key insight: compares current reading only against readings at the
+        # same time of day, removing diurnal cycles from the anomaly signal.
+        # ------------------------------------------------------------------
+        circ = ctx.get("circadian_baseline", {})
+        if circ:
+            hour_window = next(iter(circ.values())).get("hour_window_utc", "?")
+            parts.append(f"### Same-time-of-day baseline (UTC {hour_window}, 30-day window)")
+            for domain, b in sorted(circ.items()):
+                cur = b.get("current")
+                pct = b.get("percentile_rank")
+                n = b.get("n", 0)
+                reliable = b.get("percentile_rank_reliable", False)
+
+                # Cross-reference: flag where circadian rank differs materially
+                # from all-day rank (≥20 pct points) — signals a time-of-day effect
+                allday = ctx.get("historical_baseline", {}).get(domain, {})
+                allday_pct = allday.get("percentile_rank") if allday else None
+                tod_note = ""
+                if (
+                    cur is not None
+                    and pct is not None
+                    and reliable
+                    and allday_pct is not None
+                    and allday.get("percentile_rank_reliable", False)
+                ):
+                    delta = pct - allday_pct
+                    if delta >= 20:
+                        tod_note = f" (↑{delta:.0f} pct vs all-day — time-of-day effect likely)"
+                    elif delta <= -20:
+                        tod_note = f" (↓{abs(delta):.0f} pct vs all-day — lower than usual for this hour)"
+
+                if cur is not None and pct is not None and reliable:
+                    if pct >= 90:
+                        flag = " 🔴 ANOMALOUS for this hour (≥90th pct)"
+                    elif pct >= 75:
+                        flag = " 🟠 ELEVATED for this hour (≥75th pct)"
+                    elif pct <= 10:
+                        flag = " 🔵 LOW for this hour (≤10th pct)"
+                    else:
+                        flag = ""
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): current={cur}"
+                        f" → {int(pct)}th pct at this hour"
+                        f" (same-hour avg={b['mean']}, p90={b['p90']}, n={n})"
+                        f"{flag}{tod_note}"
+                    )
+                elif cur is not None and not reliable:
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): current={cur}"
+                        f" — same-hour avg={b['mean']}, max={b['max']}"
+                        f" ⚠ rank unreliable (n={n} < 30)"
+                    )
+                else:
+                    parts.append(
+                        f"- **{domain}** ({b['signal']}): "
+                        f"same-hour avg={b['mean']}, p90={b['p90']}, max={b['max']} (n={n})"
+                    )
+            parts.append("")
+
+        # ------------------------------------------------------------------
+        # 48-hour forecast (OpenMeteo — weather + AQ)
+        # ------------------------------------------------------------------
+        forecast = ctx.get("forecast", {})
+        wx = forecast.get("weather", {})
+        aq_fc = forecast.get("aq", {})
+        if wx or aq_fc:
+            parts.append("### 48-hour outlook (OpenMeteo forecast)")
+            if wx.get("wind"):
+                wind_parts = []
+                for b in wx["wind"][:4]:  # up to +24h in 6h buckets
+                    wind_parts.append(
+                        f"{b['label']}: {b['speed_mean']} m/s from {b['direction_compass']}"
+                    )
+                parts.append("**Wind**: " + " | ".join(wind_parts))
+
+            if wx.get("precipitation_prob"):
+                precip_parts = []
+                for b in wx["precipitation_prob"][:4]:
+                    precip_parts.append(f"{b['label']}: {b['mean']:.0f}%")
+                parts.append("**Precip probability**: " + " | ".join(precip_parts))
+
+            if wx.get("temperature_c"):
+                temps = [b["mean"] for b in wx["temperature_c"][:4]]
+                parts.append(
+                    f"**Temperature**: {temps[0]:.1f}°C now → "
+                    f"{temps[-1]:.1f}°C at {wx['temperature_c'][len(temps)-1]['label']}"
+                )
+
+            if aq_fc.get("pm2_5"):
+                pm_parts = []
+                for b in aq_fc["pm2_5"][:4]:
+                    pm_parts.append(f"{b['label']}: {b['mean']:.1f} μg/m³")
+                parts.append("**PM2.5 forecast**: " + " | ".join(pm_parts))
+
+            if aq_fc.get("pm10"):
+                pm_parts = []
+                for b in aq_fc["pm10"][:4]:
+                    pm_parts.append(f"{b['label']}: {b['mean']:.1f} μg/m³")
+                parts.append("**PM10 forecast**: " + " | ".join(pm_parts))
+
+            parts.append(
+                "_Use forecast wind direction to reason about plume transport. "
+                "Use precipitation probability to anticipate natural pollutant washout. "
+                "If AQ is forecast to worsen, recommend pre-emptive action._"
+            )
             parts.append("")
 
         parts.append(
             "---\n"
-            "Analyse this cell. Use tools if you need more data, "
+            "Analyse this cell across past (historical baseline above), "
+            "present (signals + assessments), and future (48h forecast). "
+            "Use tools if you need more data, "
             "then call `submit_insight` with your final cross-domain finding."
         )
         return "\n".join(parts)
@@ -780,14 +1036,14 @@ class H3ExpertAgent:
                     "finding": str(msg["content"])[:200],
                     "confidence": 0.2,
                     "domains_involved": [],
-                    "causal_chain": [],
+                    "hypothesis_chain": [],
                     "uncertainty_notes": ["Agent did not call submit_insight."],
                 }
         return {
             "finding": "Agent completed without producing a finding.",
             "confidence": 0.0,
             "domains_involved": [],
-            "causal_chain": [],
+            "hypothesis_chain": [],
         }
 
 
@@ -799,24 +1055,55 @@ def run_top_risk_cells(
     city_id: str,
     *,
     top_n: int = 5,
+    coverage_ratio: float = 0.3,
     domains: list[str] | None = None,
     config: LLMConfig | dict | None = None,
 ) -> list[dict]:
-    """Run H3ExpertAgent on the top-N highest-risk cells missing a recent insight."""
+    """Run H3ExpertAgent on a balanced mix of high-risk and coverage cells.
+
+    The agent budget (top_n) is split into two pools:
+
+    Risk pool (1 - coverage_ratio of budget):
+        Highest-risk cells that haven't had an insight in the last 6 hours.
+        Same behaviour as before — focuses AI effort where signals are worst.
+
+    Coverage pool (coverage_ratio of budget):
+        Cells with the OLDEST last insight (or never analysed), ordered so
+        never-analysed cells come first.  Ensures the system builds baseline
+        understanding across the full city over time, not just the top cluster.
+
+    With top_n=10 and coverage_ratio=0.3:  7 risk + 3 coverage cells per sweep.
+    """
     from urban_platform.h3_knowledge.store import H3KnowledgeStore
 
+    store = H3KnowledgeStore.get()
+
     domain_filter = ""
-    params: list = [city_id]
+    domain_params: list = []
     if domains:
         placeholders = ",".join(["?" for _ in domains])
         domain_filter = f"AND domain IN ({placeholders})"
-        params.extend(domains)
+        domain_params = list(domains)
 
-    df = H3KnowledgeStore.get().fetchdf(
+    # Shared exclusion: cells with a very recent insight (6h cooldown)
+    _RECENT_INSIGHT_EXCL = """
+        h3_id NOT IN (
+            SELECT h3_id FROM h3_insights
+            WHERE city_id = ?
+              AND agent_type = 'h3_expert'
+              AND created_at >= datetime('now', '-6 hours')
+        )
+    """
+
+    # ── Risk pool ─────────────────────────────────────────────────────────
+    n_risk     = max(1, round(top_n * (1 - coverage_ratio)))
+    n_coverage = top_n - n_risk
+
+    risk_df = store.fetchdf(
         f"""
         SELECT
             h3_id,
-            count(*) AS domain_count,
+            count(*)  AS domain_count,
             max(CASE risk_level
                 WHEN 'severe'   THEN 4
                 WHEN 'high'     THEN 3
@@ -828,27 +1115,97 @@ def run_top_risk_cells(
           AND risk_level IN ('severe', 'high', 'moderate')
           AND day_bucket >= date('now', '-7 days')
           {domain_filter}
-          AND h3_id NOT IN (
-              SELECT h3_id FROM h3_insights
-              WHERE city_id = ?
-                AND agent_type = 'h3_expert'
-                AND created_at >= datetime('now', '-6 hours')
-          )
+          AND {_RECENT_INSIGHT_EXCL}
         GROUP BY h3_id
         ORDER BY max_risk_score DESC, domain_count DESC
-        LIMIT {top_n}
+        LIMIT {n_risk}
         """,
-        params + [city_id],
+        [city_id] + domain_params + [city_id],
     )
 
-    if df.empty:
+    risk_ids = risk_df["h3_id"].tolist() if not risk_df.empty else []
+
+    # ── Coverage pool ─────────────────────────────────────────────────────
+    # Cells with assessments (any risk level) ordered by:
+    #   1. Never analysed (no insight row) — NULLS FIRST via CASE trick
+    #   2. Oldest last insight
+    # Excludes cells already in the risk pool and the 6h cooldown exclusion.
+    exclude_placeholders = ",".join(["?" for _ in risk_ids]) if risk_ids else "''"
+    coverage_df = store.fetchdf(
+        f"""
+        SELECT
+            a.h3_id,
+            count(*)  AS domain_count,
+            max(CASE a.risk_level
+                WHEN 'severe'   THEN 4
+                WHEN 'high'     THEN 3
+                WHEN 'moderate' THEN 2
+                WHEN 'low'      THEN 1
+                ELSE 0 END)             AS max_risk_score,
+            MAX(i.created_at)           AS last_insight_at
+        FROM h3_assessments a
+        LEFT JOIN h3_insights i
+            ON a.h3_id = i.h3_id
+           AND i.city_id = a.city_id
+           AND i.agent_type = 'h3_expert'
+        WHERE a.city_id = ?
+          AND a.day_bucket >= date('now', '-7 days')
+          {domain_filter}
+          AND a.h3_id NOT IN ({exclude_placeholders})
+          AND {_RECENT_INSIGHT_EXCL}
+        GROUP BY a.h3_id
+        ORDER BY
+            CASE WHEN MAX(i.created_at) IS NULL THEN 0 ELSE 1 END ASC,
+            MAX(i.created_at) ASC,
+            max_risk_score DESC
+        LIMIT {n_coverage}
+        """,
+        [city_id] + domain_params + risk_ids + [city_id],
+    )
+
+    coverage_ids = coverage_df["h3_id"].tolist() if not coverage_df.empty else []
+
+    # Merge pools — risk cells first, then coverage
+    all_ids = risk_ids + [h for h in coverage_ids if h not in risk_ids]
+
+    if not all_ids:
         logger.info("No eligible cells for city=%s", city_id)
         return []
+
+    logger.info(
+        "Agent sweep for %s: %d risk-first + %d coverage cells (total %d)",
+        city_id, len(risk_ids), len(coverage_ids), len(all_ids),
+    )
+
+    # Build a combined df for the forecast centroid lookup
+    import pandas as pd
+    df = pd.DataFrame({"h3_id": all_ids})
+
+    # Fetch weather + AQ forecast once for the whole city — all cells share
+    # the same forecast (city centroids are close enough that per-cell deltas
+    # are negligible) and this avoids N identical HTTP round-trips per sweep.
+    city_forecast: dict = {}
+    try:
+        import h3 as _h3
+        from urban_platform.connectors.weather.open_meteo_forecast import fetch_cell_forecast
+        rep_cell = df["h3_id"].iloc[0]
+        lat, lon = _h3.cell_to_latlng(rep_cell)
+        city_forecast = fetch_cell_forecast(lat, lon, hours=48)
+        logger.info(
+            "Fetched city-level forecast for %s (centroid %.4f, %.4f) — "
+            "shared across %d cells",
+            city_id, lat, lon, len(df),
+        )
+    except Exception as exc:
+        logger.warning("City forecast fetch failed for %s: %s — cells will run without forecast", city_id, exc)
 
     results = []
     for h3_id in df["h3_id"].tolist():
         try:
-            agent = H3ExpertAgent(h3_id=h3_id, city_id=city_id, config=config)
+            agent = H3ExpertAgent(
+                h3_id=h3_id, city_id=city_id, config=config,
+                forecast=city_forecast or None,
+            )
             results.append(agent.run())
         except Exception as exc:
             logger.error("H3ExpertAgent failed [%s/%s]: %s", h3_id, city_id, exc)

@@ -494,7 +494,7 @@ def render_map_panel() -> None:
         st.session_state["map_sel_h3"] = _pending
 
     # ── City + filter controls ────────────────────────────────────────────
-    mc1, mc2, mc3 = st.columns([3, 2, 2])
+    mc1, mc2, mc3, mc4 = st.columns([3, 2, 2, 2])
     with mc1:
         # City is always required — no "All cities" option to avoid mixing cells
         city_options = {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
@@ -517,6 +517,17 @@ def render_map_panel() -> None:
             key="map_min_risk",
             label_visibility="collapsed",
         )
+    with mc4:
+        insights_only = st.toggle(
+            "Insights only",
+            value=True,
+            key="map_insights_only",
+            help=(
+                "ON — show only cells where the AI agent has produced an insight "
+                "(matches the Inbox view).\n\n"
+                "OFF — show all assessed cells across the city."
+            ),
+        )
 
     # ── Load + filter ─────────────────────────────────────────────────────
     df = _load_assessment_cells(city_id, days_back)
@@ -533,6 +544,17 @@ def render_map_panel() -> None:
     # will crash the browser canvas if it receives invalid cell IDs.
     df = df[df["h3_id"].notna() & (df["h3_id"].astype(str).str.strip() != "")]
 
+    # Insights-only filter — mirrors the inbox panel view
+    if insights_only:
+        df = df[df["insight_id"].notna()]
+        if df.empty:
+            st.info(
+                f"No AI insights for **{city_label}** in the last {days_back} days.  \n"
+                "Toggle **Insights only** off to see all assessed cells, "
+                "or run the agent to generate insights."
+            )
+            return
+
     min_score = _RISK_ORDER.get(min_risk, 0)
     if min_risk != "all":
         df = df[df["risk_score"] >= min_score]
@@ -547,8 +569,9 @@ def render_map_panel() -> None:
     high = int((df["risk_level"] == "high").sum())
     mod  = int((df["risk_level"] == "moderate").sum())
     ins  = int(df["insight_id"].notna().sum())
+    mode_label = "insights" if insights_only else "assessed cells"
     st.caption(
-        f"**{city_label}** · {len(df)} cells · "
+        f"**{city_label}** · {len(df)} {mode_label} · "
         f"{'🔴 ' + str(sev) + ' severe · ' if sev else ''}"
         f"{'🟠 ' + str(high) + ' high · ' if high else ''}"
         f"{'🟡 ' + str(mod) + ' moderate · ' if mod else ''}"

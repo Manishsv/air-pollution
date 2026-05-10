@@ -287,7 +287,15 @@ These four domains provide the "city anatomy" that the H3 Expert Agent and risk 
 
 ## Cross-Domain Reasoning
 
-The H3 Expert Agent sees all signals simultaneously for any requested cell. Common cross-domain patterns:
+The H3 Expert Agent sees all signals simultaneously for any requested cell, enriched with three temporal horizons:
+
+- **30-day all-day baseline** — mean, p75, p90 and provenance mix per domain (what's normal for this cell overall)
+- **Circadian baseline** — same-hour-of-day stats (±2h UTC window) — removes the diurnal cycle so a 2am spike is judged against other 2am readings, not the all-day average
+- **48-hour forecast** — OpenMeteo weather + AQ forecast (wind, precip, temperature, PM2.5, PM10) shared across all cells in a city per sweep
+
+The agent can call `get_domain_cross_correlation(domain_a, domain_b)` to get a city-wide **lift score** — how much more likely are two domains to co-elevate than by chance — before asserting a cross-domain causal link in its hypothesis chain.
+
+Common cross-domain patterns:
 
 | Signals present | Likely interpretation |
 |----------------|----------------------|
@@ -297,6 +305,9 @@ The H3 Expert Agent sees all signals simultaneously for any requested cell. Comm
 | High crowd density + high heat + outdoor event | Public health risk — cooling advisory |
 | High NDVI loss + high WASTE_RISK + low BUILDING_COUNT | Possible illegal dumping on vacant land |
 | GATHERING_ALERT + high AQ risk | Cross-domain: consider event postponement advisory |
+| Air + waste lift > 3.0 city-wide | Strong evidence waste burning is the AQ source |
+
+After each cell sweep, the **City Pattern Agent** synthesises all insights into city-wide themes (e.g. "heat-green coupling in 5 northeast cells", "flood risk independent of heat — separate mitigation needed") written to `city_patterns`.
 
 ---
 

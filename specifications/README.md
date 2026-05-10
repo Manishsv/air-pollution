@@ -1,5 +1,14 @@
 # Specifications (v1)
 
+> **This folder (`specifications/`) contains machine-readable contracts** — JSON schemas,
+> YAML domain specs, OpenAPI stubs, and registry definitions used by conformance validators,
+> the API layer, and test harnesses. If you want to validate data shapes, look here.
+>
+> For narrative architecture and design documents (written for humans),
+> see [`../spec/`](../spec/).
+
+---
+
 Machine-readable contracts are grouped into **provider ingestion**, **platform objects**, **consumer outputs/APIs**, **network coordination envelopes**, and **OpenAPI stubs**. The goal is to keep ingestion, normalization surfaces, dashboards/APIs, and cross-node interoperability contracts stable via conformance testing *without renaming runtime pipeline fields casually*.
 
 See also: [`ARCHITECTURE_NOTE.md`](ARCHITECTURE_NOTE.md) and [`../GETTING_STARTED.md`](../GETTING_STARTED.md).

@@ -295,9 +295,13 @@ Outcome layer        →  ward quality-of-life index (safety, health, comfort)
 
 ---
 
-## 7. Cross-domain causal chains
+## 7. Cross-domain reasoning — testable hypotheses
 
-AirOS should be able to model and communicate causal chains that span domains.
+AirOS models cross-domain relationships as **testable hypotheses** rather than asserted causal chains. Each hypothesis produced by the H3 Expert Agent includes a `testable_by` field (e.g. "confirmed by field officer site visit" or "refuted if PM2.5 drops within 24h of rain"). Outcomes feed back into the agent's context on subsequent runs, building an evidence loop over time.
+
+The City Pattern Agent aggregates cell-level hypotheses into city-wide themes, cross-referenced with statistical co-occurrence data (lift scores) to distinguish genuine cross-domain patterns from coincidence.
+
+**Conceptual multi-domain pathways that AirOS can reason about:**
 
 **Flooding → health → trust:**
 ```

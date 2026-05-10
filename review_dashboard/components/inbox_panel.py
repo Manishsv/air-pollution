@@ -90,6 +90,8 @@ def _load_insights(
     min_confidence: float,
     domains: list[str] | None,
     days_back: int,
+    priority_tier: str | None = None,
+    outcome_status: str | None = "open",
     limit: int = 300,
 ) -> pd.DataFrame:
     try:
@@ -101,7 +103,17 @@ def _load_insights(
         if city_id:
             where.append("i.city_id = ?")
             params.append(city_id)
+        if priority_tier:
+            where.append("i.priority_tier = ?")
+            params.append(priority_tier)
+        if outcome_status:
+            where.append("i.outcome_status = ?")
+            params.append(outcome_status)
 
+        # Sort order per REVIEW_CONTRACT §Inbox:
+        #   1. priority_tier — high before medium before low
+        #   2. confidence descending within tier
+        #   3. created_at ascending within same confidence (oldest unreviewed first)
         df = H3KnowledgeStore.get().fetchdf(f"""
             SELECT
                 i.insight_id,
@@ -111,7 +123,11 @@ def _load_insights(
                 i.domains_involved,
                 i.finding,
                 i.confidence,
-                i.causal_chain_json,
+                i.priority_tier,
+                i.outcome_status,
+                i.closed_by,
+                i.closed_at,
+                i.hypothesis_chain_json,
                 m.area_name,
                 m.land_use_class,
                 m.centroid_lat,
@@ -131,9 +147,17 @@ def _load_insights(
             WHERE {" AND ".join(where)}
             GROUP BY i.insight_id, i.h3_id, i.city_id, i.created_at,
                      i.domains_involved, i.finding, i.confidence,
-                     i.causal_chain_json, m.area_name, m.land_use_class,
+                     i.priority_tier, i.outcome_status, i.closed_by, i.closed_at,
+                     i.hypothesis_chain_json, m.area_name, m.land_use_class,
                      m.centroid_lat, m.centroid_lon
-            ORDER BY risk_score DESC, i.created_at DESC
+            ORDER BY
+                CASE i.priority_tier
+                    WHEN 'high'   THEN 1
+                    WHEN 'medium' THEN 2
+                    WHEN 'low'    THEN 3
+                    ELSE 4 END,
+                i.confidence DESC,
+                i.created_at ASC
             LIMIT {limit}
         """, params)
 
@@ -267,21 +291,25 @@ If asked for a document, produce one. Acknowledge uncertainty honestly."""
 # ---------------------------------------------------------------------------
 
 def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
-    risk    = row.get("risk_level", "unknown")
-    conf    = float(row.get("confidence") or 0)
-    domains = _parse_domains(row.get("domains_involved"))
-    finding = str(row.get("finding") or "")
-    chain   = _parse_chain(row.get("causal_chain_json"))
-    actions = row.get("recommended_actions") or []
-    notes   = row.get("uncertainty_notes") or []
-    h3_id     = str(row.get("h3_id", ""))
-    city      = str(row.get("city_id", ""))
-    _an = row.get("area_name")
-    area_name = "" if (not _an or not pd.notna(_an)) else str(_an).strip()
-    land_use  = str(row.get("land_use_class") or "").strip()
-    loc_label = area_name or land_use or h3_id[:10]
-    dot       = _RISK_DOT.get(risk, "⚪")
-    col       = _RISK_CSS.get(risk, "#6b7280")
+    risk       = row.get("risk_level", "unknown")
+    conf       = float(row.get("confidence") or 0)
+    tier       = row.get("priority_tier") or ("high" if conf >= 0.75 else "medium" if conf >= 0.45 else "low")
+    domains    = _parse_domains(row.get("domains_involved"))
+    finding    = str(row.get("finding") or "")
+    chain      = _parse_chain(row.get("hypothesis_chain_json") or row.get("causal_chain_json"))
+    actions    = row.get("recommended_actions") or []
+    notes      = row.get("uncertainty_notes") or []
+    insight_id = str(row.get("insight_id", ""))
+    h3_id      = str(row.get("h3_id", ""))
+    city       = str(row.get("city_id", ""))
+    outcome    = row.get("outcome_status", "open")
+    _an        = row.get("area_name")
+    area_name  = "" if (not _an or not pd.notna(_an)) else str(_an).strip()
+    land_use   = str(row.get("land_use_class") or "").strip()
+    loc_label  = area_name or land_use or h3_id[:10]
+    dot        = _RISK_DOT.get(risk, "⚪")
+    col        = _RISK_CSS.get(risk, "#6b7280")
+    _TIER_COLOR = {"high": "#b42318", "medium": "#92670a", "low": "#6b7280"}
 
     # ── One-line header ───────────────────────────────────────────────────
     domain_chips = "  ".join(
@@ -289,13 +317,24 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
         f'background:{col}18;color:{col};border:1px solid {col}33;">{d}</span>'
         for d in domains
     )
+    _OUTCOME_BADGE = {
+        "open":          '<span style="background:#e5e7eb;color:#374151;padding:2px 8px;border-radius:10px;font-size:11px;">open</span>',
+        "confirmed":     '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:11px;">✓ confirmed</span>',
+        "refuted":       '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;">✗ refuted</span>',
+        "unverifiable":  '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">? unverifiable</span>',
+    }
+    tier_col = _TIER_COLOR.get(tier, "#6b7280")
+    outcome_badge = _OUTCOME_BADGE.get(outcome, _OUTCOME_BADGE["open"])
+
     st.markdown(f"""
 <div style="margin-bottom:12px;">
   <div style="font-size:15px;font-weight:600;line-height:1.4;margin-bottom:6px;">{finding}</div>
   <div style="font-size:12px;color:rgba(0,0,0,0.5);display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
     <span>{dot} <b style="color:{col};">{risk.upper()}</b></span>
     <span>·</span>
-    <span>{'%.0f%%' % (conf*100)} confidence</span>
+    <span style="background:{tier_col}18;color:{tier_col};padding:1px 7px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid {tier_col}33;">{tier.upper()} PRIORITY</span>
+    <span>·</span>
+    {outcome_badge}
     <span>·</span>
     <span>📍 {loc_label} · {city.title()}</span>
     <span>·</span>
@@ -306,7 +345,7 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
 """, unsafe_allow_html=True)
 
     # ── Tabs ──────────────────────────────────────────────────────────────
-    t_ev, t_act, t_ask = st.tabs(["Evidence", "Actions", "Ask agent"])
+    t_ev, t_act, t_close, t_ask = st.tabs(["Evidence", "Actions", "Close", "Ask agent"])
 
     with t_ev:
         _render_causal_chain(chain)
@@ -366,6 +405,73 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
                     st.caption(f"   👤 {who}")
                 if details:
                     st.caption(f"   ↳ {details}")
+
+    with t_close:
+        if outcome != "open":
+            # Insight already closed — show permanent record.
+            # REVIEW_CONTRACT §Re-open Prohibition: closed records are permanent.
+            # The review interface MUST NOT offer a re-open action.
+            closed_by_val = row.get("closed_by") or "—"
+            closed_at_val = row.get("closed_at", "")
+            closed_label  = _time_ago(closed_at_val) if closed_at_val else "—"
+            _STATUS_ICONS = {"confirmed": "✅", "refuted": "❌", "unverifiable": "❓"}
+            icon = _STATUS_ICONS.get(outcome, "ℹ️")
+            st.markdown(
+                f'{icon} **{outcome.title()}** · closed by `{closed_by_val}` · {closed_label}',
+            )
+            st.caption(
+                "This insight has been closed. Closed records are permanent — "
+                "if conditions recur the agent will produce a new insight on the next sweep."
+            )
+        else:
+            st.markdown(
+                "**Record your field verdict on this hypothesis.**  \n"
+                "This closes the feedback loop — outcomes calibrate future agent confidence scores."
+            )
+
+            # REVIEW_CONTRACT §Reviewer Identity: closed_by MUST be non-empty.
+            # The interface must not allow submission without a reviewer identity.
+            officer = st.text_input(
+                "Your officer ID",
+                key=f"officer_{llm_key_prefix}_{insight_id}",
+                placeholder="e.g. ward_engineer_42 or officer@city.gov",
+                help="Required. Must uniquely identify you within this deployment.",
+            )
+
+            verdict = st.radio(
+                "Verdict",
+                ["confirmed", "refuted", "unverifiable"],
+                format_func=lambda x: {
+                    "confirmed":    "✓ Confirmed — field check validated the hypothesis",
+                    "refuted":      "✗ Refuted — field check contradicted the hypothesis",
+                    "unverifiable": "? Unverifiable — cannot check (access, resources, etc.)",
+                }[x],
+                key=f"verdict_{llm_key_prefix}_{insight_id}",
+            )
+
+            submit_disabled = not officer.strip()
+            if submit_disabled:
+                st.caption("⚠️ Enter your officer ID before submitting.")
+
+            if st.button(
+                "Submit verdict",
+                type="primary",
+                key=f"submit_verdict_{llm_key_prefix}_{insight_id}",
+                disabled=submit_disabled,
+            ):
+                try:
+                    from urban_platform.h3_knowledge.writer import close_insight
+                    close_insight(
+                        insight_id=insight_id,
+                        outcome_status=verdict,
+                        closed_by=officer.strip(),
+                    )
+                    st.success(f"Marked as **{verdict}**. Thank you — this improves future analysis.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(f"Submission rejected: {e}")
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
 
     with t_ask:
         _render_chat(row, llm_key_prefix=llm_key_prefix)
@@ -500,7 +606,8 @@ def _load_full_row(row: dict) -> dict:
             for json_col, dest_key in [
                 ("recommended_actions_json", "recommended_actions"),
                 ("uncertainty_notes_json",   "uncertainty_notes"),
-                ("causal_chain_json",        "causal_chain"),
+                ("hypothesis_chain_json",    "hypothesis_chain"),
+                ("causal_chain_json",        "causal_chain"),  # legacy fallback
             ]:
                 if json_col in erow.index:
                     raw = erow[json_col]
@@ -552,16 +659,33 @@ div[data-testid="stDialog"] [role="dialog"] button[aria-label="Close"] {
 </style>
 """
 
+_SORT_OPTIONS = {
+    "Newest first":       ("created_at",  False),
+    "Oldest first":       ("created_at",  True),
+    "Highest risk first": ("risk_score",  False),
+    "Lowest risk first":  ("risk_score",  True),
+}
+
+
 def _render_list(df: pd.DataFrame) -> None:
     """Paginated inbox list as a selectable dataframe.
 
-    st.dataframe renders left-aligned text natively — no CSS fighting needed.
-    Row clicks use on_select="rerun". A versioned key resets the selection
-    after the dialog opens, so closing the dialog (X / Esc) does not reopen it.
-    @st.dialog uses Streamlit fragments internally, so widget interactions
-    inside the dialog (chat, checkboxes) rerun only the dialog fragment and
-    leave the page-level key version untouched.
+    Sorting is done server-side (session state) so sort order survives reruns.
+    Dialog open/close is tracked by insight_id — no key rotation needed, so
+    the table widget is stable and never flickers on row click.
     """
+    # ── Server-side sort ───────────────────────────────────────────────────
+    sort_label = st.selectbox(
+        "Sort by",
+        list(_SORT_OPTIONS.keys()),
+        index=0,
+        key="ib_sort",
+        label_visibility="collapsed",
+    )
+    sort_col, sort_asc = _SORT_OPTIONS[sort_label]
+    if sort_col in df.columns:
+        df = df.sort_values(sort_col, ascending=sort_asc).reset_index(drop=True)
+
     total   = len(df)
     page    = st.session_state.get("ib_page", 0)
     n_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -571,7 +695,6 @@ def _render_list(df: pd.DataFrame) -> None:
 
     page_df = df.iloc[start:end].reset_index(drop=True)
 
-    # Build slim display dataframe
     display_df = pd.DataFrame({
         " ":       page_df["risk_level"].map(_RISK_DOT).fillna("⚪"),
         "Place":   page_df.apply(_row_location, axis=1),
@@ -579,18 +702,16 @@ def _render_list(df: pd.DataFrame) -> None:
         "When":    page_df["created_at"].apply(_time_ago),
     })
 
-    # Versioned key — incremented after a row is selected so that the next
-    # full-page rerun (dialog close) shows a fresh dataframe with no selection.
-    tbl_ver = st.session_state.get("ib_table_ver", 0)
-
+    # Stable key — never rotated.  Dialog reopen prevention is handled by
+    # tracking the last-opened insight_id instead of resetting the widget.
     event = st.dataframe(
         display_df,
         hide_index=True,
         use_container_width=True,
-        height=540,
+        height=520,
         on_select="rerun",
         selection_mode="single-row",
-        key=f"ib_table_{tbl_ver}",
+        key="ib_table",
         column_config={
             " ":       st.column_config.TextColumn(" ",       width=40),
             "Place":   st.column_config.TextColumn("Place",   width=180),
@@ -601,10 +722,20 @@ def _render_list(df: pd.DataFrame) -> None:
 
     sel = event.selection.rows
     if sel:
-        orig_idx = start + sel[0]                           # absolute index in df
-        st.session_state["ib_table_ver"] = tbl_ver + 1     # reset selection next render
-        row = _load_full_row(df.iloc[orig_idx].to_dict())
-        _insight_dialog(row)
+        orig_idx  = start + sel[0]
+        row_data  = df.iloc[orig_idx]
+        selected_id = str(row_data.get("insight_id", orig_idx))
+
+        # Open dialog only for a *new* selection.
+        # When the dialog closes, Streamlit reruns and the row may still be
+        # highlighted — we skip reopening so the user must click again to reopen.
+        if st.session_state.get("ib_open_for") != selected_id:
+            st.session_state["ib_open_for"] = selected_id
+            row = _load_full_row(row_data.to_dict())
+            _insight_dialog(row)
+    else:
+        # Row deselected — allow the same row to reopen next time it's clicked.
+        st.session_state.pop("ib_open_for", None)
 
     # ── Pagination ─────────────────────────────────────────────────────────
     if n_pages > 1:
@@ -639,52 +770,73 @@ def render_inbox_panel() -> None:
     # Inject responsive dialog CSS + row styling once per render
     st.markdown(_DIALOG_CSS, unsafe_allow_html=True)
 
-    # ── Filter bar ────────────────────────────────────────────────────────
-    f1, f2, f3, f4, f5 = st.columns([2, 1, 1, 3, 1])
+    # ── Filter bar (REVIEW_CONTRACT §Required Filters) ────────────────────
+    # Spec requires: Priority tier | Domain | Time window
+    f1, f2, f3, f4, f5, f6 = st.columns([2, 1, 1, 1, 3, 1])
     with f1:
         city_opts  = {"All cities": None} | {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
         city_label = st.selectbox("City", list(city_opts.keys()), key="ib_city",
                                   label_visibility="collapsed")
         city_id    = city_opts[city_label]
     with f2:
-        days = st.selectbox("Window", [1,7,14,30,90], index=1,
-                            format_func=lambda d: f"{d}d", key="ib_days",
-                            label_visibility="collapsed")
+        # REVIEW_CONTRACT §Required Filters: Priority tier filter
+        tier_opts = {"All tiers": None, "High": "high", "Medium": "medium", "Low": "low"}
+        tier_label = st.selectbox("Priority", list(tier_opts.keys()), key="ib_tier",
+                                  label_visibility="collapsed")
+        priority_tier = tier_opts[tier_label]
     with f3:
-        min_conf = st.selectbox("Min conf", [0,.4,.6,.8], index=0,
-                                format_func=lambda v: f"≥{v:.0%}" if v else "Any conf",
-                                key="ib_conf", label_visibility="collapsed")
+        # REVIEW_CONTRACT §Required Filters: Time window — 24h / 48h / 7d / custom
+        days = st.selectbox("Window", [1, 2, 7, 30, 90], index=2,
+                            format_func=lambda d: {1: "24h", 2: "48h"}.get(d, f"{d}d"),
+                            key="ib_days", label_visibility="collapsed")
     with f4:
+        # Toggle between open-only (default inbox view) and all statuses
+        outcome_opts = {"Open only": "open", "All": None}
+        outcome_label = st.selectbox("Status", list(outcome_opts.keys()), key="ib_outcome",
+                                     label_visibility="collapsed")
+        outcome_filter = outcome_opts[outcome_label]
+    with f5:
+        # REVIEW_CONTRACT §Required Filters: Domain filter
         all_domains = ["air","water","noise","fire","heat","flood","construction","green","waste"]
         dom_filter  = st.multiselect("Domains", all_domains, key="ib_domains",
                                      placeholder="All domains", label_visibility="collapsed")
-    with f5:
+    with f6:
         if st.button("↺ Refresh", key="ib_refresh", use_container_width=True):
             st.cache_data.clear()
 
     # Reset page when filters change
     new_filter_state = {
-        "city_id": city_id, "days": days,
-        "min_conf": min_conf, "domains": dom_filter,
+        "city_id": city_id, "days": days, "tier": priority_tier,
+        "outcome": outcome_filter, "domains": dom_filter,
     }
     if st.session_state.get("ib_filter_state") != new_filter_state:
         st.session_state["ib_page"] = 0
     st.session_state["ib_filter_state"] = new_filter_state
 
-    df = _load_insights(city_id=city_id, min_confidence=min_conf,
-                        domains=dom_filter or None, days_back=days)
+    df = _load_insights(
+        city_id=city_id,
+        min_confidence=0,
+        domains=dom_filter or None,
+        days_back=days,
+        priority_tier=priority_tier,
+        outcome_status=outcome_filter,
+    )
 
     if df.empty:
         _render_empty_state(city_id, _CITY_REGISTRY)
         return
 
-    n_severe = int((df["risk_level"] == "severe").sum())
-    n_high   = int((df["risk_level"] == "high").sum())
-    avg_conf = df["confidence"].mean()
+    n_high   = int((df["priority_tier"] == "high").sum())
+    n_medium = int((df["priority_tier"] == "medium").sum())
+    n_low    = int((df["priority_tier"] == "low").sum())
+    avg_conf = df["confidence"].mean() if "confidence" in df.columns else 0.0
+    oldest   = pd.to_datetime(df["created_at"], utc=True, errors="coerce").min()
     latest   = pd.to_datetime(df["created_at"], utc=True, errors="coerce").max()
+    _status_label = f" · {outcome_filter}" if outcome_filter else " · all statuses"
     st.caption(
-        f"{len(df)} insights · **{n_severe} severe · {n_high} high** · "
-        f"avg conf {avg_conf:.0%} · latest {_time_ago(latest)}"
+        f"{len(df)} insights{_status_label} · "
+        f"**{n_high} high · {n_medium} medium · {n_low} low** · "
+        f"avg conf {avg_conf:.0%} · oldest {_time_ago(oldest)} · latest {_time_ago(latest)}"
     )
 
     _render_list(df)

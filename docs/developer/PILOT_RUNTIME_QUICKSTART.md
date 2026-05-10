@@ -27,7 +27,7 @@ This is not:
 
 ## Prerequisites
 
-- You are in the **repo root** (`AirPollution/`)
+- You are in the **repo root** (`AirStack/`)
 - Python environment is set up and dependencies are installed
 - Optional health checks (recommended):
 
