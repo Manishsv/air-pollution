@@ -1,0 +1,147 @@
+# AirOS Driver Registry
+# ======================
+# Controls which domain drivers are active in this deployment.
+#
+# DISCOVERY:
+#   The driver loader discovers drivers in two ways:
+#     1. Built-in (in-tree) drivers listed under "drivers:" below.
+#        These use the "builtin_class" key to locate the driver class.
+#     2. Third-party drivers installed as Python packages that declare
+#        the "airos.drivers" entry point group.
+#        These use the "package" key for documentation purposes.
+#
+# TRUST:
+#   Only drivers with "trusted: true" are loaded. Drivers discovered via
+#   entry points but absent from this file are quarantined with a warning.
+#   Set "trusted: false" to temporarily disable a driver without uninstalling.
+#
+# TRUST LEVELS:
+#   core     — shipped with AirOS Core, reviewed by maintainers
+#   verified — third-party, manually vetted, pinned to a version range
+#   local    — operator-built, not published to PyPI
+#
+# ADDING A THIRD-PARTY DRIVER:
+#   1. pip install airos-driver-<name>
+#   2. Add an entry here with trusted: true and trust_level: verified
+#   3. Restart AirOS — the loader will discover and conformance-check it.
+
+drivers:
+
+  # --------------------------------------------------------------------------
+  # Risk domains — produce signals + assessments + decision packets
+  # --------------------------------------------------------------------------
+
+  air:
+    builtin_class: urban_platform.h3_knowledge.drivers.air_driver:AirDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "15 minutes"
+    notes: "AQICN/CPCB sensor network. Requires AQICN_API_KEY for live data."
+
+  fire:
+    builtin_class: urban_platform.h3_knowledge.drivers.fire_driver:FireDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "15 minutes"
+    notes: "MODIS/VIIRS active fire data. No API key required."
+
+  heat:
+    builtin_class: urban_platform.h3_knowledge.drivers.heat_driver:HeatDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "30 minutes"
+    notes: "Sentinel-2 LST + OpenMeteo. Requires GEE credentials for satellite data."
+
+  flood:
+    builtin_class: urban_platform.h3_knowledge.drivers.flood_driver:FloodDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "1 hour"
+    notes: "Sentinel-2 SAR + DEM. Requires GEE credentials."
+
+  water:
+    builtin_class: urban_platform.h3_knowledge.drivers.water_driver:WaterDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "1 hour"
+    notes: "Sentinel-2 spectral indices (MNDWI, NDTI, CI, FAI). Requires GEE credentials."
+
+  waste:
+    builtin_class: urban_platform.h3_knowledge.drivers.waste_driver:WasteDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "1 hour"
+    notes: "Sentinel-2 spectral + MODIS fire at known dump sites."
+
+  construction:
+    builtin_class: urban_platform.h3_knowledge.drivers.construction_driver:ConstructionDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "6 hours"
+    notes: "Permit API + SAR change detection."
+
+  green:
+    builtin_class: urban_platform.h3_knowledge.drivers.green_driver:GreenDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "6 hours"
+    notes: "Sentinel-2 NDVI. Requires GEE credentials for full satellite data."
+
+  noise:
+    builtin_class: urban_platform.h3_knowledge.drivers.noise_driver:NoiseDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "6 hours"
+    notes: "Noise sensor API. Requires NOISE_API_URL."
+
+  crowd:
+    builtin_class: urban_platform.h3_knowledge.drivers.crowd_driver:CrowdDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "15 minutes"
+    notes: "CCTV observation store + camera registry. Requires observation_store.parquet."
+
+  # --------------------------------------------------------------------------
+  # Structural context domains — signals only, no assessments
+  # --------------------------------------------------------------------------
+
+  weather:
+    builtin_class: urban_platform.h3_knowledge.drivers.weather_driver:WeatherDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "15 minutes"
+    notes: "OpenMeteo API. No key required."
+
+  buildings:
+    builtin_class: urban_platform.h3_knowledge.drivers.buildings_driver:BuildingsDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "90 days"
+    notes: "OSM Overpass API. No key required. Quarterly refresh."
+
+  roads:
+    builtin_class: urban_platform.h3_knowledge.drivers.roads_driver:RoadsDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "90 days"
+    notes: "OSM Overpass API + osmnx. No key required. Quarterly refresh."
+
+  drains:
+    builtin_class: urban_platform.h3_knowledge.drivers.drains_driver:DrainsDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "90 days"
+    notes: "OSM Overpass API waterways. No key required. Quarterly refresh."
+
+  # --------------------------------------------------------------------------
+  # Example third-party driver (commented out — shows the format)
+  # --------------------------------------------------------------------------
+
+  # openaq_v2:
+  #   package: airos-driver-openaq
+  #   version_pin: ">=1.0,<2.0"
+  #   trust_level: verified
+  #   trusted: true
+  #   added_by: operator@city.gov
+  #   added_at: 2026-01-15
+  #   notes: "Community air quality driver using OpenAQ v2 API as alternate source."
