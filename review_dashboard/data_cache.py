@@ -6,8 +6,12 @@ All panels import loaders from here so identical requests hit the same
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 
 @st.cache_data(ttl=3600, show_spinner="Fetching FIRMS fire/waste hotspots…")
@@ -16,7 +20,8 @@ def load_firms(lat_min: float, lon_min: float, lat_max: float, lon_max: float,
     try:
         from urban_platform.connectors.satellite.firms import fetch_firms_fires
         return fetch_firms_fires(lat_min, lon_min, lat_max, lon_max, day_range=day_range)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_firms failed (%s): %s", type(exc).__name__, exc)
         return pd.DataFrame()
 
 
@@ -46,7 +51,8 @@ def load_aod(h3_ids: tuple, lat_min: float, lon_min: float,
     try:
         from urban_platform.connectors.satellite.gee_aod import fetch_aod_for_cells
         return fetch_aod_for_cells(list(h3_ids), lat_min, lon_min, lat_max, lon_max)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_aod failed (%s): %s", type(exc).__name__, exc)
         return {}
 
 
@@ -56,7 +62,8 @@ def load_ndvi(h3_ids: tuple, lat_min: float, lon_min: float,
     try:
         from urban_platform.connectors.satellite.gee_waste import fetch_ndvi_for_cells
         return fetch_ndvi_for_cells(list(h3_ids), lat_min, lon_min, lat_max, lon_max)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_ndvi failed (%s): %s", type(exc).__name__, exc)
         return {}
 
 
@@ -66,7 +73,8 @@ def load_ch4(h3_ids: tuple, lat_min: float, lon_min: float,
     try:
         from urban_platform.connectors.satellite.gee_waste import fetch_ch4_for_cells
         return fetch_ch4_for_cells(list(h3_ids), lat_min, lon_min, lat_max, lon_max)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_ch4 failed (%s): %s", type(exc).__name__, exc)
         return {}
 
 
@@ -128,7 +136,8 @@ def h3_grid_for_bbox(lat_min: float, lon_min: float, lat_max: float, lon_max: fl
             resolution,
         )
         return tuple(sorted(region))
-    except Exception:
+    except Exception as exc:
+        logger.warning("h3_grid_for_bbox failed (%s): %s", type(exc).__name__, exc)
         return ()
 
 
@@ -143,7 +152,8 @@ def load_water_quality(lat_min: float, lon_min: float, lat_max: float, lon_max: 
         from urban_platform.connectors.satellite.gee_water import fetch_water_quality
         return fetch_water_quality(list(h3_ids), lat_min, lon_min, lat_max, lon_max,
                                    lookback_days=lookback_days)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_water_quality failed (%s): %s", type(exc).__name__, exc)
         return {}
 
 
@@ -159,7 +169,8 @@ def load_green_cover(lat_min: float, lon_min: float, lat_max: float, lon_max: fl
         from urban_platform.connectors.satellite.gee_green import fetch_green_cover
         return fetch_green_cover(list(h3_ids), lat_min, lon_min, lat_max, lon_max,
                                  recent_days=recent_days, baseline_days=baseline_days)
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_green_cover failed (%s): %s", type(exc).__name__, exc)
         return {}
 
 
@@ -176,5 +187,6 @@ def load_construction_signals(lat_min: float, lon_min: float, lat_max: float, lo
             list(h3_ids), lat_min, lon_min, lat_max, lon_max,
             lookback_days=lookback_days,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("load_construction_signals failed (%s): %s", type(exc).__name__, exc)
         return {}
