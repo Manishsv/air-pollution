@@ -263,6 +263,22 @@ AGENT_TOOLS = [
                     },
                     "minItems": 1,
                 },
+                "priority_tier": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low"],
+                    "description": (
+                        "Urgency tier for the Review Dashboard inbox. Set based on RISK SEVERITY, "
+                        "not just analytical confidence:\n"
+                        "  critical — GATHERING_ALERT=1 + active hazard, OR ≥3 domains at high/severe "
+                        "with consistent multi-day trend\n"
+                        "  high     — ≥2 domains at high/severe with plausible compound mechanism "
+                        "(e.g. heat + waste fire, flood + no drainage, high AQI + low wind + construction)\n"
+                        "  medium   — one domain elevated or compound risk possible but uncertain\n"
+                        "  low      — no compound risk found, isolated low-severity signal, or "
+                        "'No cross-domain compound risk detected' findings\n"
+                        "IMPORTANT: 'No compound risk' findings MUST use priority_tier='low'."
+                    ),
+                },
             },
             required=["finding", "confidence", "domains_involved", "hypothesis_chain", "uncertainty_notes"],
         ),
@@ -419,6 +435,14 @@ Output quality bar
     0.65–0.84 — 2 signals align but trend is short or data is sparse
     0.40–0.64 — single proxy signal, mechanism is plausible but unverified
     < 0.40 — speculative; explicitly note what field verification is needed
+- Priority tier calibration (set priority_tier in submit_insight):
+    critical — GATHERING_ALERT=1 + live hazard, OR ≥3 domains at high/severe with 3+ day trend
+    high     — ≥2 domains at high/severe + plausible compound mechanism (heat+waste, flood+drainage, etc.)
+    medium   — single elevated domain or compound risk plausible but uncertain
+    low      — no compound risk found or 'No cross-domain compound risk detected'
+  Priority tier reflects RISK SEVERITY. Confidence reflects YOUR CERTAINTY.
+  A high-severity compound risk with sparse data → priority=high, confidence=0.5.
+  A 'no compound risk' finding → priority=low regardless of how confident you are.
 - Recommended actions must be structured objects with action, who, and urgency.
   'action' must be concrete: "Dispatch field inspector to verify dust source at
   construction site north of cell centroid" — not "investigate further".
@@ -427,7 +451,7 @@ Output quality bar
 - Do not repeat prior recommended actions unless the situation has worsened.
 - uncertainty_notes must state exactly what data or field verification would
   increase confidence — not generic disclaimers.
-- If nothing notable: say so clearly with confidence > 0.8 and a finding like
+- If nothing notable: say so clearly and set priority_tier='low' with a finding like
   "No cross-domain compound risk detected in this cell over the analysis window."
 """
 
@@ -744,6 +768,7 @@ class H3ExpertAgent:
             hypothesis_chain=insight_payload.get("hypothesis_chain") or insight_payload.get("causal_chain", []),
             recommended_actions=insight_payload.get("recommended_actions") or [],
             uncertainty_notes=insight_payload.get("uncertainty_notes") or [],
+            priority_tier=insight_payload.get("priority_tier"),  # agent-supplied tier takes precedence
         )
 
         return {
@@ -1130,9 +1155,19 @@ def run_top_risk_cells(
         domain_filter = f"AND domain IN ({placeholders})"
         domain_params = list(domains)
 
-    # Shared exclusion: cells with a very recent insight (6h cooldown)
+    # Shared exclusion: cells with a very recent insight (6h cooldown).
+    # Two variants — unqualified (for single-table queries) and alias-qualified
+    # (for JOINed queries where h3_id would be ambiguous).
     _RECENT_INSIGHT_EXCL = """
         h3_id NOT IN (
+            SELECT h3_id FROM h3_insights
+            WHERE city_id = ?
+              AND agent_type = 'h3_expert'
+              AND created_at >= datetime('now', '-6 hours')
+        )
+    """
+    _RECENT_INSIGHT_EXCL_A = """
+        a.h3_id NOT IN (
             SELECT h3_id FROM h3_insights
             WHERE city_id = ?
               AND agent_type = 'h3_expert'
@@ -1197,7 +1232,7 @@ def run_top_risk_cells(
           AND a.day_bucket >= date('now', '-7 days')
           {domain_filter}
           AND a.h3_id NOT IN ({exclude_placeholders})
-          AND {_RECENT_INSIGHT_EXCL}
+          AND {_RECENT_INSIGHT_EXCL_A}
         GROUP BY a.h3_id
         ORDER BY
             CASE WHEN MAX(i.created_at) IS NULL THEN 0 ELSE 1 END ASC,

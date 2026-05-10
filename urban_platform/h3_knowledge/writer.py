@@ -361,14 +361,22 @@ def write_insight(
     recommended_actions: list | None = None,
     uncertainty_notes: list | None = None,
     created_at: str | None = None,
+    priority_tier: str | None = None,
     # Legacy alias — accepted for backward compat, mapped to hypothesis_chain
     causal_chain: list[dict] | None = None,
 ) -> str:
     insight_id = str(uuid.uuid4())
-    # Derive priority_tier from confidence float so the UI can display it
-    # without treating confidence as a calibrated probability.
     resolved_chain = hypothesis_chain or causal_chain
-    if confidence is not None:
+
+    # Priority tier: use explicit value from agent if provided and valid,
+    # otherwise fall back to confidence-based derivation.
+    # The agent sets priority_tier based on RISK SEVERITY; confidence reflects
+    # its analytical certainty. These are orthogonal — a high-severity risk
+    # with sparse data gets priority=high, confidence=0.5.
+    _VALID_TIERS = {"critical", "high", "medium", "low"}
+    if priority_tier and priority_tier in _VALID_TIERS:
+        tier = priority_tier
+    elif confidence is not None:
         if confidence >= 0.75:
             tier = "high"
         elif confidence >= 0.45:
