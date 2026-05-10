@@ -494,8 +494,14 @@ PAGE_SIZE = 25
 
 @st.dialog("Insight Detail", width="large")
 def _insight_dialog(row: dict) -> None:
-    """Modal popup shown when the user clicks a row in the inbox list."""
-    _render_detail(row, llm_key_prefix="inbox_dialog")
+    """Modal popup shown when the user clicks a row in the inbox list.
+
+    Uses a scrollable st.container so content that exceeds viewport height
+    is always reachable — the dialog box itself also has overflow-y:auto via
+    _DIALOG_CSS, giving two independent scroll layers for belt-and-suspenders.
+    """
+    with st.container(height=700, border=False):
+        _render_detail(row, llm_key_prefix="inbox_dialog")
 
 
 # ---------------------------------------------------------------------------
@@ -545,29 +551,38 @@ _DIALOG_CSS = """
 /* ── Responsive dialog sizing ────────────────────────────────────────────
    Streamlit hardcodes "large" dialogs to 80rem (~1280px). Override to
    viewport-relative units so the dialog scales on any screen size.
-   Selectors derived from the rendered HTML structure:
-     div[data-testid="stDialog"]          → the backdrop overlay
-     div[data-testid="stDialog"] [role="dialog"]  → the actual dialog box
+
+   SCROLL FIX: the dialog box itself is the scroll container.
+   Previously we relied on > div:last-child which is fragile across
+   Streamlit versions. Making [role="dialog"] overflow-y:auto directly
+   is simpler and works regardless of inner nesting depth.
 ──────────────────────────────────────────────────────────────────────── */
 
-/* Dialog box: 85 % wide, at most 90 % tall, centred, with padding */
+/* Dialog box: 85 % wide, at most 88 % tall, scrollable */
 div[data-testid="stDialog"] [role="dialog"] {
-    width:      85vw !important;
-    max-width:  85vw !important;
-    max-height: 88vh !important;
-    overflow:   hidden !important;   /* let inner scroll handle overflow */
+    width:      85vw    !important;
+    max-width:  85vw    !important;
+    max-height: 88vh    !important;
+    overflow-y: auto    !important;   /* dialog itself scrolls */
+    overflow-x: hidden  !important;
 }
 
-/* Inner content wrapper: fill the box and scroll vertically */
-div[data-testid="stDialog"] [role="dialog"] > div:last-child {
-    max-height: calc(88vh - 60px) !important;  /* 60px = title + close btn  */
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+/* Belt-and-suspenders: also enable scroll on every known Streamlit
+   content-wrapper variant so whichever one Streamlit renders will work. */
+div[data-testid="stDialog"] [role="dialog"] > div,
+div[data-testid="stDialog"] [role="dialog"] > div > div,
+div[data-testid="stDialog"] div[data-testid="stVerticalBlock"],
+div[data-testid="stDialog"] div[data-testid="stVerticalBlockBorderWrapper"] {
+    overflow-y: visible !important;   /* don't double-clip; let dialog scroll */
+    overflow-x: hidden  !important;
 }
 
 /* Reposition the close (✕) button to match the narrower right edge */
 div[data-testid="stDialog"] [role="dialog"] button[aria-label="Close"] {
     right: 1.5rem !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
 }
 </style>
 """
