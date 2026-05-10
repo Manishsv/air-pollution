@@ -58,12 +58,19 @@ What belongs here
 from __future__ import annotations
 
 import copy
+import datetime
 import logging
 import os
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Path for the change-history audit log (sibling of the registry YAML)
+_DEFAULT_HISTORY_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "data" / "config" / "rules_registry_history.yaml"
+)
 
 _DEFAULT_REGISTRY_PATH = (
     Path(__file__).resolve().parent.parent.parent / "data" / "config" / "rules_registry.yaml"
@@ -299,32 +306,50 @@ _DEFAULTS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 class RulesRegistry:
-    """Thread-safe in-memory rules registry backed by a YAML config file."""
+    """Thread-safe in-memory rules registry backed by a YAML config file.
+
+    Versioning
+    ----------
+    The YAML file MAY declare a top-level ``version`` key (SemVer string,
+    e.g. "1.2.0").  On every ``reload()``, if the loaded version differs from
+    the previously held version, a change record is appended to the audit log
+    at ``rules_registry_history.yaml`` (sibling of the registry file).
+
+    The audit record captures: ``changed_at``, ``changed_by``, ``version_from``,
+    ``version_to``, ``keys_changed``, and an optional ``reason``.
+
+    ``changed_by`` is taken from the ``RULES_REGISTRY_CHANGED_BY`` environment
+    variable (default: "system").  ``reason`` is taken from
+    ``RULES_REGISTRY_CHANGE_REASON`` (default: empty).
+    """
 
     def __init__(self) -> None:
         self._data: dict[str, dict[str, Any]] = {}
         self._path: Path | None = None
         self._loaded: bool = False
+        self._version: str = "0.0.0"   # version of the currently held data
 
     def _ensure_loaded(self) -> None:
         if not self._loaded:
             self._load()
 
-    def _load(self) -> None:
+    def _load(self, *, _record_history: bool = False, _prev_data: dict | None = None, _prev_version: str = "0.0.0") -> None:
         env_path = os.environ.get("RULES_REGISTRY")
         path = Path(env_path) if env_path else _DEFAULT_REGISTRY_PATH
 
         # Start from deep copy of defaults
         merged: dict[str, dict[str, Any]] = copy.deepcopy(_DEFAULTS)
+        new_version: str = "0.0.0"
 
         if path.exists():
             try:
                 import yaml  # PyYAML — optional but expected in the env
                 with open(path, encoding="utf-8") as f:
                     file_data = yaml.safe_load(f) or {}
+                new_version = str(file_data.get("version", "0.0.0"))
                 domains = file_data.get("domains", {})
                 self._deep_merge(merged, domains)
-                logger.info("Rules registry loaded from %s", path)
+                logger.info("Rules registry loaded from %s (version %s)", path, new_version)
             except ImportError:
                 logger.warning(
                     "PyYAML not installed — rules registry using built-in defaults only. "
@@ -339,9 +364,20 @@ class RulesRegistry:
                 "Rules registry file not found at %s — using built-in defaults.", path
             )
 
-        self._data   = merged
-        self._path   = path
-        self._loaded = True
+        # Write audit history if this is a reload and something changed
+        if _record_history and (_prev_version != new_version or _prev_data != merged):
+            self._append_history(
+                prev_data=_prev_data or {},
+                new_data=merged,
+                version_from=_prev_version,
+                version_to=new_version,
+                registry_path=path,
+            )
+
+        self._data    = merged
+        self._path    = path
+        self._version = new_version
+        self._loaded  = True
 
     @staticmethod
     def _deep_merge(base: dict, override: dict) -> None:
@@ -352,11 +388,98 @@ class RulesRegistry:
             else:
                 base[key] = val
 
+    @staticmethod
+    def _diff_keys(old: dict, new: dict, prefix: str = "") -> list[str]:
+        """Return dotted key paths where values differ between old and new."""
+        changed: list[str] = []
+        all_keys = set(old) | set(new)
+        for k in all_keys:
+            path = f"{prefix}.{k}" if prefix else k
+            if k not in old:
+                changed.append(f"+{path}")
+            elif k not in new:
+                changed.append(f"-{path}")
+            elif isinstance(old[k], dict) and isinstance(new[k], dict):
+                changed.extend(RulesRegistry._diff_keys(old[k], new[k], path))
+            elif old[k] != new[k]:
+                changed.append(path)
+        return changed
+
+    def _append_history(
+        self,
+        *,
+        prev_data: dict,
+        new_data: dict,
+        version_from: str,
+        version_to: str,
+        registry_path: Path,
+    ) -> None:
+        """Append a change record to the rules_registry_history.yaml audit log."""
+        try:
+            import yaml
+        except ImportError:
+            logger.debug("PyYAML not available — skipping registry history write")
+            return
+
+        keys_changed = self._diff_keys(prev_data, new_data)
+        changed_by = os.environ.get("RULES_REGISTRY_CHANGED_BY", "system")
+        reason = os.environ.get("RULES_REGISTRY_CHANGE_REASON", "")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        record = {
+            "changed_at":    now,
+            "changed_by":    changed_by,
+            "version_from":  version_from,
+            "version_to":    version_to,
+            "keys_changed":  keys_changed,
+            "reason":        reason,
+        }
+
+        # History lives next to the registry YAML by default; override via env
+        env_hist = os.environ.get("RULES_REGISTRY_HISTORY")
+        hist_path = Path(env_hist) if env_hist else (
+            registry_path.parent / "rules_registry_history.yaml"
+            if registry_path.exists()
+            else _DEFAULT_HISTORY_PATH
+        )
+
+        try:
+            hist_path.parent.mkdir(parents=True, exist_ok=True)
+            # Read existing history, append, write back
+            existing: list[dict] = []
+            if hist_path.exists():
+                with open(hist_path, encoding="utf-8") as f:
+                    loaded = yaml.safe_load(f)
+                    if isinstance(loaded, list):
+                        existing = loaded
+            existing.append(record)
+            with open(hist_path, "w", encoding="utf-8") as f:
+                yaml.dump(existing, f, default_flow_style=False, allow_unicode=True)
+            logger.info(
+                "Rules registry history updated: %s → %s (%d key(s) changed)",
+                version_from, version_to, len(keys_changed),
+            )
+        except Exception as exc:
+            logger.warning("Could not write rules registry history: %s", exc)
+
     def reload(self) -> None:
-        """Force a fresh load from disk (call after editing the YAML without restarting)."""
+        """Force a fresh load from disk.
+
+        If the newly loaded registry differs from the current one (by version
+        string or by content), a change record is appended to the history log.
+        Call this after editing the YAML without restarting the process.
+        """
+        prev_data    = copy.deepcopy(self._data)
+        prev_version = self._version
         self._loaded = False
-        self._load()
-        logger.info("Rules registry reloaded.")
+        self._load(_record_history=True, _prev_data=prev_data, _prev_version=prev_version)
+        logger.info("Rules registry reloaded (version %s).", self._version)
+
+    @property
+    def version(self) -> str:
+        """Return the version string from the currently loaded YAML (or '0.0.0')."""
+        self._ensure_loaded()
+        return self._version
 
     def get(
         self,
