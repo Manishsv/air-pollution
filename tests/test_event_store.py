@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from urban_platform.fabric.event_store import build_event_store, persist_event_store
-from urban_platform.api import local as api
+from airos.drivers.fabric.event_store import build_event_store, persist_event_store
+from airos.network.api import local as api
 
 
 def _packet(*, packet_id: str, h3_id: str, ts: datetime, category: str, confidence_score: float, allowed: bool, warning_flags: str = "") -> dict:

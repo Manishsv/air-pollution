@@ -1,7 +1,7 @@
 """
 Urban Heat Risk SDK Walkthrough — read-only demo.
 
-Demonstrates the urban heat risk use case using only urban_platform.sdk public
+Demonstrates the urban heat risk use case using only airos.os.sdk public
 surface. No store writes; safe to run offline.
 
 Run from repo root:
@@ -21,14 +21,14 @@ if _repo_root not in sys.path:
 
 import pandas as pd
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.heat.heat_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.heat.heat_pipeline import (
     build_h3_grid_from_bbox,
     build_heat_risk_dashboard,
     build_intervention_candidates,
 )
-from urban_platform.connectors.heat.openmeteo import fetch_temperature_observations
-from urban_platform.connectors.heat.osm_green_cover import compute_green_cover
+from airos.drivers.connectors.heat.openmeteo import fetch_temperature_observations
+from airos.drivers.connectors.heat.osm_green_cover import compute_green_cover
 
 # ── 1. Inventory ──────────────────────────────────────────────────────────
 

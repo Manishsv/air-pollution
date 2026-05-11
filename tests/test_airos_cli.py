@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import tools.airos_cli as cli
+import airos.network.cli.airos_cli as cli
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ def test_review_run_conformance_flag(monkeypatch) -> None:
     assert rc == 0
     assert calls
     assert calls[0][0] == sys.executable
-    assert "tools/ai_dev_supervisor/run_review.py" in calls[0]
+    assert "airos/network/cli/ai_dev_supervisor/run_review.py" in calls[0]
     assert "--run-conformance" in calls[0]
 
 
@@ -90,7 +90,7 @@ def test_deployment_run_command_construction(monkeypatch) -> None:
 
     rc = cli.main(["deployment", "run", "deployments/examples/flood_local_demo"])
     assert rc == 0
-    assert "tools/deployment_runner/run_deployment.py" in calls[0]
+    assert "airos/network/cli/deployment_runner/run_deployment.py" in calls[0]
     assert "--deployment" in calls[0]
 
 

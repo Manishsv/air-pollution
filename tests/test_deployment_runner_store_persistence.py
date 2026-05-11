@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.deployment_runner.run_deployment import run_deployment
-from urban_platform.storage import FileAirOsStore
+from airos.network.cli.deployment_runner.run_deployment import run_deployment
+from airos.os.storage import FileAirOsStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

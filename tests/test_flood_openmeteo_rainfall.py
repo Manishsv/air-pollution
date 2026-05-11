@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from urban_platform.connectors.flood.openmeteo_rainfall import (
+from airos.drivers.connectors.flood.openmeteo_rainfall import (
     _grid_points,
     _fetch_point,
     fetch_rainfall_observations,

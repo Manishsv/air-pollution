@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from urban_platform.sdk.store_backup import backup_file_store
+from airos.os.sdk.store_backup import backup_file_store
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +12,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,

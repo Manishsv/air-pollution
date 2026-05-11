@@ -12,9 +12,9 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
-from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
-from urban_platform.specifications.audit import run_conformance_audit
-from urban_platform.specifications.engine import list_conformance_result_violations
+from airos.os.decision_support.explainability import build_decision_packets, sanitize_for_json
+from airos.os.specifications.audit import run_conformance_audit
+from airos.os.specifications.engine import list_conformance_result_violations
 
 
 @pytest.fixture
@@ -118,7 +118,7 @@ def _write_min_outputs(tmp_path: Path, *, packet: dict) -> None:
     with open(out / "data_audit.json", "w", encoding="utf-8") as f:
         json.dump(audit, f)
 
-    from urban_platform.common.provenance_summary import build_provenance_summary
+    from airos.os.common.provenance_summary import build_provenance_summary
 
     metrics = {
         "best_model": "random_forest",

@@ -6,8 +6,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-from urban_platform.storage.file_store import FileAirOsStore
-from urban_platform.storage.models import AuditEvent, StoredRun
+from airos.os.storage.file_store import FileAirOsStore
+from airos.os.storage.models import AuditEvent, StoredRun
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +15,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,

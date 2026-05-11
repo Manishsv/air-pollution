@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from urban_platform.storage.file_store import FileAirOsStore, compute_payload_hash
-from urban_platform.storage.models import (
+from airos.os.storage.file_store import FileAirOsStore, compute_payload_hash
+from airos.os.storage.models import (
     AuditEvent,
     StoredOutput,
     StoredRecord,

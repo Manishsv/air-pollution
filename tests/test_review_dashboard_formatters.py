@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from review_dashboard.formatters import (
+from airos.network.dashboard.formatters import (
     evidence_inputs_to_rows,
     humanize_internal_flag,
     humanize_snake_sentence,

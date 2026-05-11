@@ -5,7 +5,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
 
-from urban_platform.common.data_audit import audit_data_coverage
+from airos.os.common.data_audit import audit_data_coverage
 
 
 class TestQualityGates(unittest.TestCase):

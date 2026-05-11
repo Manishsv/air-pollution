@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-import tools.airos_cli as cli
+import airos.network.cli.airos_cli as cli
 
 
 _SECRET_VALUE_RE = re.compile(

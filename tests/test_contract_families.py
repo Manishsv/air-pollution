@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from urban_platform.specifications.conformance import assert_conforms, load_manifest
+from airos.os.specifications.conformance import assert_conforms, load_manifest
 
 
 def test_provider_contract_validates_minimal_aq_feed():

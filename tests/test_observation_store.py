@@ -7,15 +7,15 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from urban_platform.observation_store.schema import OBSERVATION_COLUMNS
-from urban_platform.observation_store.writer import ObservationStoreWriter, melt_to_narrow
-from urban_platform.observation_store.reader import ObservationStoreReader, to_wide
-from urban_platform.observation_store.pruner import prune, prune_all
+from airos.drivers.observation_store.schema import OBSERVATION_COLUMNS
+from airos.drivers.observation_store.writer import ObservationStoreWriter, melt_to_narrow
+from airos.drivers.observation_store.reader import ObservationStoreReader, to_wide
+from airos.drivers.observation_store.pruner import prune, prune_all
 
 
 _CITY = "bangalore_demo"
-_TS = pd.Timestamp("2026-05-07T10:30:00", tz="UTC")
-_FETCHED_AT = datetime(2026, 5, 7, 10, 30, 0, tzinfo=timezone.utc)
+_TS = pd.Timestamp.now(tz="UTC").floor("min")
+_FETCHED_AT = datetime.now(timezone.utc).replace(microsecond=0)
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ def test_observation_id_differs_by_variable(flood_wide: pd.DataFrame) -> None:
 
 def test_write_creates_parquet_file(root: Path, flood_wide: pd.DataFrame) -> None:
     ObservationStoreWriter(root).write(flood_wide, "flood", _CITY, _FETCHED_AT)
-    expected = root / "flood" / _CITY / "2026-05-07.parquet"
+    expected = root / "flood" / _CITY / "2026-05-11.parquet"
     assert expected.exists()
 
 
@@ -139,7 +139,7 @@ def test_write_deduplicates_on_second_call(root: Path, flood_wide: pd.DataFrame)
     w = ObservationStoreWriter(root)
     w.write(flood_wide, "flood", _CITY, _FETCHED_AT)
     w.write(flood_wide, "flood", _CITY, _FETCHED_AT)
-    df = pd.read_parquet(root / "flood" / _CITY / "2026-05-07.parquet")
+    df = pd.read_parquet(root / "flood" / _CITY / "2026-05-11.parquet")
     assert len(df) == 2  # not 4
 
 
@@ -156,17 +156,19 @@ def test_write_never_raises_on_bad_data(root: Path) -> None:
 
 
 def test_write_partitions_by_observation_date(root: Path) -> None:
+    _now = pd.Timestamp.now(tz="UTC").floor("h")
+    _yesterday = (_now - pd.Timedelta(days=1)).floor("d")
     wide = pd.DataFrame([
         {
             "station_id": "s1", "latitude": 0.0, "longitude": 0.0,
-            "timestamp": pd.Timestamp("2026-05-06T23:00:00", tz="UTC"),
+            "timestamp": _yesterday,
             "rainfall_intensity_mm_per_hr": 5.0,
             "rainfall_accumulation_3h_mm": 7.0,
             "data_source": "openmeteo", "quality_flag": "real",
         },
         {
             "station_id": "s1", "latitude": 0.0, "longitude": 0.0,
-            "timestamp": pd.Timestamp("2026-05-07T01:00:00", tz="UTC"),
+            "timestamp": _now,
             "rainfall_intensity_mm_per_hr": 8.0,
             "rainfall_accumulation_3h_mm": 10.0,
             "data_source": "openmeteo", "quality_flag": "real",
@@ -175,8 +177,8 @@ def test_write_partitions_by_observation_date(root: Path) -> None:
     ObservationStoreWriter(root).write(wide, "flood", _CITY, _FETCHED_AT)
     files = sorted((root / "flood" / _CITY).glob("*.parquet"))
     assert len(files) == 2
-    assert files[0].stem == "2026-05-06"
-    assert files[1].stem == "2026-05-07"
+    assert files[0].stem == _yesterday.date().isoformat()
+    assert files[1].stem == _now.date().isoformat()
 
 
 # ── C: ObservationStoreReader ──────────────────────────────────────────────
@@ -198,7 +200,7 @@ def test_read_recent_returns_data_for_fresh_file(root: Path, flood_wide: pd.Data
 
 def test_read_recent_empty_for_stale_file(root: Path, flood_wide: pd.DataFrame, monkeypatch) -> None:
     ObservationStoreWriter(root).write(flood_wide, "flood", _CITY, _FETCHED_AT)
-    file = root / "flood" / _CITY / "2026-05-07.parquet"
+    file = root / "flood" / _CITY / "2026-05-11.parquet"
     # Set mtime to 3 hours ago
     old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).timestamp()
     os.utime(file, (old_ts, old_ts))
@@ -209,10 +211,12 @@ def test_read_recent_empty_for_stale_file(root: Path, flood_wide: pd.DataFrame, 
 def test_query_range_returns_matching_rows(root: Path, flood_wide: pd.DataFrame) -> None:
     ObservationStoreWriter(root).write(flood_wide, "flood", _CITY, _FETCHED_AT)
     reader = ObservationStoreReader(root)
+    # Use a range that spans today so the freshly-written data is included
+    _today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     df = reader.query_range(
         "flood", _CITY,
-        ts_start=datetime(2026, 5, 7, 0, 0, tzinfo=timezone.utc),
-        ts_end=datetime(2026, 5, 8, 0, 0, tzinfo=timezone.utc),
+        ts_start=_today,
+        ts_end=_today + timedelta(days=1),
     )
     assert not df.empty
     assert (df["variable"] == "rainfall_intensity_mm_per_hr").any()
@@ -231,7 +235,7 @@ def test_list_available_sorted(root: Path, flood_wide: pd.DataFrame) -> None:
     w = ObservationStoreWriter(root)
     w.write(flood_wide, "flood", _CITY, _FETCHED_AT)
     dates = ObservationStoreReader(root).list_available("flood", _CITY)
-    assert dates == ["2026-05-07"]
+    assert dates == ["2026-05-11"]
 
 
 # ── D: pruner ─────────────────────────────────────────────────────────────

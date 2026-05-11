@@ -14,7 +14,7 @@ def _fp_row(*, ward_id: str, building_id: str, area_sq: float, source: str = "os
 
 
 def test_open_data_features_current_footprints_only() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import (
+    from airos.drivers.processing.property_buildings.open_data_features import (
         STANDARD_BLOCKED_USES,
         build_built_environment_change_features,
     )
@@ -65,7 +65,7 @@ def test_open_data_features_current_footprints_only() -> None:
 
 
 def test_open_data_features_with_previous_and_satellite_ready() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import (
+    from airos.drivers.processing.property_buildings.open_data_features import (
         build_built_environment_change_features,
     )
 
@@ -108,7 +108,7 @@ def test_open_data_features_with_previous_and_satellite_ready() -> None:
 
 
 def test_open_data_features_ready_with_previous_only() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import build_built_environment_change_features
+    from airos.drivers.processing.property_buildings.open_data_features import build_built_environment_change_features
 
     current = pd.DataFrame([_fp_row(ward_id="ward_1", building_id="b", area_sq=10.0)])
     previous = pd.DataFrame([_fp_row(ward_id="ward_1", building_id="p", area_sq=10.0)])
@@ -118,7 +118,7 @@ def test_open_data_features_ready_with_previous_only() -> None:
 
 
 def test_open_data_features_ready_with_satellite_only() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import build_built_environment_change_features
+    from airos.drivers.processing.property_buildings.open_data_features import build_built_environment_change_features
 
     current = pd.DataFrame([_fp_row(ward_id="ward_9", building_id="b", area_sq=25.0)])
     satellite = pd.DataFrame(
@@ -130,7 +130,7 @@ def test_open_data_features_ready_with_satellite_only() -> None:
 
 
 def test_open_data_features_low_geometry_coverage_not_ready() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import build_built_environment_change_features
+    from airos.drivers.processing.property_buildings.open_data_features import build_built_environment_change_features
 
     current = pd.DataFrame(
         [
@@ -146,7 +146,7 @@ def test_open_data_features_low_geometry_coverage_not_ready() -> None:
 
 
 def test_open_data_features_no_municipal_registry_required() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import build_built_environment_change_features
+    from airos.drivers.processing.property_buildings.open_data_features import build_built_environment_change_features
 
     current = pd.DataFrame([_fp_row(ward_id="ward_5", building_id="x", area_sq=40.0)])
     df, _meta = build_built_environment_change_features(current, generated_at="2026-05-02T12:00:00Z")
@@ -156,7 +156,7 @@ def test_open_data_features_no_municipal_registry_required() -> None:
 
 
 def test_open_data_features_empty_current_still_returns_row() -> None:
-    from urban_platform.processing.property_buildings.open_data_features import build_built_environment_change_features
+    from airos.drivers.processing.property_buildings.open_data_features import build_built_environment_change_features
 
     df, meta = build_built_environment_change_features(
         pd.DataFrame(),

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import yaml
 
-import tools.airos_cli as cli
-from tools.deployment_runner.run_deployment import run_deployment
+import airos.network.cli.airos_cli as cli
+from airos.network.cli.deployment_runner.run_deployment import run_deployment
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

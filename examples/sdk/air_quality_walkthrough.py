@@ -3,7 +3,7 @@ Air Quality SDK Walkthrough
 ============================
 
 A read-only tour of the air quality use case using the AirOS SDK
-(urban_platform.sdk) and the air quality pipeline public surface.
+(airos.os.sdk) and the air quality pipeline public surface.
 
 Run from repo root:
     python examples/sdk/air_quality_walkthrough.py
@@ -20,8 +20,8 @@ if _repo_root not in sys.path:
 
 import pandas as pd
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.air.air_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.air.air_pipeline import (
     build_h3_grid_from_bbox,
     build_air_quality_dashboard,
     build_air_quality_decision_packets,

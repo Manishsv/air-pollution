@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urban_platform.sdk import get_deployment_profile, list_deployment_ids, list_deployment_profiles
+from airos.os.sdk import get_deployment_profile, list_deployment_ids, list_deployment_profiles
 
 
 def test_sdk_deployments_list_includes_known_examples() -> None:

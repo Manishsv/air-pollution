@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from urban_platform.sdk.evidence import export_evidence_bundle, verify_evidence_bundle
-from urban_platform.storage.file_store import FileAirOsStore
-from urban_platform.storage.models import StoredOutput, StoredRecord, StoredRun
+from airos.os.sdk.evidence import export_evidence_bundle, verify_evidence_bundle
+from airos.os.storage.file_store import FileAirOsStore
+from airos.os.storage.models import StoredOutput, StoredRecord, StoredRun
 
 
 def test_verify_exported_bundle_is_verified_or_warned(tmp_path: Path) -> None:
@@ -109,7 +109,7 @@ def test_tampered_payload_hash_is_invalid(tmp_path: Path) -> None:
     # Create minimal bundle where payload_hash exists and payload is modified.
     z = tmp_path / "tamper.zip"
     record = {"record_id": "rec_1", "deployment_id": "dep", "contract_key": "k", "payload": {"x": 1}, "received_at": "t"}
-    from urban_platform.storage.file_store import compute_payload_hash
+    from airos.os.storage.file_store import compute_payload_hash
 
     record["payload_hash"] = compute_payload_hash(record["payload"])
     tampered = dict(record)

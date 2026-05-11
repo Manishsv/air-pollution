@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from urban_platform.sdk.evidence import export_evidence_bundle, inspect_evidence_bundle, redact_evidence_bundle, verify_evidence_bundle
-from urban_platform.storage.file_store import FileAirOsStore
-from urban_platform.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
+from airos.os.sdk.evidence import export_evidence_bundle, inspect_evidence_bundle, redact_evidence_bundle, verify_evidence_bundle
+from airos.os.storage.file_store import FileAirOsStore
+from airos.os.storage.models import AuditEvent, StoredOutput, StoredRecord, StoredRun
 
 
 def test_redact_public_demo_creates_new_zip_and_preserves_original(tmp_path: Path) -> None:

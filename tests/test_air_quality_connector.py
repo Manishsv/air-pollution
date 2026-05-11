@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from urban_platform.connectors.air_quality.openmeteo_aq import (
+from airos.drivers.connectors.air_quality.openmeteo_aq import (
     _grid_points,
     _fetch_point,
     fetch_air_quality_observations,

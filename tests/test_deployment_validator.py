@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from tools.deployment_runner.validate_deployment import validate_deployment
+from airos.network.cli.deployment_runner.validate_deployment import validate_deployment
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from urban_platform.fabric.feature_store import build_feature_store, pivot_feature_store_for_model
+from airos.drivers.fabric.feature_store import build_feature_store, pivot_feature_store_for_model
 
 
 def test_feature_store_static_and_dynamic_present():
@@ -98,9 +98,9 @@ import pytest
 from pathlib import Path
 from datetime import datetime, timezone
 
-from urban_platform.feature_store.schema import ensure_schema
-from urban_platform.feature_store.writer import FeatureStoreWriter
-from urban_platform.feature_store.reader import FeatureStoreReader
+from airos.drivers.feature_store.schema import ensure_schema
+from airos.drivers.feature_store.writer import FeatureStoreWriter
+from airos.drivers.feature_store.reader import FeatureStoreReader
 
 
 _BUCKET = datetime(2026, 5, 7, 10, 0, 0, tzinfo=timezone.utc)
@@ -151,7 +151,7 @@ def test_ensure_schema_idempotent(tmp_db: Path) -> None:
 
 
 def test_db_path_in_data_dir() -> None:
-    from urban_platform.feature_store.schema import DB_PATH
+    from airos.drivers.feature_store.schema import DB_PATH
     assert DB_PATH.parent.name == "data"
 
 

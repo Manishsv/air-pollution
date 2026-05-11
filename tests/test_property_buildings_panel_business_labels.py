@@ -6,7 +6,7 @@ from pathlib import Path
 def test_property_buildings_panel_includes_business_readable_labels_and_safety() -> None:
     panel = (
         Path(__file__).resolve().parents[1]
-        / "review_dashboard"
+        / "airos" / "network" / "dashboard"
         / "components"
         / "property_buildings_panel.py"
     )

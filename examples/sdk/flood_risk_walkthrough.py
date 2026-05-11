@@ -3,7 +3,7 @@ Flood Risk SDK Walkthrough
 ==========================
 
 A read-only tour of the flood risk use case using the AirOS SDK
-(urban_platform.sdk) and the flood pipeline public surface.
+(airos.os.sdk) and the flood pipeline public surface.
 
 Run from repo root:
     python examples/sdk/flood_risk_walkthrough.py
@@ -20,8 +20,8 @@ if _repo_root not in sys.path:
 
 import pandas as pd
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.flood.flood_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.flood.flood_pipeline import (
     build_h3_grid_from_bbox,
     build_flood_risk_dashboard,
     build_flood_decision_packets,

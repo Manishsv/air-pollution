@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from urban_platform.sdk.client import UrbanPlatformClient
+from airos.os.sdk.client import UrbanPlatformClient
 
 
 def _write_sdk_artifacts(tmp: Path) -> None:

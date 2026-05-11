@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from urban_platform.sdk.apps import list_app_ids
+from airos.os.sdk.apps import list_app_ids
 
 
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AIROS_STORE_DIR", str(tmp_path / "api_store"))
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     return TestClient(create_app())
 
@@ -47,7 +47,7 @@ def test_get_apps_lists_program_reporting_and_flood(api_client: TestClient) -> N
 
 def test_get_apps_list_matches_sdk_list_app_ids(api_client: TestClient) -> None:
     """
-    GET /apps and urban_platform.sdk.apps both load descriptors via specs_helpers;
+    GET /apps and airos.os.sdk.apps both load descriptors via specs_helpers;
     they must expose the same app_id set (regression guard after shared-loader refactor).
     """
     r = api_client.get("/apps")

@@ -12,7 +12,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,
@@ -31,7 +31,7 @@ def _make_package(tmp_path: Path) -> Path:
 
 def test_inspect_package_valid_succeeds(tmp_path: Path) -> None:
     manifest = (_REPO_ROOT / "specifications" / "manifest.json").read_bytes()
-    builders = (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes()
+    builders = (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes()
 
     z = _make_package(tmp_path)
     res = _run_cli("apps", "inspect-package", str(z))
@@ -45,7 +45,7 @@ def test_inspect_package_valid_succeeds(tmp_path: Path) -> None:
     assert "Inspection does not execute builders" in out
 
     assert (_REPO_ROOT / "specifications" / "manifest.json").read_bytes() == manifest
-    assert (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes() == builders
+    assert (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes() == builders
 
 
 def test_inspect_package_missing_zip_fails(tmp_path: Path) -> None:

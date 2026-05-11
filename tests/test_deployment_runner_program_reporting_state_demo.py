@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.deployment_runner.run_deployment import run_deployment
-from urban_platform.specifications.conformance import assert_conforms
+from airos.network.cli.deployment_runner.run_deployment import run_deployment
+from airos.os.specifications.conformance import assert_conforms
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

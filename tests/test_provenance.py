@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from urban_platform.common.provenance import PROVENANCE_COLS, ensure_provenance_columns
+from airos.os.common.provenance import PROVENANCE_COLS, ensure_provenance_columns
 
 
 class TestProvenance(unittest.TestCase):

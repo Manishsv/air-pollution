@@ -3,7 +3,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from urban_platform.sdk.store_backup import backup_file_store, restore_file_store_dry_run
+from airos.os.sdk.store_backup import backup_file_store, restore_file_store_dry_run
 
 
 def _has_any_store_file(p: Path) -> bool:

@@ -4,8 +4,8 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
-from urban_platform.quality.source_reliability import assess_source_reliability
-from urban_platform.quality.observation_quality import apply_source_reliability_to_observations
+from airos.os.quality.source_reliability import assess_source_reliability
+from airos.os.quality.observation_quality import apply_source_reliability_to_observations
 
 
 def _base_obs(ts: pd.Timestamp, vals: list[float], *, entity_id: str = "s1", variable: str = "pm25") -> pd.DataFrame:

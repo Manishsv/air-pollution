@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urban_platform.common.provenance_summary import build_provenance_summary
+from airos.os.common.provenance_summary import build_provenance_summary
 
 
 def test_build_provenance_summary_basic_fields_and_low_confidence():

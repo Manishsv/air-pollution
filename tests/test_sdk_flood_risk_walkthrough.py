@@ -14,8 +14,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.flood.flood_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.flood.flood_pipeline import (
     build_h3_grid_from_bbox,
     build_flood_risk_dashboard,
     build_flood_decision_packets,

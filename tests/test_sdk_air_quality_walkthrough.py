@@ -14,8 +14,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.air.air_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.air.air_pipeline import (
     build_h3_grid_from_bbox,
     build_air_quality_dashboard,
     build_air_quality_decision_packets,

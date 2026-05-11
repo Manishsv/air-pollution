@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urban_platform.sdk import get_platform_inventory
+from airos.os.sdk import get_platform_inventory
 
 
 def test_sdk_inventory_static_contains_known_ids() -> None:

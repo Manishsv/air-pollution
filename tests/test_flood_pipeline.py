@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from urban_platform.applications.flood.flood_pipeline import (
+from airos.apps.flood.flood_pipeline import (
     _haversine_km,
     _idw_interpolate,
     _risk_level,
@@ -315,7 +315,7 @@ def test_dashboard_risk_cells_present(dashboard):
 
 
 def test_dashboard_validates_against_schema(dashboard):
-    from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+    from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
     schema_path = str(
         (SPEC_ROOT / "consumer_contracts" / "flood_risk_dashboard.v1.schema.json").resolve()
     )
@@ -385,7 +385,7 @@ def test_packets_review_guidance_present(packets):
 
 
 def test_packets_validate_against_schema(packets):
-    from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+    from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
     schema_path = str(
         (SPEC_ROOT / "consumer_contracts" / "flood_decision_packet.v1.schema.json").resolve()
     )

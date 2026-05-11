@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from urban_platform.sdk import apps as sdk_apps
-from urban_platform.sdk.specs_helpers import (
+from airos.os.sdk import apps as sdk_apps
+from airos.os.sdk.specs_helpers import (
     get_app_descriptor_from_specs,
     load_all_app_descriptors_from_specs,
 )

@@ -14,7 +14,7 @@ def _run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Comple
     if env:
         merged.update(env)
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,

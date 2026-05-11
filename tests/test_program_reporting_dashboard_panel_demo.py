@@ -96,13 +96,13 @@ def _sample_packets_direct() -> List[Dict[str, Any]]:
 
 def test_default_data_mode_is_file(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AIROS_DASHBOARD_DATA_MODE", raising=False)
-    from review_dashboard.components import program_reporting_panel as pr
+    from airos.network.dashboard.components import program_reporting_panel as pr
 
     assert pr._dashboard_data_mode() == "file"
 
 
 def test_panel_missing_outputs_returns_none(tmp_path: Path) -> None:
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_demo_outputs,
     )
 
@@ -110,7 +110,7 @@ def test_panel_missing_outputs_returns_none(tmp_path: Path) -> None:
 
 
 def test_panel_loader_reads_state_summary_and_packets(tmp_path: Path) -> None:
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_demo_outputs,
     )
 
@@ -136,7 +136,7 @@ def test_panel_loader_reads_state_summary_and_packets(tmp_path: Path) -> None:
 def test_program_reporting_panel_contains_business_sections() -> None:
     panel = (
         Path(__file__).resolve().parents[1]
-        / "review_dashboard"
+        / "airos" / "network" / "dashboard"
         / "components"
         / "program_reporting_panel.py"
     )
@@ -154,7 +154,7 @@ def test_program_reporting_panel_contains_business_sections() -> None:
 
 
 def test_panel_loader_falls_back_to_single_packet(tmp_path: Path) -> None:
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_demo_outputs,
     )
 
@@ -201,7 +201,7 @@ def test_api_mode_stored_output_shape(monkeypatch: pytest.MonkeyPatch) -> None:
             return [], 200, None
         return pkts, 200, None
 
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_dashboard_data,
     )
 
@@ -231,7 +231,7 @@ def test_api_mode_direct_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
             return [], 200, None
         return pkts, 200, None
 
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_dashboard_data,
         pick_latest_state_summary,
     )
@@ -249,7 +249,7 @@ def test_api_mode_empty_returns_empty_guide(monkeypatch: pytest.MonkeyPatch) -> 
     def _fetch_ok_empty(_base: str, _ck: str) -> Tuple[Optional[list], Optional[int], Optional[str]]:
         return [], 200, None
 
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_dashboard_data,
     )
 
@@ -265,7 +265,7 @@ def test_api_mode_http_error_shows_warning(monkeypatch: pytest.MonkeyPatch) -> N
     def _fetch(_base: str, _ck: str) -> Tuple[Optional[list], Optional[int], Optional[str]]:
         return None, 404, "not found"
 
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         API_LOAD_FAILURE_PREFACE,
         load_program_reporting_dashboard_data,
     )
@@ -283,7 +283,7 @@ def test_api_mode_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fetch(_base: str, _ck: str) -> Tuple[Optional[list], Optional[int], Optional[str]]:
         return None, None, "Connection refused"
 
-    from review_dashboard.components.program_reporting_panel import (
+    from airos.network.dashboard.components.program_reporting_panel import (
         load_program_reporting_dashboard_data,
     )
 
@@ -294,7 +294,7 @@ def test_api_mode_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_panel_safe_wording(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AIROS_DASHBOARD_DATA_MODE", raising=False)
-    panel_path = Path(__file__).resolve().parents[1] / "review_dashboard" / "components" / "program_reporting_panel.py"
+    panel_path = Path(__file__).resolve().parents[1] / "airos" / "network" / "dashboard" / "components" / "program_reporting_panel.py"
     text = panel_path.read_text(encoding="utf-8").lower()
     assert "will be automatically released" not in text
     assert "automatic fund release authorized" not in text

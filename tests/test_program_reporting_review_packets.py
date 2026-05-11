@@ -4,12 +4,12 @@ import json
 import re
 from pathlib import Path
 
-from urban_platform.applications.program_reporting.review_packets import (
+from airos.apps.program_reporting.review_packets import (
     build_fund_release_review_packet,
     build_program_reporting_demo_outputs,
     build_program_reporting_state_summary,
 )
-from urban_platform.specifications.conformance import assert_conforms
+from airos.os.specifications.conformance import assert_conforms
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SAMPLE_SUBMISSION = _REPO_ROOT / "specifications/examples/program_reporting/city_program_submission.sample.json"

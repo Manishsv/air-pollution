@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urban_platform.sdk import (
+from airos.os.sdk import (
     get_provider_adapter_descriptor,
     list_provider_adapter_descriptors,
     list_provider_adapter_ids,

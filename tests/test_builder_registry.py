@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from urban_platform.deployments.builder_registry import get_builder, list_builders
+from airos.os.deployments.builder_registry import get_builder, list_builders
 
 
 def test_list_builders_includes_current_demo_application_ids() -> None:
@@ -33,7 +33,7 @@ def test_registry_is_not_yaml_driven() -> None:
 
     src = (
         Path(__file__).resolve().parents[1]
-        / "urban_platform"
+        / "airos" / "os"
         / "deployments"
         / "builder_registry.py"
     ).read_text(encoding="utf-8")

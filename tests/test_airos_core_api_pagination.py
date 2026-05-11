@@ -6,20 +6,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from urban_platform.storage.models import StoredRun
+from airos.os.storage.models import StoredRun
 
 
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AIROS_STORE_DIR", str(tmp_path / "api_store"))
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     return TestClient(create_app())
 
 
 def test_runs_paginated_envelope_and_legacy_array(api_client: TestClient) -> None:
     # create a couple runs directly via store
-    from urban_platform.storage.file_store import FileAirOsStore
+    from airos.os.storage.file_store import FileAirOsStore
 
     store = FileAirOsStore(Path(os.environ["AIROS_STORE_DIR"]))
     store.put_run(
@@ -64,8 +64,8 @@ def test_limit_max_enforced(api_client: TestClient) -> None:
 
 def test_outputs_filter_by_run_id_with_pagination(api_client: TestClient) -> None:
     # create outputs with metadata.run_id
-    from urban_platform.storage.file_store import FileAirOsStore
-    from urban_platform.storage.models import StoredOutput
+    from airos.os.storage.file_store import FileAirOsStore
+    from airos.os.storage.models import StoredOutput
 
     store = FileAirOsStore(Path(os.environ["AIROS_STORE_DIR"]))
     store.put_output(
@@ -99,8 +99,8 @@ def test_outputs_filter_by_run_id_with_pagination(api_client: TestClient) -> Non
 
 
 def test_audit_events_filter_by_action_and_resource_type(api_client: TestClient) -> None:
-    from urban_platform.storage.file_store import FileAirOsStore
-    from urban_platform.storage.models import AuditEvent
+    from airos.os.storage.file_store import FileAirOsStore
+    from airos.os.storage.models import AuditEvent
 
     store = FileAirOsStore(Path(os.environ["AIROS_STORE_DIR"]))
     store.append_audit_event(

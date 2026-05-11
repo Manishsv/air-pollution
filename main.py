@@ -6,9 +6,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from urban_platform.common.config import load_config
-from urban_platform.specifications.audit import run_conformance_audit
-from urban_platform.specifications.engine import list_conformance_result_violations
+from airos.os.common.config import load_config
+from airos.os.specifications.audit import run_conformance_audit
+from airos.os.specifications.engine import list_conformance_result_violations
 
 
 def setup_logging() -> None:
@@ -51,7 +51,7 @@ def main() -> None:
             format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             datefmt="%H:%M:%S",
         )
-        from urban_platform.scheduler import run_forever
+        from airos.os.scheduler import run_forever
         run_forever()
         return
 
@@ -60,7 +60,7 @@ def main() -> None:
         _logging.basicConfig(level=_logging.INFO,
                              format="%(asctime)s %(levelname)s %(name)s — %(message)s",
                              datefmt="%H:%M:%S")
-        from urban_platform.h3_knowledge.ingestor import run as _h3_run, ALL_CITIES, ALL_DOMAINS
+        from airos.drivers.store.ingestor import run as _h3_run, ALL_CITIES, ALL_DOMAINS
         cities  = getattr(args, "cities",  None) or ALL_CITIES
         domains = getattr(args, "domains", None) or ALL_DOMAINS
         force   = getattr(args, "force",   False)
@@ -74,7 +74,7 @@ def main() -> None:
         logging.basicConfig(level=logging.INFO,
                             format="%(asctime)s %(levelname)s %(name)s — %(message)s",
                             datefmt="%H:%M:%S")
-        from urban_platform.h3_knowledge.geocoder import geocode_all_cells, geocode_summary
+        from airos.drivers.store.geocoder import geocode_all_cells, geocode_summary
         overwrite = getattr(args, "overwrite", False)
         city_arg  = getattr(args, "city", None)
         # Print coverage before

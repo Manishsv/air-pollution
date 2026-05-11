@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.ai_dev_supervisor.deployment_probe import probe_deployment_examples
+from airos.network.cli.ai_dev_supervisor.deployment_probe import probe_deployment_examples
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

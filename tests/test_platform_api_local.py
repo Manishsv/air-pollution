@@ -8,7 +8,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
 
-from urban_platform.api.local import (
+from airos.network.api.local import (
     get_decision_packet,
     get_decision_packets,
     get_features,

@@ -4,14 +4,14 @@ import json
 
 import pandas as pd
 
-from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 
 
 def test_property_buildings_dashboard_payload_validates_against_contract() -> None:
-    from urban_platform.applications.property_buildings.dashboard_payload import (
+    from airos.apps.property_buildings.dashboard_payload import (
         build_property_building_dashboard_payload,
     )
-    from urban_platform.processing.property_buildings.features import (
+    from airos.drivers.processing.property_buildings.features import (
         build_property_buildings_feature_rows,
     )
 
@@ -57,7 +57,7 @@ def test_property_buildings_dashboard_payload_validates_against_contract() -> No
 
 
 def test_property_buildings_dashboard_payload_handles_empty_features() -> None:
-    from urban_platform.applications.property_buildings.dashboard_payload import (
+    from airos.apps.property_buildings.dashboard_payload import (
         build_property_building_dashboard_payload,
     )
 

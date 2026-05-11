@@ -4,8 +4,8 @@ from pathlib import Path
 
 import yaml
 
-from urban_platform.deployments import builder_registry
-from urban_platform.specifications.conformance import SPEC_ROOT, Draft202012Validator, load_manifest, validator_for_schema_file
+from airos.os.deployments import builder_registry
+from airos.os.specifications.conformance import SPEC_ROOT, Draft202012Validator, load_manifest, validator_for_schema_file
 
 
 def _spec_path(rel: str) -> Path:

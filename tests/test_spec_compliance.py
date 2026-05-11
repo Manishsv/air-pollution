@@ -58,7 +58,7 @@ class TestConformanceRule1:
     """DATA_CONFIDENCE must be present for every cell in the batch (BLOCKING)."""
 
     def test_missing_data_confidence_is_blocking(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", 45.0),
@@ -69,7 +69,7 @@ class TestConformanceRule1:
         assert any("DATA_CONFIDENCE" in f for f in result.failures)
 
     def test_data_confidence_present_passes(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", 45.0),
@@ -80,7 +80,7 @@ class TestConformanceRule1:
 
     def test_data_confidence_for_one_cell_does_not_satisfy_another(self):
         """DATA_CONFIDENCE for cell_a does NOT cover cell_b (Rule 1 per-cell)."""
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", 45.0),
@@ -93,7 +93,7 @@ class TestConformanceRule1:
         assert any("cell_b" in f for f in result.failures)
 
     def test_all_cells_have_data_confidence_passes(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", 45.0),
@@ -105,7 +105,7 @@ class TestConformanceRule1:
         assert result.ok is True
 
     def test_empty_batch_is_warning_not_failure(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         result = validate_signal_rows([], domain="air")
         assert result.ok is True  # no blocking failure
@@ -116,7 +116,7 @@ class TestConformanceRule2:
     """Declared signal missing from rows is a WARNING (non-blocking)."""
 
     def test_missing_declared_signal_is_warning_only(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         driver = SimpleNamespace(
             domain="air",
@@ -132,7 +132,7 @@ class TestConformanceRule2:
         assert any("AQI" in w for w in result.warnings)
 
     def test_all_declared_signals_present_no_warning(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         driver = SimpleNamespace(
             domain="air",
@@ -156,7 +156,7 @@ class TestConformanceRule3:
     )
     def test_wrong_h3_resolution_is_blocking(self):
         import h3
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         # Generate a resolution-7 cell
         res7_cell = h3.latlng_to_cell(28.6, 77.2, 7)
@@ -174,7 +174,7 @@ class TestConformanceRule3:
     )
     def test_correct_h3_resolution_8_passes(self):
         import h3
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         res8_cell = h3.latlng_to_cell(28.6, 77.2, 8)
         rows = [
@@ -186,7 +186,7 @@ class TestConformanceRule3:
 
     def test_unparseable_h3_id_does_not_block(self):
         """If h3 can't parse the id, Rule 3 skips it (returns None from _h3_resolution)."""
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         # A string that's not a valid H3 cell — resolution cannot be determined
         # so Rule 3 should not fire a blocking failure
@@ -203,7 +203,7 @@ class TestConformanceRule4:
     """Null/NaN values produce a WARNING (non-blocking)."""
 
     def test_nan_value_is_warning_only(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", float("nan")),
@@ -214,7 +214,7 @@ class TestConformanceRule4:
         assert any("null" in w.lower() or "nan" in w.lower() for w in result.warnings)
 
     def test_none_value_is_warning_only(self):
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         rows = [
             _make_row("cell_a", "PM25", None),
@@ -230,7 +230,7 @@ class TestConformanceRule5:
     def test_out_of_range_value_is_warning_only(self, tmp_path: Path):
         """If a signals.yaml declares a range, out-of-range values emit a warning."""
         import yaml
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         # Write a signals.yaml for a mock driver
         signals_yaml = tmp_path / "signals.yaml"
@@ -260,7 +260,7 @@ class TestConformanceRule5:
 
     def test_in_range_value_produces_no_warning(self, tmp_path: Path):
         import yaml
-        from urban_platform.sdk.conformance import validate_signal_rows
+        from airos.os.sdk.conformance import validate_signal_rows
 
         signals_yaml = tmp_path / "signals.yaml"
         signals_yaml.write_text(
@@ -300,18 +300,18 @@ def temp_db(tmp_path: Path, monkeypatch):
 
     # Patch schema.DB_PATH first (used when store.py imports it at module level)
     monkeypatch.setattr(
-        "urban_platform.h3_knowledge.schema.DB_PATH", db_file
+        "airos.drivers.store.schema.DB_PATH", db_file
     )
     # Patch store.DB_PATH (the module-level import)
     monkeypatch.setattr(
-        "urban_platform.h3_knowledge.store.DB_PATH", db_file
+        "airos.drivers.store.store.DB_PATH", db_file
     )
 
     # Clear the schema-initialised cache so the DDL runs on our new file
-    from urban_platform.h3_knowledge import store as _store_mod
+    from airos.drivers.store import store as _store_mod
     _store_mod._schema_initialised.clear()
 
-    from urban_platform.h3_knowledge.store import H3KnowledgeStore
+    from airos.drivers.store.store import H3KnowledgeStore
     return H3KnowledgeStore(db_file)
 
 
@@ -371,9 +371,9 @@ class TestCloseInsight:
 
     def test_empty_closed_by_raises_valueerror(self, temp_db, monkeypatch, tmp_path):
         monkeypatch.setattr(
-            "urban_platform.h3_knowledge.store.DB_PATH", temp_db._db_path
+            "airos.drivers.store.store.DB_PATH", temp_db._db_path
         )
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         with pytest.raises(ValueError, match="closed_by"):
@@ -384,7 +384,7 @@ class TestCloseInsight:
             )
 
     def test_whitespace_closed_by_raises_valueerror(self, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         with pytest.raises(ValueError, match="closed_by"):
@@ -395,7 +395,7 @@ class TestCloseInsight:
             )
 
     def test_invalid_outcome_status_raises_valueerror(self, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         with pytest.raises(ValueError, match="outcome_status"):
@@ -407,7 +407,7 @@ class TestCloseInsight:
 
     @pytest.mark.parametrize("bad_status", ["reopened", "cancelled", "rejected", ""])
     def test_other_invalid_statuses_raise_valueerror(self, bad_status, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         with pytest.raises(ValueError):
@@ -419,7 +419,7 @@ class TestCloseInsight:
 
     @pytest.mark.parametrize("status", ["confirmed", "refuted", "unverifiable"])
     def test_valid_close_succeeds(self, status, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         iid = _write_insight(temp_db._db_path)
@@ -442,7 +442,7 @@ class TestCloseInsight:
 
     def test_already_closed_insight_is_not_modified(self, temp_db, monkeypatch):
         """close_insight uses WHERE outcome_status='open' — closed insights are immutable."""
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         # Insert already-closed insight
@@ -477,7 +477,7 @@ class TestCloseInsight:
 class TestWriteCityPattern:
 
     def test_returns_a_pattern_id(self, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         pid = writer.write_city_pattern(
@@ -491,7 +491,7 @@ class TestWriteCityPattern:
         assert len(pid) > 0
 
     def test_caller_supplied_pattern_id_is_preserved(self, temp_db, monkeypatch):
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         custom_id = "fixed-pattern-id-123"
@@ -514,7 +514,7 @@ class TestWriteCityPattern:
 
     def test_persists_fields_correctly(self, temp_db, monkeypatch):
         import json as _json
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         summary_data = {"themes": ["construction_dust", "high_crowd"], "city_id": "delhi"}
@@ -543,7 +543,7 @@ class TestWriteCityPattern:
 
     def test_each_call_inserts_new_row(self, temp_db, monkeypatch):
         """write_city_pattern is INSERT only — no upsert, no overwrite."""
-        from urban_platform.h3_knowledge import writer
+        from airos.drivers.store import writer
         monkeypatch.setattr(writer, "_store", lambda: temp_db)
 
         writer.write_city_pattern(
@@ -579,7 +579,7 @@ class TestInboxSortOrder:
 
     def test_sort_order_priority_then_confidence_then_date(self, temp_db, monkeypatch):
         import pandas as pd
-        from urban_platform.h3_knowledge import reader
+        from airos.drivers.store import reader
         monkeypatch.setattr(
             reader, "_store",
             lambda: temp_db,

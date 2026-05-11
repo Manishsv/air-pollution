@@ -4,7 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from urban_platform.sdk.store_backup import backup_file_store, verify_store_backup
+from airos.os.sdk.store_backup import backup_file_store, verify_store_backup
 
 
 def _rewrite_zip(src: Path, dst: Path, *, mutate: dict[str, bytes] | None = None, drop: set[str] | None = None) -> None:

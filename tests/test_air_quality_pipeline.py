@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from urban_platform.applications.air.air_pipeline import (
+from airos.apps.air.air_pipeline import (
     _aqi_category,
     _aqi_color,
     _worst_category,
@@ -18,7 +18,7 @@ from urban_platform.applications.air.air_pipeline import (
     build_air_quality_dashboard,
     build_air_quality_decision_packets,
 )
-from urban_platform.applications.flood.flood_pipeline import (
+from airos.apps.flood.flood_pipeline import (
     build_h3_grid_from_bbox,
 )
 
@@ -251,7 +251,7 @@ def test_dashboard_risk_cells_present(dashboard):
 
 
 def test_dashboard_validates_against_schema(dashboard):
-    from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+    from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
     schema_path = str(
         (SPEC_ROOT / "consumer_contracts" / "air_quality_dashboard.v1.schema.json").resolve()
     )
@@ -319,7 +319,7 @@ def test_packets_review_guidance_present(packets):
 
 
 def test_packets_validate_against_schema(packets):
-    from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+    from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
     schema_path = str(
         (SPEC_ROOT / "consumer_contracts" / "air_quality_decision_packet.v1.schema.json").resolve()
     )

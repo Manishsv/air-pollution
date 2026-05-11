@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from urban_platform.sdk import (
+from airos.os.sdk import (
     assert_fixture_valid,
     compute_hash,
     contract_exists,
@@ -69,7 +69,7 @@ def test_assert_fixture_valid_passes() -> None:
 
 
 def test_sdk_apps_does_not_enable_dynamic_execution() -> None:
-    import urban_platform.sdk.apps as sdk_apps
+    import airos.os.sdk.apps as sdk_apps
 
     src = inspect.getsource(sdk_apps)
     blocked = ["importlib", "exec(", "eval(", "builder_registry"]

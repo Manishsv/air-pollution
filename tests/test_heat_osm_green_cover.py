@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon, box
 
-from urban_platform.connectors.heat.osm_green_cover import (
+from airos.drivers.connectors.heat.osm_green_cover import (
     _green_cover_fraction,
     _h3_cell_polygon,
     _water_proximity_score,
@@ -205,7 +205,7 @@ def test_compute_green_cover_osm_failure_returns_empty():
         broken = MagicMock()
         broken.features_from_polygon.side_effect = Exception("import failed")
         # Force h3.geo_to_cells to also fail to simulate total failure
-        with patch("urban_platform.connectors.heat.osm_green_cover.h3") as mock_h3:
+        with patch("airos.drivers.connectors.heat.osm_green_cover.h3") as mock_h3:
             mock_h3.geo_to_cells.side_effect = Exception("h3 failed")
             df = compute_green_cover(boundary, h3_resolution=9, osmnx_module=broken)
     assert isinstance(df, pd.DataFrame)

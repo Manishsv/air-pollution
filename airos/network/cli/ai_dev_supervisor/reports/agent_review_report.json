@@ -1,0 +1,1546 @@
+{
+  "conformance": {
+    "attempted": true,
+    "command": [
+      "/opt/homebrew/anaconda3/bin/python3",
+      "main.py",
+      "--step",
+      "conformance"
+    ],
+    "conformance_report": {
+      "artifacts": {
+        "data_audit": {
+          "core_schema_status": "n/a",
+          "error_count": 0,
+          "errors": [],
+          "profile": null,
+          "profile_schema_status": "n/a",
+          "schema": "data_audit",
+          "status": "skipped"
+        },
+        "decision_packets": {
+          "core_schema_status": "skipped",
+          "error_count": 0,
+          "errors": [],
+          "profile": "air_quality",
+          "profile_schema_status": "skipped",
+          "schema": "decision_packets",
+          "status": "skipped"
+        },
+        "metrics": {
+          "core_schema_status": "n/a",
+          "error_count": 0,
+          "errors": [],
+          "profile": null,
+          "profile_schema_status": "n/a",
+          "schema": "metrics",
+          "status": "skipped"
+        },
+        "scale_analysis": {
+          "core_schema_status": "n/a",
+          "error_count": 0,
+          "errors": [],
+          "profile": null,
+          "profile_schema_status": "n/a",
+          "schema": "scale_analysis",
+          "status": "skipped"
+        },
+        "source_reliability": {
+          "core_schema_status": "n/a",
+          "error_count": 0,
+          "errors": [],
+          "profile": null,
+          "profile_schema_status": "n/a",
+          "schema": "source_reliability",
+          "status": "skipped"
+        }
+      },
+      "mode": "full",
+      "results": [
+        {
+          "artifact_or_api": "schema_file:provider_contracts/air_quality_observation_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "air_quality_observation_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/building_footprint_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "building_footprint_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/building_permit_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "building_permit_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/drainage_asset_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "drainage_asset_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/fire_event_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "fire_event_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/flood_incident_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "flood_incident_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/land_use_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "land_use_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/property_registry_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "property_registry_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/rainfall_observation_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "rainfall_observation_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/road_network_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "road_network_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/satellite_change_signal_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "satellite_change_signal_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/video_camera_people_count_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "video_camera_people_count_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/ward_boundary_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "ward_boundary_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:provider_contracts/weather_observation_feed.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "weather_observation_feed.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/air_os_app_descriptor.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "air_os_app_descriptor.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/entity.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "entity.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/event.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "event.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/feature.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "feature.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/observation.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "observation.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/provenance_summary.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provenance_summary.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/provider_adapter_descriptor.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_adapter_descriptor.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/reference_catalog.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "reference_catalog.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:platform_objects/source_reliability.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "source_reliability.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/city_program_submission.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "city_program_submission.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/data_audit.profile.air_quality.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "data_audit.profile.air_quality.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/decision_packet.profile.air_quality.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packet.profile.air_quality.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/decision_packets.profile.air_quality.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packets.profile.air_quality.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/feature_response.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "feature_response.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/field_verification_task.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "field_verification_task.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/flood_decision_packet.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "flood_decision_packet.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/flood_risk_dashboard.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "flood_risk_dashboard.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/fund_release_review_packet.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "fund_release_review_packet.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/metrics.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "metrics.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/observation_response.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "observation_response.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/program_reporting_state_summary.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "program_reporting_state_summary.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/property_building_dashboard.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "property_building_dashboard.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/property_building_review_packet.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "property_building_review_packet.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/recommendation_response.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "recommendation_response.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/scale_analysis.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "scale_analysis.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/source_reliability_response.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "source_reliability_response.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:consumer_contracts/urban_decision_packet_core.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "urban_decision_packet_core.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:network_contracts/delivery_receipt.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "delivery_receipt.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:network_contracts/message_envelope.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "message_envelope.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:registry_contracts/application_registry.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "application_registry.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:registry_contracts/network_adapter_registry.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "network_adapter_registry.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:registry_contracts/program_spec_registry.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "program_spec_registry.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "schema_file:registry_contracts/provider_registry.v1.schema.json",
+          "contract_type": "schema_file",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_registry.v1.schema.json",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/air_quality.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "air_quality.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/domain_spec_template.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "domain_spec_template.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/flood_risk.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "flood_risk.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/program_reporting.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "program_reporting.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/property_buildings.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "property_buildings.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "domain_spec:domain_specs/water_operations.v1.yaml",
+          "contract_type": "domain_spec",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "water_operations.v1.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "program_spec_bundle:program_specs/stormwater_resilience_grant_2026/program_spec.yaml",
+          "contract_type": "program_spec_bundle",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "program_spec.yaml",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/app_descriptors/program_reporting_review.v1.yaml",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_air_os_app_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/app_descriptors/flood_risk_review.v1.yaml",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_air_os_app_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/provider_adapters/openaq_air_quality_adapter.v1.yaml",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_provider_adapter_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/provider_adapters/open_meteo_weather_adapter.v1.yaml",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_provider_adapter_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/provider_adapters/osm_geospatial_adapter.v1.yaml",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_provider_adapter_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/flood/rainfall_observation.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_rainfall_observation_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/flood/flood_incident.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_flood_incident_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/flood/drainage_asset.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_drainage_asset_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/flood/flood_risk_dashboard.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_flood_risk_dashboard",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/flood/flood_decision_packet.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_flood_decision_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/property_registry.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_property_registry_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/building_footprint.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_building_footprint_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/building_permit.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_building_permit_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/land_use.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_land_use_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/ward_boundary.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_ward_boundary_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/satellite_change_signal.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_satellite_change_signal_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/property_building_dashboard.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_property_building_dashboard",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/property_buildings/property_building_review_packet.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_property_building_review_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/network/message_envelope.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "network_message_envelope_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/network/delivery_receipt.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "network_delivery_receipt_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/registries/provider_registry.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_provider_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/registries/application_registry.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_application_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/registries/network_adapter_registry.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_network_adapter_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/program_reporting/city_program_submission.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_city_program_submission",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/program_reporting/city_program_submission_city_b.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_city_program_submission",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/program_reporting/fund_release_review_packet.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_fund_release_review_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/program_reporting/program_reporting_state_summary.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_program_reporting_state_summary",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/program_reporting/program_spec_registry.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_program_spec_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/reference_data/administrative_units.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_reference_catalog",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/reference_data/program_catalog.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_reference_catalog",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/specifications/examples/reference_data/reporting_periods.sample.json",
+          "contract_type": "example",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_reference_catalog",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:urban_decision_packet_core",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "urban_decision_packet_core",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:decision_packet",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:decision_packet_air_quality",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packet_air_quality",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:decision_packets",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packets",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:data_audit",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "data_audit",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:metrics",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "metrics",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provenance_summary",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provenance_summary",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:source_reliability",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "source_reliability",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:scale_analysis",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "scale_analysis",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_air_quality_observation_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_air_quality_observation_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_weather_observation_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_weather_observation_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_fire_event_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_fire_event_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_building_footprint_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_building_footprint_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_road_network_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_road_network_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_video_camera_people_count_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_video_camera_people_count_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_rainfall_observation_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_rainfall_observation_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_flood_incident_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_flood_incident_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_drainage_asset_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_drainage_asset_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_property_registry_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_property_registry_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_building_permit_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_building_permit_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_land_use_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_land_use_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_ward_boundary_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_ward_boundary_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:provider_satellite_change_signal_feed",
+          "contract_type": "provider",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "provider_satellite_change_signal_feed",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_observation",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_observation",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_entity",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_entity",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_feature",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_feature",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_event",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_event",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_reference_catalog",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_reference_catalog",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_air_os_app_descriptor",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_air_os_app_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:platform_provider_adapter_descriptor",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "platform_provider_adapter_descriptor",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_urban_decision_packet_core",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_urban_decision_packet_core",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_decision_packet_air_quality",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_decision_packet_air_quality",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_decision_packets_air_quality",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_decision_packets_air_quality",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_recommendation_response",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_recommendation_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_observation_response",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_observation_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_feature_response",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_feature_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_source_reliability_response",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_source_reliability_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_flood_risk_dashboard",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_flood_risk_dashboard",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_flood_decision_packet",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_flood_decision_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_field_verification_task",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_field_verification_task",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_property_building_dashboard",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_property_building_dashboard",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_property_building_review_packet",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_property_building_review_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_city_program_submission",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_city_program_submission",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_fund_release_review_packet",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_fund_release_review_packet",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:consumer_program_reporting_state_summary",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_program_reporting_state_summary",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:network_message_envelope_v1",
+          "contract_type": "network_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "network_message_envelope_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:network_delivery_receipt_v1",
+          "contract_type": "network_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "network_delivery_receipt_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:registry_provider_registry_v1",
+          "contract_type": "registry_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_provider_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:registry_application_registry_v1",
+          "contract_type": "registry_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_application_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:registry_network_adapter_registry_v1",
+          "contract_type": "registry_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_network_adapter_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:registry_program_spec_registry_v1",
+          "contract_type": "registry_contract",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "registry_program_spec_registry_v1",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:openapi_platform_api",
+          "contract_type": "openapi",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "openapi_platform_api",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "manifest:openapi_provider_ingestion_api",
+          "contract_type": "openapi",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "openapi_provider_ingestion_api",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/data/outputs/decision_packets.json",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packets",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/data/outputs/data_audit.json",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "data_audit",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/data/outputs/metrics.json",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "metrics",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/data/outputs/source_reliability.json",
+          "contract_type": "platform_object",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "source_reliability",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "/Users/manishsv/Documents/Projects/AirPollution/data/outputs/scale_analysis.json",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "scale_analysis",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "api:get_decision_packets()",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "decision_packets",
+          "status": "skipped",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "api:get_recommendations()",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_recommendation_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "api:get_source_reliability()",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_source_reliability_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "api:get_features()",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_feature_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        },
+        {
+          "artifact_or_api": "api:get_observations()",
+          "contract_type": "consumer",
+          "error_count": 0,
+          "errors": [],
+          "schema_name": "consumer_observation_response",
+          "status": "valid",
+          "validated_at": "2026-05-07T01:00:21.007590+00:00"
+        }
+      ],
+      "validated_at": "2026-05-07T01:00:21.007590+00:00"
+    },
+    "conformance_report_loaded": true,
+    "conformance_report_path": "data/outputs/conformance_report.json",
+    "duration_s": 2.757,
+    "errors": [],
+    "exit_code": 0,
+    "stderr_tail": "2026-05-07 06:30:21,347 | INFO | __main__ | Wrote conformance report to /Users/manishsv/Documents/Projects/AirPollution/data/outputs/conformance_report.json\n2026-05-07 06:30:21,347 | INFO | __main__ | Validated 148 checks\n",
+    "stdout_tail": ""
+  },
+  "dashboard_probe": null,
+  "deployment_examples": {
+    "deployments": [
+      {
+        "application_count": 3,
+        "application_registry_exists": true,
+        "deployment_dir": "deployments/examples/flood_local_demo",
+        "deployment_id": "flood_local_demo",
+        "deployment_key": "flood_local_demo",
+        "deployment_profile_exists": true,
+        "errors": [],
+        "missing_fixture_paths": [],
+        "missing_manifest_references": [],
+        "provider_count": 3,
+        "provider_registry_exists": true,
+        "readme_exists": true,
+        "recommended_next_task": "Keep deployment examples aligned with manifest contracts and fixture paths.",
+        "risks": []
+      },
+      {
+        "application_count": 1,
+        "application_registry_exists": true,
+        "deployment_dir": "deployments/examples/program_reporting_state_demo",
+        "deployment_id": "program_reporting_state_demo",
+        "deployment_key": "program_reporting_state_demo",
+        "deployment_profile_exists": true,
+        "errors": [],
+        "missing_fixture_paths": [],
+        "missing_manifest_references": [],
+        "provider_count": 0,
+        "provider_registry_exists": true,
+        "readme_exists": true,
+        "recommended_next_task": "Keep deployment examples aligned with manifest contracts and fixture paths.",
+        "risks": []
+      }
+    ],
+    "errors": [],
+    "example_count": 2,
+    "examples_dir_exists": true,
+    "recommended_next_task": "Add another deployment example or extend checks (still read-only).",
+    "risks": []
+  },
+  "domain_maturity": null,
+  "expected_spec_folders": {
+    "specifications/consumer_contracts": true,
+    "specifications/domain_specs": true,
+    "specifications/network_contracts": true,
+    "specifications/platform_objects": true,
+    "specifications/provider_contracts": true,
+    "specifications/registry_contracts": true
+  },
+  "governance": {
+    "agents_exists": true,
+    "agents_mentions_specs_first": true,
+    "readme_exists": true,
+    "readme_mentions_specs_first": true
+  },
+  "recommended_next_task": "Add new provider/domain/consumer work only via specs-first sequence (update specs, then run conformance).",
+  "registry_hygiene": {
+    "adapter_count": 3,
+    "application_count": 3,
+    "errors": [],
+    "missing_example_references": [],
+    "missing_manifest_references": [],
+    "provider_count": 6,
+    "recommended_next_task": "Keep registries aligned with manifest artifacts and examples; add registry validation to CI if needed.",
+    "risks": []
+  },
+  "repo_root": "/Users/manishsv/Documents/Projects/AirPollution",
+  "risks": [],
+  "spec_policy": {
+    "errors": [],
+    "keys_present": [
+      "blocked_without_specs",
+      "mandatory_conformance",
+      "notes",
+      "paths",
+      "required_sequence",
+      "specs_first"
+    ],
+    "loaded": true,
+    "policy_path": "specifications/spec_policy.yaml",
+    "raw_policy": {
+      "blocked_without_specs": [
+        "connector",
+        "edge_publisher",
+        "file_ingestion",
+        "platform_object",
+        "platform_object_extension",
+        "domain_field",
+        "domain_variable",
+        "domain_threshold",
+        "domain_category",
+        "decision_packet_extension",
+        "dashboard",
+        "dashboard_payload",
+        "sdk_method",
+        "api_endpoint",
+        "map_layer",
+        "report",
+        "public_report",
+        "decision_packet",
+        "field_task",
+        "model_output",
+        "alert_rule"
+      ],
+      "mandatory_conformance": {
+        "consumer_outputs": true,
+        "domain_profiles": true,
+        "platform_objects": true,
+        "provider_inputs": true
+      },
+      "notes": {
+        "policy_files_kept_aligned": [
+          "specifications/spec_policy.yaml",
+          "specifications/specs_policy.yaml"
+        ]
+      },
+      "paths": {
+        "consumer_contracts": "specifications/consumer_contracts",
+        "domain_specs": "specifications/domain_specs",
+        "platform_objects": "specifications/platform_objects",
+        "provider_contracts": "specifications/provider_contracts"
+      },
+      "required_sequence": [
+        "define_use_case",
+        "identify_actor",
+        "identify_decision",
+        "define_or_reuse_provider_contract",
+        "define_or_reuse_platform_object",
+        "define_or_reuse_domain_spec",
+        "define_or_reuse_consumer_contract",
+        "register_in_manifest",
+        "add_conformance_check",
+        "implement_code",
+        "run_conformance",
+        "attach_evidence"
+      ],
+      "specs_first": true
+    },
+    "specs_first": true
+  },
+  "timestamp_utc": "2026-05-07T01:00:21.561217+00:00"
+}

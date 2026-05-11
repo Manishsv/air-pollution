@@ -4,17 +4,17 @@ import json
 
 import pandas as pd
 
-from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 
 
 def test_property_buildings_field_tasks_validate_against_contract() -> None:
-    from urban_platform.applications.property_buildings.field_tasks import (
+    from airos.apps.property_buildings.field_tasks import (
         build_property_buildings_field_verification_tasks,
     )
-    from urban_platform.applications.property_buildings.review_packets import (
+    from airos.apps.property_buildings.review_packets import (
         build_property_building_review_packets,
     )
-    from urban_platform.processing.property_buildings.features import (
+    from airos.drivers.processing.property_buildings.features import (
         build_property_buildings_feature_rows,
     )
 

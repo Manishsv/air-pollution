@@ -10,9 +10,9 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
-from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
-from urban_platform.sdk.client import UrbanPlatformClient
-from urban_platform.specifications.runtime_validation import validate_artifact, validate_output_artifacts
+from airos.os.decision_support.explainability import build_decision_packets, sanitize_for_json
+from airos.os.sdk.client import UrbanPlatformClient
+from airos.os.specifications.runtime_validation import validate_artifact, validate_output_artifacts
 
 
 @pytest.fixture
@@ -136,7 +136,7 @@ def test_validate_output_artifacts_writes_conformance_report(tmp_path: Path, aq_
     with open(out / "data_audit.json", "w", encoding="utf-8") as f:
         json.dump(audit, f)
 
-    from urban_platform.common.provenance_summary import build_provenance_summary
+    from airos.os.common.provenance_summary import build_provenance_summary
 
     metrics = {
         "best_model": "random_forest",

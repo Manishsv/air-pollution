@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from urban_platform.standards.converters import stations_pm25_to_observations
-from urban_platform.standards.converters import weather_hourly_to_observations
-from urban_platform.fabric.observation_store import build_observation_table
-from urban_platform.standards.validators import SchemaValidationError, assert_quality_gate, validate_observations
+from airos.os.standards.converters import stations_pm25_to_observations
+from airos.os.standards.converters import weather_hourly_to_observations
+from airos.drivers.fabric.observation_store import build_observation_table
+from airos.os.standards.validators import SchemaValidationError, assert_quality_gate, validate_observations
 
 
 class TestPlatformStandards(unittest.TestCase):

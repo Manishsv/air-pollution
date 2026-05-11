@@ -42,7 +42,7 @@ def _run_program_reporting_app(client: TestClient) -> Dict[str, Any]:
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AIROS_STORE_DIR", str(tmp_path / "api_store"))
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     return TestClient(create_app())
 
@@ -128,7 +128,7 @@ def test_program_reporting_application_run_completed(api_client: TestClient) -> 
     assert rf_status.status_code == 200
     assert any(x.get("run_id") == run_id for x in rf_status.json())
 
-    from urban_platform.storage import FileAirOsStore
+    from airos.os.storage import FileAirOsStore
 
     store = FileAirOsStore(Path(os.environ["AIROS_STORE_DIR"]))
     pkts = store.list_outputs(deployment_id="program_reporting_state_demo", contract_key="consumer_fund_release_review_packet")

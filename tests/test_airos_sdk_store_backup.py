@@ -4,7 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from urban_platform.sdk.store_backup import backup_file_store
+from airos.os.sdk.store_backup import backup_file_store
 
 
 def test_backup_creates_zip_and_does_not_include_unknown_files(tmp_path: Path) -> None:

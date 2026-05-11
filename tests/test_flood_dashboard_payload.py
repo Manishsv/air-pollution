@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 
 
 def _ex(name: str) -> str:
@@ -10,13 +10,13 @@ def _ex(name: str) -> str:
 
 
 def test_flood_dashboard_payload_validates_against_contract() -> None:
-    from urban_platform.connectors.flood.ingest_file import (
+    from airos.drivers.connectors.flood.ingest_file import (
         ingest_drainage_asset_feed_json,
         ingest_flood_incident_feed_json,
         ingest_rainfall_observation_feed_json,
     )
-    from urban_platform.processing.flood.features import build_flood_feature_rows
-    from urban_platform.applications.flood.dashboard_payload import build_flood_risk_dashboard_payload
+    from airos.drivers.processing.flood.features import build_flood_feature_rows
+    from airos.apps.flood.dashboard_payload import build_flood_risk_dashboard_payload
 
     rain, _ = ingest_rainfall_observation_feed_json(json_path=_ex("rainfall_observation.sample.json"))
     inc, _ = ingest_flood_incident_feed_json(json_path=_ex("flood_incident.sample.json"))

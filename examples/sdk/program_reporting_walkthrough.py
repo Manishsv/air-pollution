@@ -1,7 +1,7 @@
 """
 Program Reporting SDK walkthrough — read-only example.
 
-Uses only the documented public SDK surface (urban_platform.sdk.__all__).
+Uses only the documented public SDK surface (airos.os.sdk.__all__).
 Does not require the Core API to be running and does not mutate any state.
 
 Run from the repository root:
@@ -18,7 +18,7 @@ _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from urban_platform.sdk import (
+from airos.os.sdk import (
     get_platform_inventory,
     list_app_ids,
     list_app_descriptors,
@@ -149,7 +149,7 @@ def main() -> dict:
     show_catalogs()
 
     print(f"\n{'=' * 60}")
-    print("  Done. All calls used urban_platform.sdk public surface only.")
+    print("  Done. All calls used airos.os.sdk public surface only.")
     print("=" * 60)
 
     return {

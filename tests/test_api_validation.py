@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from urban_platform.api.validation import collect_validation_errors, manifest_has_artifact
+from airos.network.api.validation import collect_validation_errors, manifest_has_artifact
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

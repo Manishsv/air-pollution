@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
-from urban_platform.models.sklearn_pm25 import _time_split
+from airos.drivers.models.sklearn_pm25 import _time_split
 
 
 class TestTemporalSplit(unittest.TestCase):

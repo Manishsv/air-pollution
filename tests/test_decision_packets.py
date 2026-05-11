@@ -6,7 +6,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
 
-from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
+from airos.os.decision_support.explainability import build_decision_packets, sanitize_for_json
 
 
 def test_build_decision_packets_structure_and_guidance():

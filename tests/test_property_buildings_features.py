@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def test_build_property_buildings_features_scaffold_runs() -> None:
-    from urban_platform.processing.property_buildings.features import (
+    from airos.drivers.processing.property_buildings.features import (
         build_property_buildings_feature_rows,
     )
 
@@ -45,7 +45,7 @@ def test_build_property_buildings_features_scaffold_runs() -> None:
 
 
 def test_build_property_buildings_features_no_inputs_has_warning() -> None:
-    from urban_platform.processing.property_buildings.features import (
+    from airos.drivers.processing.property_buildings.features import (
         build_property_buildings_feature_rows,
     )
 

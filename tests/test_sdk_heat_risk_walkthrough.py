@@ -16,8 +16,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-import urban_platform.sdk as sdk
-from urban_platform.applications.heat.heat_pipeline import (
+import airos.os.sdk as sdk
+from airos.apps.heat.heat_pipeline import (
     build_h3_grid_from_bbox,
     build_heat_risk_dashboard,
     build_intervention_candidates,

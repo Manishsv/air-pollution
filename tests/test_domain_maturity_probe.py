@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.ai_dev_supervisor.domain_maturity_probe import (
+from airos.network.cli.ai_dev_supervisor.domain_maturity_probe import (
     load_domain_checklist,
     probe_domain_maturity,
     required_paths_from_checklist,
@@ -36,7 +36,7 @@ def test_property_buildings_checklist_loads() -> None:
     paths = required_paths_from_checklist(data)
     assert len(paths) == 30
     assert paths[0] == "specifications/domain_specs/property_buildings.v1.yaml"
-    assert "urban_platform/processing/property_buildings/open_data_features.py" in paths
+    assert "airos/drivers/processing/property_buildings/open_data_features.py" in paths
 
 
 def test_air_quality_checklist_loads() -> None:
@@ -46,7 +46,7 @@ def test_air_quality_checklist_loads() -> None:
     assert data.get("domain_id") == "air_quality"
     paths = required_paths_from_checklist(data)
     assert "specifications/domain_specs/air_quality.v1.yaml" in paths
-    assert "urban_platform/applications/air_pollution/pipeline.py" in paths
+    assert "airos/apps/air_pollution/pipeline.py" in paths
     # Runtime outputs are optional, so the probe should complete even on clean clone.
     assert "data/outputs/decision_packets.json" not in paths
 
@@ -80,11 +80,11 @@ def test_unknown_domain_handled_gracefully() -> None:
             "specs_present_missing_examples",
         ),
         (
-            ["urban_platform/foo.py"],
+            ["airos/os/foo.py"],
             "specs_ready_missing_implementation",
         ),
         (
-            ["review_dashboard/components/x.py"],
+            ["airos/network/dashboard/components/x.py"],
             "specs_ready_missing_implementation",
         ),
         (["tests/test_x.py"], "implementation_ready_missing_tests"),
@@ -103,7 +103,7 @@ def test_recommended_next_respects_checklist_stage_and_rules() -> None:
     pb = load_domain_checklist("property_buildings")
     assert pb is not None
     panel_missing = [
-        "review_dashboard/components/property_buildings_panel.py",
+        "airos/network/dashboard/components/property_buildings_panel.py",
     ]
     rec = _recommended_next_task_from_checklist(pb, panel_missing, "specs_ready_missing_implementation")
     assert "property_buildings" in rec.lower()
@@ -141,7 +141,7 @@ def test_probe_property_buildings_matches_prior_vertical_slice_contract() -> Non
 def test_invalid_checklist_yaml_non_crashing() -> None:
     from tempfile import TemporaryDirectory
 
-    import tools.ai_dev_supervisor.domain_maturity_probe as dmp
+    import airos.network.cli.ai_dev_supervisor.domain_maturity_probe as dmp
 
     with TemporaryDirectory() as td:
         tdir = Path(td)

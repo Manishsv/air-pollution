@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from urban_platform.sdk.store_backup import backup_file_store, inspect_store_backup
+from airos.os.sdk.store_backup import backup_file_store, inspect_store_backup
 
 
 def test_inspect_valid_backup_succeeds(tmp_path: Path) -> None:

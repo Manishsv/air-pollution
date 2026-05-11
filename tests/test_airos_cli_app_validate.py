@@ -11,7 +11,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,
@@ -20,7 +20,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_apps_validate_scaffolded_app_succeeds_with_warnings(tmp_path: Path) -> None:
     manifest = (_REPO_ROOT / "specifications" / "manifest.json").read_bytes()
-    builders = (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes()
+    builders = (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes()
 
     out = tmp_path / "scaf"
     res1 = _run_cli("apps", "scaffold", "heat_risk_review", "--domain-id", "heat_risk", "--output-dir", str(out))
@@ -35,7 +35,7 @@ def test_apps_validate_scaffolded_app_succeeds_with_warnings(tmp_path: Path) -> 
 
     # Must not modify repo specs/registry
     assert (_REPO_ROOT / "specifications" / "manifest.json").read_bytes() == manifest
-    assert (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes() == builders
+    assert (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes() == builders
 
 
 def test_apps_validate_missing_descriptor_fails(tmp_path: Path) -> None:

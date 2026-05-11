@@ -3,13 +3,13 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from urban_platform.place.ward_decisions import (
+from airos.drivers.place.ward_decisions import (
     generate_ward_decisions,
     decisions_to_dataframe,
     _score_urgency,
     _packet_id,
 )
-from urban_platform.place.ward_aggregator import WardAggregationResult
+from airos.drivers.place.ward_aggregator import WardAggregationResult
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

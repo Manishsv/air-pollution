@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import tools.airos_cli as cli
+import airos.network.cli.airos_cli as cli
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

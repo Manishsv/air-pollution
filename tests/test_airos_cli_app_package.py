@@ -12,7 +12,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "tools/airos_cli.py", *args],
+        [sys.executable, "airos/network/cli/airos_cli.py", *args],
         cwd=str(_REPO_ROOT),
         text=True,
         capture_output=True,
@@ -21,7 +21,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_apps_package_scaffolded_app_creates_zip_with_manifest(tmp_path: Path) -> None:
     manifest = (_REPO_ROOT / "specifications" / "manifest.json").read_bytes()
-    builders = (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes()
+    builders = (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes()
 
     app_dir = tmp_path / "app"
     dist = tmp_path / "dist"
@@ -44,7 +44,7 @@ def test_apps_package_scaffolded_app_creates_zip_with_manifest(tmp_path: Path) -
         assert not any(".DS_Store" in n for n in zf.namelist())
 
     assert (_REPO_ROOT / "specifications" / "manifest.json").read_bytes() == manifest
-    assert (_REPO_ROOT / "urban_platform" / "deployments" / "builder_registry.py").read_bytes() == builders
+    assert (_REPO_ROOT / "airos" / "os" / "deployments" / "builder_registry.py").read_bytes() == builders
 
 
 def test_apps_package_fails_if_exists_without_force(tmp_path: Path) -> None:

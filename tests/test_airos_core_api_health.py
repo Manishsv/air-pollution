@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AIROS_STORE_DIR", str(tmp_path / "api_store"))
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     return TestClient(create_app())
 
@@ -67,7 +67,7 @@ def test_health_ready_not_ready_if_store_path_is_a_file(tmp_path: Path, monkeypa
     p.write_text("x", encoding="utf-8")
     monkeypatch.setenv("AIROS_STORE_DIR", str(p))
 
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     client = TestClient(create_app())
     r = client.get("/health/ready")

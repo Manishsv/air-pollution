@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from urban_platform.models.air_quality_forecast import run_spatial_cross_validation
+from airos.drivers.models.air_quality_forecast import run_spatial_cross_validation
 
 
 def _stations_hourly(n_stations: int) -> pd.DataFrame:

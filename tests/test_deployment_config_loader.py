@@ -3,7 +3,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from urban_platform.deployments.config_loader import (
+from airos.os.deployments.config_loader import (
     DeploymentConfig,
     load_deployment_config,
 )
@@ -62,8 +62,8 @@ def test_missing_optional_registries_do_not_crash(tmp_path: Path) -> None:
 
 
 def test_config_loader_source_has_no_connector_or_plugin_hooks() -> None:
-    src = (_repo_root() / "urban_platform" / "deployments" / "config_loader.py").read_text(encoding="utf-8")
-    assert "urban_platform.connectors" not in src
+    src = (_repo_root() / "airos" / "os" / "deployments" / "config_loader.py").read_text(encoding="utf-8")
+    assert "airos.os.connectors" not in src
     assert "__import__" not in src
     assert "importlib" not in src
 

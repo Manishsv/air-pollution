@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture()
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AIROS_STORE_DIR", str(tmp_path / "api_store"))
-    from urban_platform.api.app import create_app
+    from airos.network.api.app import create_app
 
     return TestClient(create_app())
 

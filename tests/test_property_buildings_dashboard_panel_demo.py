@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 
 
 def test_property_buildings_demo_artifacts_are_contract_shaped() -> None:
-    from review_dashboard.components.property_buildings_panel import (
+    from airos.network.dashboard.components.property_buildings_panel import (
         build_demo_property_buildings_artifacts,
     )
 

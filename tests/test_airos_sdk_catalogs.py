@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urban_platform.sdk import get_reference_catalog, list_reference_catalog_ids
+from airos.os.sdk import get_reference_catalog, list_reference_catalog_ids
 
 
 def test_sdk_catalog_list_includes_reference_examples() -> None:

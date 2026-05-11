@@ -8,12 +8,12 @@ import pytest
 
 def test_file_mode_shows_api_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AIROS_DASHBOARD_DATA_MODE", raising=False)
-    from review_dashboard.components import runtime_trace_panel as rt
+    from airos.network.dashboard.components import runtime_trace_panel as rt
 
     res = rt.load_runtime_trace_data(fetch_endpoint=lambda _b, _p: ([], 200, None))
     assert res.mode == "file"
 
-    text = (Path(__file__).resolve().parents[1] / "review_dashboard" / "components" / "runtime_trace_panel.py").read_text(
+    text = (Path(__file__).resolve().parents[1] / "airos" / "network" / "dashboard" / "components" / "runtime_trace_panel.py").read_text(
         encoding="utf-8"
     )
     assert "Runtime Trace is available when the dashboard is connected to AirOS Core API." in text
@@ -22,7 +22,7 @@ def test_file_mode_shows_api_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_api_mode_renders_data(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AIROS_DASHBOARD_DATA_MODE", "api")
     monkeypatch.setenv("AIROS_API_BASE_URL", "http://example.test")
-    from review_dashboard.components import runtime_trace_panel as rt
+    from airos.network.dashboard.components import runtime_trace_panel as rt
 
     runs = [
         {
@@ -76,7 +76,7 @@ def test_api_mode_renders_data(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_api_mode_invalid_receipts_are_detectable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AIROS_DASHBOARD_DATA_MODE", "api")
-    from review_dashboard.components import runtime_trace_panel as rt
+    from airos.network.dashboard.components import runtime_trace_panel as rt
 
     receipts = [
         {"receipt_id": "bad", "contract_key": "x", "validation_target_type": "record", "validation_target_id": "r1", "status": "invalid", "error_count": 2}
@@ -94,7 +94,7 @@ def test_api_mode_invalid_receipts_are_detectable(monkeypatch: pytest.MonkeyPatc
 
 def test_api_connection_failure_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AIROS_DASHBOARD_DATA_MODE", "api")
-    from review_dashboard.components import runtime_trace_panel as rt
+    from airos.network.dashboard.components import runtime_trace_panel as rt
 
     def fetch(_base: str, _path: str) -> Tuple[Optional[List[Any]], Optional[int], Optional[str]]:
         return None, None, "Connection refused"
@@ -106,7 +106,7 @@ def test_api_connection_failure_does_not_crash(monkeypatch: pytest.MonkeyPatch) 
 
 def test_api_empty_returns_empty_guide(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AIROS_DASHBOARD_DATA_MODE", "api")
-    from review_dashboard.components import runtime_trace_panel as rt
+    from airos.network.dashboard.components import runtime_trace_panel as rt
 
     def fetch_ok_empty(_base: str, _path: str) -> Tuple[Optional[List[Any]], Optional[int], Optional[str]]:
         return [], 200, None
@@ -118,7 +118,7 @@ def test_api_empty_returns_empty_guide(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_panel_language_is_traceability_not_approval() -> None:
-    text = (Path(__file__).resolve().parents[1] / "review_dashboard" / "components" / "runtime_trace_panel.py").read_text(
+    text = (Path(__file__).resolve().parents[1] / "airos" / "network" / "dashboard" / "components" / "runtime_trace_panel.py").read_text(
         encoding="utf-8"
     )
     assert "traceability evidence, not approval evidence" in text.lower()

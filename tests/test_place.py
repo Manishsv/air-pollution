@@ -5,10 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from urban_platform.place.schema import Ward
-from urban_platform.place.ward_registry import load_wards, _synthetic_grid
-from urban_platform.place.h3_to_ward import assign_wards
-from urban_platform.place.ward_aggregator import _aggregate, _weighted_qol
+from airos.drivers.place.schema import Ward
+from airos.drivers.place.ward_registry import load_wards, _synthetic_grid
+from airos.drivers.place.h3_to_ward import assign_wards
+from airos.drivers.place.ward_aggregator import _aggregate, _weighted_qol
 
 
 # ── Ward ──────────────────────────────────────────────────────────────────

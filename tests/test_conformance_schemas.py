@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
-from urban_platform.common.provenance_summary import build_provenance_summary
-from urban_platform.decision_support.explainability import build_decision_packets, sanitize_for_json
-from urban_platform.specifications.conformance import (
+from airos.os.common.provenance_summary import build_provenance_summary
+from airos.os.decision_support.explainability import build_decision_packets, sanitize_for_json
+from airos.os.specifications.conformance import (
     assert_conforms,
     iter_manifest_schema_paths,
     load_manifest,

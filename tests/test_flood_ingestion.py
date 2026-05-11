@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from urban_platform.specifications.conformance import SPEC_ROOT, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, validator_for_schema_file
 
 
 def _example(path: str) -> Path:
@@ -24,7 +24,7 @@ def test_flood_provider_examples_validate_against_provider_contracts() -> None:
 
 
 def test_flood_ingestion_normalizes_without_losing_provenance() -> None:
-    from urban_platform.connectors.flood.ingest_file import (
+    from airos.drivers.connectors.flood.ingest_file import (
         ingest_drainage_asset_feed_json,
         ingest_flood_incident_feed_json,
         ingest_rainfall_observation_feed_json,

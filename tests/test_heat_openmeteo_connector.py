@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 import requests
 
-from urban_platform.connectors.heat.openmeteo import (
+from airos.drivers.connectors.heat.openmeteo import (
     _grid_points,
     fetch_temperature_observations,
 )

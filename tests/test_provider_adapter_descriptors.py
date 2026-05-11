@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 from jsonschema import Draft202012Validator
 
-from urban_platform.specifications.conformance import SPEC_ROOT, load_manifest, validator_for_schema_file
+from airos.os.specifications.conformance import SPEC_ROOT, load_manifest, validator_for_schema_file
 
 
 def _load_yaml(path: Path) -> dict:
