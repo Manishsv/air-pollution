@@ -3,9 +3,10 @@
 Loads ward boundaries from a GeoJSON file if one exists at
   data/registries/wards/{city_id}.geojson
 
-Falls back to a synthetic rectangular grid when no file is present.
-The grid is deterministic — same city always produces the same ward layout —
-so it can be used as a stable demo fixture.
+Falls back to a synthetic rectangular grid derived from the city's bbox in
+the city registry (data/config/cities.yaml).  The grid is deterministic —
+same city always produces the same ward layout — so it can be used as a
+stable demo fixture.
 """
 from __future__ import annotations
 
@@ -15,17 +16,11 @@ from pathlib import Path
 from typing import List
 
 from .schema import Ward
+from .city_registry import get_bbox as _get_city_bbox
 
 logger = logging.getLogger(__name__)
 
 _REGISTRIES_DIR = Path(__file__).resolve().parents[3] / "data" / "registries" / "wards"
-
-# Bounding boxes for demo cities (lat_min, lon_min, lat_max, lon_max)
-_CITY_BBOXES = {
-    "bangalore_demo": (12.87, 77.49, 13.07, 77.69),
-    "delhi_demo":     (28.50, 76.90, 28.80, 77.30),
-    "mumbai_demo":    (18.90, 72.75, 19.20, 73.00),
-}
 
 # Grid dimensions for synthetic wards (rows × cols)
 _GRID = (4, 5)  # 20 wards per city
@@ -38,14 +33,26 @@ def load_wards(city_id: str) -> List[Ward]:
     """Return ward boundaries for city_id.
 
     Tries to load from data/registries/wards/{city_id}.geojson first.
-    Falls back to a synthetic rectangular grid.
+    Falls back to a synthetic rectangular grid using the bbox from the
+    city registry (data/config/cities.yaml).
     """
     geojson_path = _REGISTRIES_DIR / f"{city_id}.geojson"
     if geojson_path.exists():
         return _load_from_geojson(city_id, geojson_path)
-    if city_id in _CITY_BBOXES:
-        return _synthetic_grid(city_id, *_CITY_BBOXES[city_id])
-    logger.warning("No ward data for city_id=%r and no bbox fallback", city_id)
+
+    bbox = _get_city_bbox(city_id)
+    if bbox:
+        return _synthetic_grid(
+            city_id,
+            bbox["lat_min"], bbox["lon_min"],
+            bbox["lat_max"], bbox["lon_max"],
+        )
+
+    logger.warning(
+        "No ward data for city_id=%r and no bbox in city registry — "
+        "add the city to data/config/cities.yaml",
+        city_id,
+    )
     return []
 
 
@@ -56,7 +63,7 @@ def _load_from_geojson(city_id: str, path: Path) -> List[Ward]:
         wards = []
         for feat in fc.get("features", []):
             props = feat.get("properties", {})
-            geom = feat.get("geometry", {})
+            geom  = feat.get("geometry", {})
             if geom.get("type") != "Polygon":
                 continue
             coords = geom["coordinates"][0]
@@ -72,7 +79,14 @@ def _load_from_geojson(city_id: str, path: Path) -> List[Ward]:
         return wards
     except Exception as exc:
         logger.warning("Failed to load wards from %s: %s — using synthetic", path, exc)
-        return _synthetic_grid(city_id, *_CITY_BBOXES.get(city_id, (0, 0, 1, 1)))
+        bbox = _get_city_bbox(city_id)
+        if bbox:
+            return _synthetic_grid(
+                city_id,
+                bbox["lat_min"], bbox["lon_min"],
+                bbox["lat_max"], bbox["lon_max"],
+            )
+        return []
 
 
 def _synthetic_grid(
@@ -91,16 +105,14 @@ def _synthetic_grid(
             n = s + lat_step
             w = lon_min + c * lon_step
             e = w + lon_step
-            ward_num = r * cols + c + 1
-            row_name = _ROW_NAMES[r] if r < len(_ROW_NAMES) else str(r)
-            col_name = _COL_NAMES[c] if c < len(_COL_NAMES) else str(c)
+            ward_num  = r * cols + c + 1
+            row_name  = _ROW_NAMES[r] if r < len(_ROW_NAMES) else str(r)
+            col_name  = _COL_NAMES[c] if c < len(_COL_NAMES) else str(c)
             wards.append(Ward(
                 ward_id=f"{city_id}_w{ward_num:02d}",
                 city_id=city_id,
                 name=f"Ward {ward_num} ({row_name} {col_name})",
-                coordinates=[
-                    [w, s], [e, s], [e, n], [w, n], [w, s],
-                ],
+                coordinates=[[w, s], [e, s], [e, n], [w, n], [w, s]],
                 metadata={"synthetic": True, "row": r, "col": c},
             ))
     return wards

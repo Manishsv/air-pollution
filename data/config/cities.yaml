@@ -1,0 +1,143 @@
+# City registry — add any city here to make it available for ingestion,
+# the dashboard, and ward lookups.
+#
+# Fields
+# -------
+# display_name  Human-readable label shown in the dashboard.
+# country       ISO 3166-1 alpha-2 country code.
+# timezone      IANA timezone string (used for report timestamps).
+# bbox          Bounding box in WGS84 decimal degrees.  Cover the urban
+#               agglomeration including suburban areas you want to monitor.
+# enabled       Set to false to disable a city without removing its entry.
+#
+# Adding a city
+# -------------
+# 1. Pick a short, lowercase, underscore-separated id (e.g. "kolkata").
+# 2. Find the bbox: use https://boundingbox.klokantech.com/ (CSV format).
+# 3. Add the block below and run:
+#      python main.py --step ingest-h3 --cities <id> --domains terrain nightlights
+
+cities:
+
+  bangalore:
+    display_name: "Bengaluru, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 12.834
+      lon_min: 77.461
+      lat_max: 13.139
+      lon_max: 77.784
+
+  hyderabad:
+    display_name: "Hyderabad, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 17.287
+      lon_min: 78.270
+      lat_max: 17.556
+      lon_max: 78.622
+
+  mumbai:
+    display_name: "Mumbai, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 18.890
+      lon_min: 72.776
+      lat_max: 19.272
+      lon_max: 72.987
+
+  delhi:
+    display_name: "Delhi, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 28.404
+      lon_min: 76.838
+      lat_max: 28.883
+      lon_max: 77.347
+
+  chennai:
+    display_name: "Chennai, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 12.878
+      lon_min: 80.179
+      lat_max: 13.223
+      lon_max: 80.332
+
+  pune:
+    display_name: "Pune, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 18.421
+      lon_min: 73.735
+      lat_max: 18.631
+      lon_max: 73.982
+
+  # ── Additional cities (examples — set enabled: true to activate) ──────────
+
+  kolkata:
+    display_name: "Kolkata, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: false
+    bbox:
+      lat_min: 22.453
+      lon_min: 88.208
+      lat_max: 22.663
+      lon_max: 88.478
+
+  ahmedabad:
+    display_name: "Ahmedabad, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: false
+    bbox:
+      lat_min: 22.926
+      lon_min: 72.489
+      lat_max: 23.110
+      lon_max: 72.703
+
+  jaipur:
+    display_name: "Jaipur, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: false
+    bbox:
+      lat_min: 26.794
+      lon_min: 75.706
+      lat_max: 26.985
+      lon_max: 75.928
+
+  lucknow:
+    display_name: "Lucknow, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: false
+    bbox:
+      lat_min: 26.739
+      lon_min: 80.840
+      lat_max: 26.952
+      lon_max: 81.072
+
+  surat:
+    display_name: "Surat, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: false
+    bbox:
+      lat_min: 21.107
+      lon_min: 72.782
+      lat_max: 21.280
+      lon_max: 72.953

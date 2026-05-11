@@ -72,18 +72,16 @@ def _h3_grid_for_bbox(bbox: dict, resolution: int) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# City bounding boxes — same as panels use
+# City registry — loaded from data/config/cities.yaml (single source of truth)
 # ---------------------------------------------------------------------------
-_CITY_BBOXES: dict[str, dict] = {
-    "bangalore":  {"lat_min": 12.834, "lon_min": 77.461, "lat_max": 13.139, "lon_max": 77.784},
-    "hyderabad":  {"lat_min": 17.287, "lon_min": 78.270, "lat_max": 17.556, "lon_max": 78.622},
-    "mumbai":     {"lat_min": 18.890, "lon_min": 72.776, "lat_max": 19.272, "lon_max": 72.987},
-    "delhi":      {"lat_min": 28.404, "lon_min": 76.838, "lat_max": 28.883, "lon_max": 77.347},
-    "chennai":    {"lat_min": 12.878, "lon_min": 80.179, "lat_max": 13.223, "lon_max": 80.332},
-    "pune":       {"lat_min": 18.421, "lon_min": 73.735, "lat_max": 18.631, "lon_max": 73.982},
-}
+from airos.drivers.place.city_registry import all_city_ids, get_bbox as _get_city_bbox
 
-ALL_CITIES  = list(_CITY_BBOXES.keys())
+def _city_bboxes() -> dict[str, dict]:
+    """Return {city_id: bbox_dict} for all enabled cities from the registry."""
+    from airos.drivers.place.city_registry import all_cities
+    return {c.id: c.bbox for c in all_cities()}
+
+ALL_CITIES  = all_city_ids()
 ALL_DOMAINS = [
     "air", "fire", "heat", "flood", "water", "waste", "construction", "green", "noise", "weather",
     # Urban infrastructure — OSM-derived structural context (weekly cadence)
@@ -1017,7 +1015,7 @@ def run(
     results: dict[str, dict[str, int]] = {}
 
     for city_id in cities:
-        bbox = _CITY_BBOXES.get(city_id)
+        bbox = _get_city_bbox(city_id)
         if not bbox:
             logger.warning("Unknown city '%s' — skipping.", city_id)
             continue
