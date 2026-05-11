@@ -158,12 +158,30 @@ def _load_field_tasks(city_id: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_latest_aqi(city_id: str) -> float | None:
-    """Return the most recent AQI signal value for a city."""
+    """Return the most recent AQI signal value for a city (ground station)."""
     try:
         from airos.os.sdk import store
         return store.get_latest_aqi(city_id)
     except Exception:
         return None
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_air_risk(city_id: str) -> str:
+    """Return the worst assessed air quality risk level for the city.
+
+    Uses h3_assessments (satellite + expert analysis) — the same source
+    as domain chips — so the citizen hero and the chips are always consistent.
+    """
+    try:
+        from airos.os.sdk import store
+        df = store.get_assessments(city_id, domain="air", lookback_hours=24)
+        if df.empty:
+            return "unknown"
+        score_map = {"severe": 4, "high": 3, "moderate": 2, "low": 1, "unknown": 0}
+        return max(df["risk_level"].tolist(), key=lambda r: score_map.get(r, 0))
+    except Exception:
+        return "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -610,66 +628,81 @@ def _render_ward_officer(city_id: str) -> None:
 # Role: Citizen / Public
 # ---------------------------------------------------------------------------
 
+_RISK_HERO_LABEL = {
+    "low":      "Good",
+    "moderate": "Moderate",
+    "high":     "Poor",
+    "severe":   "Hazardous",
+    "unknown":  "No data",
+}
+_RISK_HERO_ADVICE = {
+    "low":      "Air quality is satisfactory across the city.",
+    "moderate": "Acceptable air quality — sensitive groups may notice mild effects.",
+    "high":     "Elevated pollution detected. Limit prolonged outdoor exposure.",
+    "severe":   "Hazardous air quality. Stay indoors and minimise all outdoor activity.",
+    "unknown":  "No recent air quality assessment available for this city.",
+}
+_RISK_HERO_CARDS = {
+    "low": [
+        ("🏃", "Great for outdoor activity", "Ideal conditions for running, cycling, or spending time outside."),
+        ("🪟", "Open your windows", "Good ventilation is fine — enjoy fresh air."),
+        ("🌿", "Garden & green spaces", "Perfect day to visit a park or green area."),
+    ],
+    "moderate": [
+        ("🚶", "Outdoor activity is fine", "Most people can go outside normally."),
+        ("😷", "Sensitive groups: take care", "Children, elderly, and people with respiratory conditions should limit prolonged outdoor exertion."),
+        ("💧", "Stay hydrated", "Drink plenty of water throughout the day."),
+    ],
+    "high": [
+        ("⚠️", "Limit prolonged outdoor activity", "Take breaks if exercising outside, especially in high-traffic areas."),
+        ("😷", "Consider a mask outdoors", "An N95/FFP2 mask helps reduce exposure during extended outdoor time."),
+        ("🏠", "Keep windows closed", "Reduce indoor infiltration — use air conditioning on recirculate if available."),
+    ],
+    "severe": [
+        ("🚨", "Stay indoors", "All outdoor activity strongly discouraged."),
+        ("😷", "N95 mask if you must go out", "Even brief outdoor exposure can be harmful at these levels."),
+        ("🏥", "Seek advice if symptomatic", "Coughing, shortness of breath, eye irritation — contact a doctor."),
+        ("🌀", "Run air filtration indoors", "Use an air purifier on maximum setting and seal window gaps."),
+    ],
+    "unknown": [
+        ("📡", "No recent data", "Air quality assessment not yet available for this city."),
+    ],
+}
+
+
 def _render_citizen(city_id: str) -> None:
-    aqi = _load_latest_aqi(city_id)
-    label, color, advice = _aqi_label(aqi)
+    # Primary: assessment risk level (same source as domain chips)
+    risk  = _load_air_risk(city_id)
+    color = _RISK_COLOR.get(risk, "#6b7280")
+    emoji = _RISK_EMOJI.get(risk, "⚪")
+    label = _RISK_HERO_LABEL.get(risk, "No data")
+    advice = _RISK_HERO_ADVICE.get(risk, "")
+
+    # Secondary: raw ground-station reading (context only)
+    station_aqi = _load_latest_aqi(city_id)
+    station_line = (
+        f'<div style="font-size:12px;color:rgba(0,0,0,.4);margin-top:10px;">'
+        f'Nearest ground station: AQI {station_aqi:.0f}</div>'
+        if station_aqi is not None else ""
+    )
 
     # ── Hero ───────────────────────────────────────────────────────────────
-    aqi_display = f"{aqi:.0f}" if aqi is not None else "—"
     st.markdown(_html(f"""
         <div style="text-align:center;padding:32px 24px 24px;
             background:linear-gradient(160deg,{color}18,{color}06);
             border:0.5px solid {color}55;border-radius:16px;margin-bottom:20px;">
         <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
             color:rgba(0,0,0,.4);text-transform:uppercase;margin-bottom:8px;">
-        Air Quality Index · {city_id.title()}</div>
-        <div style="font-size:80px;font-weight:800;color:{color};
-            line-height:1;margin-bottom:8px;">{aqi_display}</div>
-        <div style="font-size:22px;font-weight:600;color:{color};margin-bottom:12px;">{label}</div>
+        Air Quality · {city_id.title()}</div>
+        <div style="font-size:72px;line-height:1;margin-bottom:6px;">{emoji}</div>
+        <div style="font-size:28px;font-weight:700;color:{color};margin-bottom:10px;">{label}</div>
         <div style="font-size:14px;color:rgba(0,0,0,.62);max-width:380px;margin:0 auto;">{advice}</div>
+        {station_line}
         </div>
     """), unsafe_allow_html=True)
 
-    # ── Health guidance strip ──────────────────────────────────────────────
-    score = _RISK_SCORE.get(label.lower().replace(" ", "_"), 0) if aqi else 0
-    # Map AQI bands to advice cards
-    if aqi is None:
-        cards = [
-            ("📡", "No recent data", "Sensor data not yet available for this city."),
-        ]
-    elif aqi <= 50:
-        cards = [
-            ("🏃", "Great for outdoor activity", "Ideal conditions for running, cycling, or spending time outside."),
-            ("🪟", "Open your windows", "Good ventilation is fine — enjoy fresh air."),
-            ("🌿", "Garden & green spaces", "Perfect day to visit a park or green area."),
-        ]
-    elif aqi <= 100:
-        cards = [
-            ("🚶", "Outdoor activity is fine", "Most people can go outside normally."),
-            ("😷", "Sensitive groups: take care", "Children, elderly, and people with respiratory issues should limit prolonged outdoor exertion."),
-            ("💧", "Stay hydrated", "Drink plenty of water throughout the day."),
-        ]
-    elif aqi <= 200:
-        cards = [
-            ("⚠️", "Limit prolonged outdoor activity", "Take breaks if exercising outside."),
-            ("😷", "Consider a mask outdoors", "An N95/FFP2 mask helps if you need to be outside for extended periods."),
-            ("🏠", "Keep windows closed", "Use indoor air filtration if available."),
-        ]
-    elif aqi <= 300:
-        cards = [
-            ("🏠", "Stay indoors", "Avoid outdoor activities today."),
-            ("😷", "Wear a mask if going out", "N95/FFP2 recommended for any outdoor exposure."),
-            ("💊", "If you have asthma or COPD", "Keep your inhaler/medication close."),
-            ("🌀", "Use air purifier", "Run air purification indoors on maximum setting."),
-        ]
-    else:
-        cards = [
-            ("🚨", "Health emergency conditions", "All outdoor activity strongly discouraged."),
-            ("😷", "N95 mask mandatory outdoors", "Even brief outdoor exposure can be harmful."),
-            ("🏥", "Seek medical advice if symptomatic", "Coughing, shortness of breath, eye irritation — see a doctor."),
-            ("🌀", "Maximum indoor air filtration", "Seal gaps in doors/windows if possible."),
-        ]
-
+    # ── Health guidance cards ──────────────────────────────────────────────
+    cards = _RISK_HERO_CARDS.get(risk, _RISK_HERO_CARDS["unknown"])
     cols = st.columns(min(len(cards), 3))
     for i, (icon, title, desc) in enumerate(cards):
         with cols[i % len(cols)]:
@@ -682,33 +715,33 @@ def _render_citizen(city_id: str) -> None:
                 </div>
             """), unsafe_allow_html=True)
 
-    # ── Nearby domain summary ──────────────────────────────────────────────
+    # ── Other city conditions (air excluded — it's the hero) ──────────────
     st.divider()
     health = _load_health(city_id)
     domain_risk = health.get("domain_risk", {})
 
     if domain_risk:
         st.markdown("#### Other conditions in your city")
-        # Show only public-relevant domains
-        PUBLIC_DOMAINS = ["air", "flood", "heat", "water", "noise", "green"]
+        # Air is already shown in the hero — exclude it here to avoid redundancy
+        PUBLIC_DOMAINS = ["flood", "heat", "water", "noise", "green"]
         chips = '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
         for d in PUBLIC_DOMAINS:
             if d not in domain_risk:
                 continue
-            risk  = domain_risk[d]
-            color2 = _RISK_COLOR.get(risk, "#6b7280")
-            emoji2 = _RISK_EMOJI.get(risk, "⚪")
-            label2 = _DOMAIN_LABEL.get(d, d.title())
+            risk2   = domain_risk[d]
+            color2  = _RISK_COLOR.get(risk2, "#6b7280")
+            emoji2  = _RISK_EMOJI.get(risk2, "⚪")
+            label2  = _DOMAIN_LABEL.get(d, d.title())
             chips += (
                 f'<div style="border:0.5px solid {color2}55;border-radius:6px;'
                 f'padding:6px 12px;background:{color2}0e;">'
                 f'{label2} <span style="color:{color2};font-weight:500;">'
-                f'{emoji2} {risk}</span></div>'
+                f'{emoji2} {risk2}</span></div>'
             )
         chips += "</div>"
         st.markdown(chips, unsafe_allow_html=True)
 
-    st.caption("Data is updated every 30 minutes by automated sensors. For emergencies call 112.")
+    st.caption("Assessment updated every 30 minutes from satellite and ground sensors. For emergencies call 112.")
 
 
 # ---------------------------------------------------------------------------
