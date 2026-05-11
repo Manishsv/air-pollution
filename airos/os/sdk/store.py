@@ -129,7 +129,7 @@ def get_assessments(
     """Return the most recent assessment per cell (and domain) for *city_id*.
 
     Columns: h3_id, domain, risk_level, primary_index, primary_value,
-    confidence, assessed_at.
+    dominant_issue, assessed_at.
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ def get_assessments(
     return s.fetchdf(
         f"""
         SELECT a.h3_id, a.domain, a.risk_level, a.primary_index,
-               a.primary_value, a.confidence, a.assessed_at
+               a.primary_value, a.dominant_issue, a.assessed_at
         FROM h3_assessments a
         JOIN (
             SELECT h3_id, domain, MAX(assessed_at) AS latest

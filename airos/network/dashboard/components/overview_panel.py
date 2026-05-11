@@ -171,15 +171,31 @@ def _load_air_risk(city_id: str) -> str:
     """Return the worst assessed air quality risk level for the city.
 
     Uses h3_assessments (satellite + expert analysis) — the same source
-    as domain chips — so the citizen hero and the chips are always consistent.
+    as domain chips — so the citizen hero and chips are always consistent.
+    Aggregates directly in SQL to avoid row-limit sampling bias.
     """
     try:
-        from airos.os.sdk import store
-        df = store.get_assessments(city_id, domain="air", lookback_hours=24)
-        if df.empty:
-            return "unknown"
-        score_map = {"severe": 4, "high": 3, "moderate": 2, "low": 1, "unknown": 0}
-        return max(df["risk_level"].tolist(), key=lambda r: score_map.get(r, 0))
+        from airos.drivers.store.store import H3KnowledgeStore
+        row = H3KnowledgeStore.get().fetchone(
+            """
+            SELECT CASE MAX(CASE risk_level
+                       WHEN 'severe'   THEN 4
+                       WHEN 'high'     THEN 3
+                       WHEN 'moderate' THEN 2
+                       WHEN 'low'      THEN 1
+                       ELSE 0 END)
+                   WHEN 4 THEN 'severe'
+                   WHEN 3 THEN 'high'
+                   WHEN 2 THEN 'moderate'
+                   WHEN 1 THEN 'low'
+                   ELSE 'unknown' END AS worst_risk
+            FROM h3_assessments
+            WHERE city_id = ? AND domain = 'air'
+              AND assessed_at >= datetime('now', '-24 hours')
+            """,
+            [city_id],
+        )
+        return str(row[0]) if row and row[0] else "unknown"
     except Exception:
         return "unknown"
 
