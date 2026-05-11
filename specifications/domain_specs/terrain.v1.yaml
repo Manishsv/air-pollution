@@ -1,0 +1,305 @@
+domain_id: terrain
+version: v1
+status: draft
+
+purpose: >
+  Provide static terrain context — elevation, slope, aspect, terrain class, and surface
+  ruggedness — per H3 cell across each monitored city. Terrain does not change on human
+  timescales and requires no API key (SRTM 30 m DEM is NASA public-domain). It is a
+  structural-context domain: it does not produce risk assessments or decision packets of
+  its own, but it is consumed as mandatory spatial substrate by Flood, Heat, Air Quality,
+  Construction, and Water Quality domain agents when reasoning about cell-level risk.
+  A valley cell and a ridge cell with identical sensor readings carry fundamentally
+  different risk profiles; terrain makes that difference explicit and auditable.
+
+produces_assessments: false
+cadence_hint: "90 days"   # terrain is effectively static; refresh only for coverage corrections
+
+target_actors:
+  - h3_expert_agent           # reads terrain signals as reasoning context
+  - city_pattern_agent        # reads terrain for cross-domain pattern analysis
+  - flood_domain_agent        # low_lying_exposure needs elevation and slope
+  - heat_domain_agent         # aspect and elevation affect urban heat island intensity
+  - air_quality_domain_agent  # valleys trap pollutants via temperature inversions
+  - construction_domain_agent # steep slope increases build-site risk classification
+  - water_quality_domain_agent # slope drives runoff speed and sediment load
+
+supported_decisions:
+  - decision_id: contextualise_flood_risk_by_terrain
+    description: >
+      Adjust flood risk scores for cells based on low-lying exposure and slope.
+      Valley and low-elevation cells with poor drainage geometry receive higher weight.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: contextualise_heat_risk_by_terrain
+    description: >
+      Adjust urban heat island estimates using elevation and aspect. South-facing
+      slopes and low valleys that trap heat are weighted higher.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: flag_high_slope_construction_zones
+    description: >
+      Surface cells with SLOPE_DEG above city-configured threshold as elevated-risk
+      build zones for construction permit review workflows.
+    decision_scope: grid_cell
+    operational_risk: medium
+  - decision_id: identify_pollution_trap_corridors
+    description: >
+      Identify valley and enclosed terrain cells where air pollutants accumulate
+      due to restricted wind flow and thermal inversions.
+    decision_scope: corridor
+    operational_risk: low
+
+canonical_entities:
+  - entity_type: h3_cell
+    description: H3 resolution-8 hexagonal cell (~0.74 km²) with terrain attributes attached.
+    examples: [8828830a07fffff, 882883a6d5fffff]
+
+observations:
+  - observed_property: elevation_m
+    description: Mean elevation above sea level within the H3 cell, derived from SRTM 30 m DEM.
+    typical_sources: [srtm_dem_nasa, open_elevation_api, copernicus_dem]
+    required_provenance_fields: [source_id, source_type, license, collected_at, ingested_at]
+  - observed_property: slope_deg
+    description: >
+      Mean terrain slope within the H3 cell in degrees, computed from the SRTM DEM
+      using a standard 3x3 Horn gradient kernel.
+    typical_sources: [srtm_dem_nasa, derived_from_elevation_m]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: aspect_deg
+    description: >
+      Dominant slope-facing direction within the H3 cell in degrees
+      (0 = North, 90 = East, 180 = South, 270 = West, -1 = flat).
+    typical_sources: [srtm_dem_nasa, derived_from_elevation_m]
+    required_provenance_fields: [source_id, source_type, collected_at]
+  - observed_property: terrain_class
+    description: >
+      Categorical terrain classification per cell derived from elevation and slope
+      context: valley, plain, hill, ridge, escarpment. Used by agents as a
+      human-readable terrain label.
+    typical_sources: [derived_from_elevation_m_and_slope_deg]
+    required_provenance_fields: [source_id, collected_at]
+  - observed_property: ruggedness_index
+    description: >
+      Terrain Ruggedness Index (TRI) — mean absolute difference in elevation between
+      the cell centroid and its H3 k=1 ring neighbours. Higher values indicate more
+      complex, uneven terrain; lower values indicate flat ground.
+    typical_sources: [derived_from_elevation_m]
+    required_provenance_fields: [source_id, collected_at]
+
+features:
+  - feature_id: low_lying_exposure
+    description: >
+      Graded flag: cell elevation is below city-median by more than one standard
+      deviation. Used directly by Flood domain agent as static exposure weight.
+    inputs: [elevation_m, city_elevation_statistics]
+  - feature_id: slope_risk_class
+    description: >
+      Categorised slope risk for construction and landslide-adjacent use cases.
+      Flat (0-3 deg), gentle (3-10 deg), moderate (10-20 deg), steep (>20 deg).
+    inputs: [slope_deg]
+  - feature_id: pollution_trap_score
+    description: >
+      Composite score combining valley terrain class, low ruggedness neighbours,
+      and enclosed aspect geometry. High score means cell likely traps air pollutants.
+    inputs: [terrain_class, ruggedness_index, aspect_deg, elevation_m]
+
+allowed_variables:
+  - variable: ELEVATION_M
+    description: Mean cell elevation above sea level derived from SRTM 30 m DEM.
+    type: number
+    unit: metres
+    value_range: -500..9000
+    allowed_values: []
+    notes: Negative values valid for below-sea-level areas (coastal, estuarine).
+
+  - variable: SLOPE_DEG
+    description: Mean slope steepness within the H3 cell in degrees.
+    type: number
+    unit: degrees
+    value_range: 0..90
+    allowed_values: []
+    notes: >
+      0 = perfectly flat. Values above 45 deg are rare in urban areas and should
+      be flagged for DEM artefact review.
+
+  - variable: ASPECT_DEG
+    description: Dominant slope-facing direction in degrees. -1 encodes flat terrain.
+    type: number
+    unit: degrees
+    value_range: -1..360
+    allowed_values: []
+    notes: -1 reserved for flat cells where aspect is undefined.
+
+  - variable: TERRAIN_CLASS
+    description: Categorical terrain type for the H3 cell.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [valley, plain, hill, ridge, escarpment, water_body]
+    notes: >
+      Derived from cell elevation relative to neighbourhood statistics and slope.
+      water_body is assigned when the cell overlaps a known water surface.
+
+  - variable: RUGGEDNESS_INDEX
+    description: >
+      Terrain Ruggedness Index — mean absolute elevation difference between this cell
+      and its H3 k=1 ring neighbours.
+    type: number
+    unit: metres
+    value_range: 0..500
+    allowed_values: []
+    notes: Values above 100 m are unusual in typical Indian city bboxes.
+
+  - variable: DATA_CONFIDENCE
+    description: Confidence in the terrain signals for this cell (0-1).
+    type: number
+    unit: ratio
+    value_range: 0..1
+    allowed_values: []
+    notes: >
+      SRTM 30 m has known voids over water bodies and occasional urban artefacts
+      from radar reflections off tall buildings. Void-filled cells use 0.65;
+      full-coverage cells use 0.90.
+
+units:
+  - unit: metres
+    symbol: m
+    description: Metres above (or below) mean sea level.
+  - unit: degrees
+    symbol: deg
+    description: Angular measurement for slope steepness or compass direction.
+  - unit: ratio
+    symbol: ""
+    description: Dimensionless ratio between 0 and 1.
+  - unit: none
+    symbol: ""
+    description: Unitless categorical value.
+
+thresholds_or_categories:
+  - id: terrain_class_definitions
+    variable: TERRAIN_CLASS
+    type: categories
+    definition: >
+      Derived from cell elevation relative to the city-bbox median and inter-quartile
+      range, combined with SLOPE_DEG. City-specific calibration is recommended but
+      these defaults are applied on first ingest.
+    levels:
+      - level: valley
+        criteria: elevation_m < (city_median - 0.5 * city_iqr) AND slope_deg < 5
+        severity: low
+      - level: plain
+        criteria: elevation_m within (city_median +/- 0.5 * city_iqr) AND slope_deg < 5
+        severity: low
+      - level: hill
+        criteria: slope_deg >= 5 AND slope_deg < 20
+        severity: medium
+      - level: ridge
+        criteria: elevation_m > (city_median + 0.5 * city_iqr) AND slope_deg >= 10
+        severity: medium
+      - level: escarpment
+        criteria: slope_deg >= 20
+        severity: high
+
+  - id: slope_risk_class
+    variable: SLOPE_DEG
+    type: thresholds
+    definition: >
+      Slope classes used by the Construction domain agent to flag build-site risk.
+      Based on common geotechnical practice; not a substitute for a site-specific survey.
+    levels:
+      - level: flat
+        criteria: slope_deg < 3
+        severity: low
+      - level: gentle
+        criteria: slope_deg >= 3 AND < 10
+        severity: low
+      - level: moderate
+        criteria: slope_deg >= 10 AND < 20
+        severity: medium
+      - level: steep
+        criteria: slope_deg >= 20 AND < 35
+        severity: high
+      - level: very_steep
+        criteria: slope_deg >= 35
+        severity: critical
+
+safety_gates:
+  - gate_id: block_terrain_as_sole_risk_basis
+    description: >
+      Terrain signals are structural context only. They must not be used as the sole
+      basis for operational risk recommendations, alerts, or enforcement actions.
+      Any recommendation citing terrain must also include at least one dynamic signal
+      (sensor, satellite observation, or incident report) from a risk domain.
+    when_to_block: operational_risk_recommendations, public_advisories, enforcement
+    required_evidence: [at_least_one_dynamic_domain_signal_co_cited]
+    override_policy: human_approval_only
+
+  - gate_id: block_void_filled_cells_for_precision_decisions
+    description: >
+      SRTM has known voids over water and some urban areas. Void-filled cells
+      (DATA_CONFIDENCE < 0.70) must not be used for precision slope-based construction
+      decisions without field survey confirmation.
+    when_to_block: construction_slope_based_permit_guidance
+    required_evidence: [field_survey_or_higher_resolution_dem]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields:
+    - source_id
+    - source_type
+    - license
+    - collected_at
+    - ingested_at
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+source_reliability_requirements:
+  required_fields:
+    - source_reliability_score
+    - source_reliability_status
+    - source_reliability_issues
+  minimum_reliability_for_operational_use:
+    score_gte: 0.65   # lower than live sensors — DEM is static and well-characterised
+    allowed_statuses: [healthy, degraded_acceptable]
+
+dashboard_consumer_requirements:
+  required_payload_sections:
+    - summary
+    - map_layers
+  required_warnings:
+    - show_synthetic_data_banner_if_present
+    - show_dem_void_notice_if_confidence_below_0.70
+
+human_review_prompts:
+  - prompt: >
+      This alert was partially driven by terrain context (valley / steep slope).
+      Does field evidence confirm the terrain characteristic is physically present
+      and not a DEM artefact?
+    applies_when: terrain_class used as co-evidence in a risk recommendation
+    required_response: yes/no
+
+  - prompt: >
+      SLOPE_DEG > 20 deg for this cell. Has a qualified geotechnical survey been
+      conducted, or is this slope class derived solely from SRTM?
+    applies_when: construction slope-risk flagging
+    required_response: free_text
+
+field_verification_requirements:
+  required_before_operational_action:
+    - confirm_terrain_class_matches_physical_site_for_steep_or_valley_cells
+  evidence_to_capture: [photo, site_visit_note]
+
+blocked_uses:
+  - using_terrain_signals_as_sole_basis_for_any_operational_recommendation
+  - using_void_filled_dem_cells_for_precision_slope_permit_decisions_without_survey
+  - treating_terrain_class_as_a_live_or_dynamic_signal
+
+open_questions:
+  - Should we prefer SRTM 30 m (global, proven) or Copernicus DEM 30 m (slightly newer)?
+  - What is the correct elevation statistics window for terrain class: per-city-bbox or per-ward?
+  - Should TERRAIN_CLASS be computed in the ingestor or exposed as an agent-computed feature?
+  - How do we handle coastal cities where significant fractions of cells are at or below sea level?
+  - Is RUGGEDNESS_INDEX meaningful at H3 resolution 8 (~0.74 km2) or should it use resolution 9?
