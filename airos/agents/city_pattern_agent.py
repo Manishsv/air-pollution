@@ -156,6 +156,72 @@ def _build_sweep_context(city_id: str, lookback_hours: int = 6) -> dict:
     )
     city_risk_dist = risk_df.to_dict(orient="records") if not risk_df.empty else []
 
+    # Domain-level assessment summary — worst risk per domain + top issue
+    # This gives the pattern agent visibility into ALL domains, even those
+    # without H3 expert insights (e.g. green, water, construction).
+    domain_summary_df = store.fetchdf(
+        """
+        SELECT domain,
+               MAX(CASE risk_level WHEN 'severe' THEN 4 WHEN 'high' THEN 3
+                   WHEN 'moderate' THEN 2 WHEN 'low' THEN 1 ELSE 0 END) AS risk_score,
+               COUNT(*) AS n_cells,
+               SUM(CASE WHEN risk_level = 'severe' THEN 1 ELSE 0 END) AS n_severe,
+               SUM(CASE WHEN risk_level = 'high'   THEN 1 ELSE 0 END) AS n_high,
+               AVG(primary_value) AS avg_value,
+               MAX(primary_value) AS max_value,
+               primary_index
+        FROM (
+            SELECT domain, risk_level, primary_value, primary_index,
+                   ROW_NUMBER() OVER (PARTITION BY h3_id, domain ORDER BY assessed_at DESC) AS rn
+            FROM h3_assessments
+            WHERE city_id = ?
+              AND assessed_at >= datetime('now', '-24 hours')
+        ) WHERE rn = 1
+        GROUP BY domain, primary_index
+        ORDER BY risk_score DESC
+        """,
+        [city_id],
+    )
+    # Also get top dominant_issue per domain
+    issue_df = store.fetchdf(
+        """
+        SELECT domain, dominant_issue, COUNT(*) AS n
+        FROM (
+            SELECT domain, dominant_issue,
+                   ROW_NUMBER() OVER (PARTITION BY h3_id, domain ORDER BY assessed_at DESC) AS rn
+            FROM h3_assessments
+            WHERE city_id = ?
+              AND assessed_at >= datetime('now', '-24 hours')
+              AND dominant_issue IS NOT NULL
+        ) WHERE rn = 1
+        GROUP BY domain, dominant_issue
+        ORDER BY domain, n DESC
+        """,
+        [city_id],
+    )
+    top_issues: dict[str, str] = {}
+    for row in issue_df.to_dict(orient="records"):
+        dom = row["domain"]
+        if dom not in top_issues:
+            top_issues[dom] = str(row["dominant_issue"])
+
+    domain_assessment_summary = []
+    _score_to_risk = {4: "severe", 3: "high", 2: "moderate", 1: "low", 0: "unknown"}
+    for row in domain_summary_df.to_dict(orient="records"):
+        dom = row["domain"]
+        score = int(row.get("risk_score") or 0)
+        domain_assessment_summary.append({
+            "domain":       dom,
+            "worst_risk":   _score_to_risk.get(score, "unknown"),
+            "n_cells":      int(row.get("n_cells") or 0),
+            "n_severe":     int(row.get("n_severe") or 0),
+            "n_high":       int(row.get("n_high") or 0),
+            "avg_value":    round(float(row["avg_value"]), 3) if row.get("avg_value") else None,
+            "max_value":    round(float(row["max_value"]), 3) if row.get("max_value") else None,
+            "primary_index": row.get("primary_index"),
+            "top_issue":    top_issues.get(dom),
+        })
+
     return {
         "city_id": city_id,
         "lookback_hours": lookback_hours,
@@ -165,6 +231,7 @@ def _build_sweep_context(city_id: str, lookback_hours: int = 6) -> dict:
         "hotspot_cells": hotspot_cells,
         "cross_correlations": corr_data,
         "city_risk_distribution": city_risk_dist,
+        "domain_assessment_summary": domain_assessment_summary,
         "insights": insights,
     }
 
@@ -213,6 +280,33 @@ def _build_prompt(ctx: dict) -> str:
         parts.append("## City-wide risk distribution (last 24h, all domains)")
         for row in ctx["city_risk_distribution"]:
             parts.append(f"- {row['risk_level']}: {row['n_cells']} cells")
+        parts.append("")
+
+    # Domain assessment summary — includes domains without H3 expert insights
+    # (e.g. green, water, construction) so the pattern covers ALL risk domains.
+    domain_summary = ctx.get("domain_assessment_summary", [])
+    if domain_summary:
+        parts.append("## Domain risk summary (rule-based assessments, ALL domains)")
+        parts.append(
+            "NOTE: Some domains below have satellite/sensor data but no LLM insights yet. "
+            "Your pattern MUST address ALL domains showing high or severe risk, "
+            "even if the evidence comes only from the assessment summary below."
+        )
+        for d in domain_summary:
+            risk  = d.get("worst_risk", "unknown")
+            dom   = d.get("domain", "?")
+            n     = d.get("n_cells", 0)
+            nsev  = d.get("n_severe", 0)
+            nhigh = d.get("n_high", 0)
+            issue = d.get("top_issue") or "—"
+            pidx  = d.get("primary_index") or ""
+            avg_v = d.get("avg_value")
+            val_str = f", {pidx} avg={avg_v:.3f}" if (avg_v is not None and pidx) else ""
+            sev_str = f"({nsev} severe, {nhigh} high)" if nsev + nhigh > 0 else ""
+            parts.append(
+                f"- **{dom}**: worst_risk={risk}, {n} cells {sev_str}"
+                f", top_issue={issue}{val_str}"
+            )
         parts.append("")
 
     # Hotspot cells (appearing in multiple insights)

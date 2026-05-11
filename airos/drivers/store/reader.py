@@ -761,6 +761,101 @@ def get_city_health_summary(city_id: str) -> dict[str, Any]:
     return out
 
 
+def get_domain_driver_summary(city_id: str) -> list[dict[str, Any]]:
+    """Return a per-domain summary of what's driving the current risk levels.
+
+    Each entry:
+        domain, worst_risk, n_severe, n_high, n_moderate, n_low, n_total,
+        top_issue (most common dominant_issue for severe/high cells),
+        top_issue_cells (count), avg_value, max_value, primary_index
+    Ordered worst-first.
+    """
+    _RISK_ORDER = (
+        "CASE risk_level "
+        "WHEN 'severe' THEN 4 WHEN 'high' THEN 3 "
+        "WHEN 'moderate' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+    )
+    s = _store()
+    try:
+        # Latest assessment per cell×domain in last 48h
+        base_df = s.fetchdf(
+            f"""
+            SELECT domain, risk_level, dominant_issue, primary_value, primary_index
+            FROM (
+                SELECT domain, risk_level, dominant_issue, primary_value, primary_index,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY h3_id, domain
+                           ORDER BY assessed_at DESC
+                       ) AS rn
+                FROM h3_assessments
+                WHERE city_id = ?
+                  AND assessed_at >= datetime('now', '-2 days')
+            ) WHERE rn = 1
+            """,
+            [city_id],
+        )
+        if base_df.empty:
+            return []
+
+        results = []
+        for domain, grp in base_df.groupby("domain"):
+            n_total    = len(grp)
+            n_severe   = int((grp["risk_level"] == "severe").sum())
+            n_high     = int((grp["risk_level"] == "high").sum())
+            n_moderate = int((grp["risk_level"] == "moderate").sum())
+            n_low      = int((grp["risk_level"] == "low").sum())
+
+            # Worst risk level present
+            _order = {"severe": 4, "high": 3, "moderate": 2, "low": 1, "unknown": 0}
+            worst_risk = max(grp["risk_level"].unique(),
+                            key=lambda r: _order.get(str(r), 0))
+
+            # Most common issue among severe+high cells
+            bad = grp[grp["risk_level"].isin(["severe", "high"])]
+            top_issue = None
+            top_issue_cells = 0
+            if not bad.empty and "dominant_issue" in bad.columns:
+                vc = bad["dominant_issue"].dropna().value_counts()
+                if not vc.empty:
+                    top_issue = str(vc.index[0])
+                    top_issue_cells = int(vc.iloc[0])
+
+            # Average / max signal value for high+severe
+            avg_val = max_val = primary_index = None
+            if not bad.empty and "primary_value" in bad.columns:
+                vals = bad["primary_value"].dropna()
+                if not vals.empty:
+                    avg_val = float(vals.mean())
+                    max_val = float(vals.max())
+            if "primary_index" in grp.columns:
+                pi_vals = grp["primary_index"].dropna()
+                if not pi_vals.empty:
+                    primary_index = str(pi_vals.iloc[0])
+
+            results.append({
+                "domain":          str(domain),
+                "worst_risk":      str(worst_risk),
+                "n_severe":        n_severe,
+                "n_high":          n_high,
+                "n_moderate":      n_moderate,
+                "n_low":           n_low,
+                "n_total":         n_total,
+                "top_issue":       top_issue,
+                "top_issue_cells": top_issue_cells,
+                "avg_value":       avg_val,
+                "max_value":       max_val,
+                "primary_index":   primary_index,
+            })
+
+        results.sort(key=lambda x: {"severe": 4, "high": 3,
+                                     "moderate": 2, "low": 1, "unknown": 0
+                                     }.get(x["worst_risk"], 0), reverse=True)
+        return results
+    except Exception as exc:
+        logger.warning("get_domain_driver_summary failed for %s: %s", city_id, exc)
+        return []
+
+
 def get_ward_domain_risk(
     city_id: str,
     domain: str,
