@@ -4,20 +4,21 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
+# app.py lives at airos/network/dashboard/app.py — repo root is 3 levels up
+_APP_FILE = Path(__file__).resolve()
+PROJECT_ROOT = _APP_FILE.parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # Load .env before any connector imports read os.environ
 try:
     from dotenv import load_dotenv
-    load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env", override=False)
+    load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 except ImportError:
     pass
 
 import pandas as pd
 import streamlit as st
-
-APP_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = APP_DIR.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from airos.os.sdk.client import UrbanPlatformClient
 
