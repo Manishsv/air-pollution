@@ -6,9 +6,16 @@ Signals written (domain="terrain"):
     ASPECT_DEG        degrees  Dominant slope direction (0=N, 90=E, 180=S, 270=W; -1=flat).
     RUGGEDNESS_INDEX  metres   Mean |elevation delta| vs k=1 H3 ring neighbours.
     DATA_CONFIDENCE   ratio    0.90 full coverage, 0.65 void-filled, 0.0 synthetic.
+    TERRAIN_CLASS     ordinal  Rule-based morphological class written after DEM ingest.
+                               Stored as integer ordinal (0–4); decode with TERRAIN_CLASS_LABELS.
+                               0=valley  1=plain  2=hill  3=ridge  4=escarpment
 
-NOT written by this ingestor:
-    TERRAIN_CLASS — agent-layer derived signal (H3 Expert Agent classifies after ingest).
+Classification uses city-relative elevation percentiles + slope thresholds:
+    escarpment  slope > 20°
+    ridge       slope > 10°  AND  elevation in top 50% of city cells
+    hill        elevation in top 35% of city cells  AND  slope > 2°
+    valley      elevation in bottom 25% of city cells  AND  slope < 5°
+    plain       everything else (default)
 
 Slope and aspect are computed from the H3 neighbourhood:
     For each cell, retrieve the mean elevation of its 6 k=1 ring neighbours, convert
@@ -36,6 +43,19 @@ logger = logging.getLogger(__name__)
 # drops from 0.90 to 0.65 for a cell.
 _VOID_FRACTION_THRESHOLD = 0.10   # > 10% void-filled → reduced confidence
 _SYNTHETIC_SOURCE_ID     = "synthetic_fallback"
+
+# ---------------------------------------------------------------------------
+# TERRAIN_CLASS ordinal encoding
+# ---------------------------------------------------------------------------
+# h3_signals.value is REAL — store class as integer ordinal; decode in the panel.
+TERRAIN_CLASS_LABELS: dict[int, str] = {
+    0: "valley",
+    1: "plain",
+    2: "hill",
+    3: "ridge",
+    4: "escarpment",
+}
+TERRAIN_CLASS_ORDINAL: dict[str, int] = {v: k for k, v in TERRAIN_CLASS_LABELS.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -277,5 +297,116 @@ def ingest_terrain(city_id: str, bbox: dict, *, force: bool = False) -> int:
         "[%s/terrain] %d cells × 5 signals = %d rows written.",
         city_id, len(all_cells), written,
     )
-    record_ingest(city_id=city_id, domain="terrain", rows_written=written)
+
+    # Classify immediately after ingest while the data is fresh.
+    classified = classify_terrain(city_id)
+    logger.info("[%s/terrain] %d TERRAIN_CLASS rows written.", city_id, classified)
+
+    record_ingest(city_id=city_id, domain="terrain", rows_written=written + classified)
+    return written + classified
+
+
+# ---------------------------------------------------------------------------
+# Rule-based terrain classifier
+# ---------------------------------------------------------------------------
+
+def classify_terrain(city_id: str) -> int:
+    """Classify H3 cells for *city_id* and write TERRAIN_CLASS to h3_signals.
+
+    Uses city-relative elevation percentiles so the thresholds adapt to each
+    city's topographic range (Bangalore plateau vs. Delhi plain vs. Mumbai coast).
+
+    TERRAIN_CLASS is stored as an integer ordinal — decode with TERRAIN_CLASS_LABELS:
+        0 valley · 1 plain · 2 hill · 3 ridge · 4 escarpment
+
+    Returns the number of TERRAIN_CLASS rows written (one per classified cell).
+    """
+    from airos.drivers.store.store import H3KnowledgeStore
+    from airos.drivers.store.writer import write_signals
+
+    store = H3KnowledgeStore.get()
+
+    # ── 1. Load ELEVATION_M, SLOPE_DEG, DATA_CONFIDENCE for the city ──────
+    df = store.fetchdf(
+        """
+        SELECT h3_id, signal, value
+        FROM   h3_signals
+        WHERE  city_id = ?
+          AND  domain  = 'terrain'
+          AND  signal  IN ('ELEVATION_M', 'SLOPE_DEG', 'DATA_CONFIDENCE')
+          AND  value   IS NOT NULL
+        """,
+        [city_id],
+    )
+    if df is None or df.empty:
+        logger.warning("[%s/terrain] classify_terrain: no signals found — skipping.", city_id)
+        return 0
+
+    # ── 2. Pivot to wide (one row per cell) ───────────────────────────────
+    wide = (
+        df.pivot_table(index="h3_id", columns="signal", values="value", aggfunc="last")
+        .reset_index()
+    )
+    if "ELEVATION_M" not in wide.columns or "SLOPE_DEG" not in wide.columns:
+        logger.warning("[%s/terrain] classify_terrain: missing required signals.", city_id)
+        return 0
+
+    wide = wide.dropna(subset=["ELEVATION_M"])
+    if wide.empty:
+        return 0
+
+    # ── 3. Compute city-wide elevation percentile thresholds ─────────────
+    elev = wide["ELEVATION_M"].values
+    p25  = float(np.percentile(elev, 25))   # bottom quarter → valley candidates
+    p65  = float(np.percentile(elev, 65))   # upper third → hill candidates
+    p50  = float(np.percentile(elev, 50))   # median → ridge elevation gate
+
+    logger.info(
+        "[%s/terrain] elevation percentiles — p25=%.0fm  p50=%.0fm  p65=%.0fm",
+        city_id, p25, p50, p65,
+    )
+
+    # ── 4. Classify each cell ─────────────────────────────────────────────
+    def _classify(row) -> int:
+        slope = float(row.get("SLOPE_DEG") or 0.0)
+        e     = float(row["ELEVATION_M"])
+        if slope > 20.0:
+            return TERRAIN_CLASS_ORDINAL["escarpment"]
+        if slope > 10.0 and e > p50:
+            return TERRAIN_CLASS_ORDINAL["ridge"]
+        if e > p65 and slope > 2.0:
+            return TERRAIN_CLASS_ORDINAL["hill"]
+        if e < p25 and slope < 5.0:
+            return TERRAIN_CLASS_ORDINAL["valley"]
+        return TERRAIN_CLASS_ORDINAL["plain"]
+
+    wide["tc"] = wide.apply(_classify, axis=1)
+
+    # ── 5. Build signal rows and write ────────────────────────────────────
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    signal_rows = [
+        {
+            "h3_id":  row["h3_id"],
+            "signal": "TERRAIN_CLASS",
+            "value":  float(row["tc"]),
+            "unit":   TERRAIN_CLASS_LABELS[int(row["tc"])],   # human label in unit field
+        }
+        for _, row in wide.iterrows()
+    ]
+
+    # skip_conformance=True: the classifier writes only TERRAIN_CLASS as a
+    # targeted update — the other 5 signals are already in the store from
+    # the DEM ingest. Running the full conformance gate on a single-signal
+    # batch would always fail the "all declared signals present" check.
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="terrain",
+        source="terrain_classifier", skip_conformance=True,
+    )
+
+    counts = wide["tc"].value_counts().to_dict()
+    summary = "  ".join(
+        f"{TERRAIN_CLASS_LABELS[int(k)]}={v}"
+        for k, v in sorted(counts.items())
+    )
+    logger.info("[%s/terrain] classified %d cells: %s", city_id, len(wide), summary)
     return written

@@ -117,13 +117,25 @@ def _load_terrain_signals(city_id: str) -> pd.DataFrame:
 
 
 def _pivot(df: pd.DataFrame) -> pd.DataFrame:
-    """Long → wide: one row per H3 cell, signals as columns."""
+    """Long → wide: one row per H3 cell, signals as columns.
+
+    TERRAIN_CLASS is stored as a numeric ordinal in the DB — decode it to
+    the string label here so downstream code can use it directly in colour
+    lookups and display.
+    """
     if df.empty:
         return pd.DataFrame()
     wide = (
         df.pivot_table(index="h3_id", columns="signal", values="value", aggfunc="last")
         .reset_index()
     )
+    if "TERRAIN_CLASS" in wide.columns:
+        from airos.drivers.store.terrain_ingestor import TERRAIN_CLASS_LABELS
+        wide["TERRAIN_CLASS"] = (
+            wide["TERRAIN_CLASS"]
+            .dropna()
+            .apply(lambda v: TERRAIN_CLASS_LABELS.get(int(v)))
+        ).reindex(wide.index)
     return wide
 
 

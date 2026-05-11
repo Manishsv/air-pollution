@@ -15,8 +15,7 @@ class TerrainDriver(_InTreeDriver):
         "ASPECT_DEG",
         "RUGGEDNESS_INDEX",
         "DATA_CONFIDENCE",
-        # TERRAIN_CLASS is intentionally absent here — it is derived by the
-        # H3 Expert Agent after ingest, not written by the ingestor.
+        "TERRAIN_CLASS",   # rule-based classifier runs at end of ingest
     ]
     data_sources = [
         "Open-Elevation API (SRTM-backed, free, no key)",
