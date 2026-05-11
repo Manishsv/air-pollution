@@ -8,7 +8,7 @@ AirOS is an open urban intelligence platform that ingests sensor, satellite, and
 
 **AirOS Core (the OS)** is the runtime foundation. It manages an H3 Knowledge Store (SQLite in WAL mode), a Rules Registry that holds configurable thresholds per domain, and a Scheduler that orchestrates ingest runs and agent sweeps on a cadence you control. A conformance layer checks incoming data against those rules before it is committed to the store. You rarely touch the Core directly — it runs in the background, keeping data clean and up to date.
 
-**AirOS Data Sources (Drivers)** are the connectors and ingestors that bring data into the Knowledge Store. Each of the 14 supported domains has its own ingestor (`urban_platform/h3_knowledge/*_ingestor.py`) and, where needed, a raw connector (`urban_platform/connectors/`). Weather and air quality forecasts come from OpenMeteo and require no API key. Optional integrations — real AQ sensor data via AQICN, satellite-derived layers (heat, flood, green space) via Google Earth Engine — activate when you supply the corresponding keys in `.env`.
+**AirOS Data Sources (Drivers)** are the connectors and ingestors that bring data into the Knowledge Store. Each of the 14 supported domains has its own ingestor (`airos/drivers/store/*_ingestor.py`) and, where needed, a raw connector (`airos/drivers/connectors/`). Weather and air quality forecasts come from OpenMeteo and require no API key. Optional integrations — real AQ sensor data via AQICN, satellite-derived layers (heat, flood, green space) via Google Earth Engine — activate when you supply the corresponding keys in `.env`.
 
 **AirOS Decision Support System (the App)** is the intelligence layer. An H3 Expert Agent (backed by an LLM you choose) analyses each grid cell by synthesising signals across all active domains and writes a structured observation into the Knowledge Store. A City Pattern Agent runs a sweep across the highest-risk cells and produces a city-level summary. Both outputs surface in a Streamlit review dashboard that lets city analysts examine conditions, compare domains, and export findings. The agents inform; humans decide.
 
@@ -111,7 +111,7 @@ Leave these blank if you do not have them. AirOS will fall back to OpenMeteo for
 The easiest entry point is the review dashboard. It reads whatever is already in the Knowledge Store and requires no LLM call.
 
 ```bash
-streamlit run review_dashboard/app.py
+streamlit run airos/network/dashboard/app.py
 ```
 
 Open [http://localhost:8501](http://localhost:8501) in your browser.
@@ -140,7 +140,7 @@ A typical full run takes 30–90 seconds depending on network speed and LLM late
 
 ```bash
 # Run the agent directly on a specific city, top 5 risk cells
-python -m urban_platform.agents.h3_expert --city bangalore --top-risk 5
+python -m airos.agents.h3_expert --city bangalore --top-risk 5
 
 # Run conformance checks only (no ingest, no agents)
 python main.py --step conformance
@@ -165,7 +165,7 @@ After a successful pipeline run, reload the dashboard at [http://localhost:8501]
 
 If a domain panel is blank, check the terminal output from `main.py` — it will tell you which ingestor failed and why (usually a missing API key or a network timeout).
 
-If agent observations are missing, confirm that `SCHEDULER_AGENT=true` is set in `.env` and that your LLM provider credentials are correct. Running `python -m urban_platform.agents.h3_expert --city bangalore --top-risk 2` directly will give you detailed output including any LLM errors.
+If agent observations are missing, confirm that `SCHEDULER_AGENT=true` is set in `.env` and that your LLM provider credentials are correct. Running `python -m airos.agents.h3_expert --city bangalore --top-risk 2` directly will give you detailed output including any LLM errors.
 
 ---
 

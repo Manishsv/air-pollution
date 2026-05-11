@@ -22,7 +22,7 @@ git clone <repo-url> && cd AirStack
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # add LLM_API_KEY and any overrides
-streamlit run review_dashboard/app.py
+streamlit run airos/network/dashboard/app.py
 ```
 
 ---
@@ -46,30 +46,27 @@ streamlit run review_dashboard/app.py
 
 ```
 AirStack/
-├── spec/                  # AirOS specification — narrative, normative design docs
-│                          #   (what the platform must do and why)
+├── airos/                 # Five-layer Python implementation
+│   ├── os/                #   Runtime: storage, SDK, specs, standards, config, scheduling
+│   ├── apps/              #   Domain logic: air, heat, flood, water, fire, noise, … (10 apps)
+│   ├── agents/            #   AI agents: H3 Expert, City Pattern, LLM client
+│   ├── drivers/           #   Data integration: connectors, H3 store, processing, feature/obs stores
+│   └── network/           #   External surfaces: dashboard (Streamlit), REST API, CLI
 ├── specifications/        # Machine-readable contracts — JSON schemas, YAML domain specs
-│                          #   (what data shapes must look like; used by validators)
-├── urban_platform/        # Core Python implementation
-│   ├── h3_knowledge/      #   Knowledge Store + 14 domain drivers
-│   ├── sdk/               #   Driver / App SDK
-│   ├── applications/      #   Domain pipelines (air, heat, flood, …)
-│   ├── agents/            #   LLM agents (H3 Expert, City Pattern)
-│   ├── rules/             #   Rules Registry
-│   └── api/               #   REST API layer
-├── review_dashboard/      # Review Console — Streamlit UI for officers
-├── agentic/               # Agentic loop framework (orchestration, schemas, roles)
+├── agentic/               # Agentic loop framework (to be extracted to its own repo)
+├── spec/                  # Narrative design docs (what the platform must do and why)
 ├── docs/                  # Human-readable documentation
 │   ├── developer/         #   Guides: getting started, building drivers/apps
 │   ├── platform/          #   Architecture, vision, methodology
-│   ├── apps/              #   App-layer walkthroughs
-│   └── _archive/          #   Dated review checkpoints (not current)
+│   └── apps/              #   App-layer walkthroughs
 ├── deployments/           # City deployment configs and examples
-├── tools/                 # CLI, driver template cookiecutter, validators
 ├── examples/              # SDK walkthrough scripts
-├── tests/                 # Test suite
+├── scripts/               # Migration and maintenance scripts
+├── tests/                 # Test suite (883 tests)
 └── data/                  # Local data files (store, outputs, config)
 ```
+
+> **Note:** `urban_platform/` is kept as a backward-compatibility shim — old imports still work but new code should use `airos.*`.
 
 ---
 
