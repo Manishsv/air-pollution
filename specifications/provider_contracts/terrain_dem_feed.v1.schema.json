@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/terrain_dem_feed",
+  "title": "Provider contract: terrain DEM feed (v1)",
+  "description": "Elevation point samples covering a city bounding box, sourced from SRTM 30 m (NASA public domain) and/or Copernicus DEM 30 m (ESA). Each record is one sampled elevation point with its lat/lon, elevation in metres, and provenance. The ingestor aggregates these points to H3 cells and derives slope, aspect, and ruggedness. TERRAIN_CLASS is NOT expected in this feed — it is computed by the agent layer after ingest.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "dem_source", "license", "bbox", "resolution_m", "samples", "source_metadata"],
+  "properties": {
+
+    "provider_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for the data provider (e.g. 'srtm_nasa', 'copernicus_dem_esa', 'open_elevation_api')."
+    },
+
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable source name (e.g. 'SRTM 30m DEM', 'Copernicus DEM GLO-30')."
+    },
+
+    "source_type": {
+      "type": "string",
+      "enum": ["dem_raster_sampled", "dem_api", "dem_tile"],
+      "description": "How the elevation data was acquired: sampled from a raster, fetched from an API, or read from a tile file."
+    },
+
+    "dem_source": {
+      "type": "string",
+      "enum": ["srtm_30m", "copernicus_dem_30m", "aster_dem_30m", "other"],
+      "description": "The specific DEM product used. Copernicus is preferred; SRTM is the fallback."
+    },
+
+    "license": {
+      "type": "string",
+      "description": "Data license. SRTM is public domain (NASA). Copernicus DEM is free under the Copernicus Data Space licence."
+    },
+
+    "bbox": {
+      "type": "object",
+      "description": "Bounding box for which elevation samples were collected.",
+      "required": ["lat_min", "lat_max", "lon_min", "lon_max"],
+      "additionalProperties": false,
+      "properties": {
+        "lat_min": { "type": "number", "minimum": -90,  "maximum": 90  },
+        "lat_max": { "type": "number", "minimum": -90,  "maximum": 90  },
+        "lon_min": { "type": "number", "minimum": -180, "maximum": 180 },
+        "lon_max": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+
+    "resolution_m": {
+      "type": "number",
+      "minimum": 1,
+      "description": "Nominal horizontal resolution of the DEM in metres (typically 30 for SRTM/Copernicus)."
+    },
+
+    "void_fill_applied": {
+      "type": "boolean",
+      "description": "Whether void-filling was applied to this dataset. Void-filled cells should reduce DATA_CONFIDENCE to 0.65.",
+      "default": false
+    },
+
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Free-form provider metadata: tile IDs, acquisition date, processing version, etc."
+    },
+
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array of individual elevation point samples covering the bbox.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["lat", "lon", "elevation_m", "quality_flag", "provenance"],
+        "properties": {
+
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "description": "Latitude of the sample point in decimal degrees (WGS84)."
+          },
+
+          "lon": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "description": "Longitude of the sample point in decimal degrees (WGS84)."
+          },
+
+          "elevation_m": {
+            "type": ["number", "null"],
+            "description": "Elevation above mean sea level in metres. Null indicates a DEM void at this point."
+          },
+
+          "quality_flag": {
+            "type": "string",
+            "enum": ["ok", "void", "void_filled", "suspected_artefact"],
+            "description": "Data quality at this sample point. 'void_filled' means interpolated; 'suspected_artefact' means the value is anomalous (e.g. radar reflection off a tall building)."
+          },
+
+          "source_record_id": {
+            "type": "string",
+            "description": "Optional tile or pixel identifier from the source DEM for traceability."
+          },
+
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["source_id", "source_type", "license", "collected_at", "ingested_at"],
+            "properties": {
+              "source_id":    { "type": "string" },
+              "source_type":  { "type": "string" },
+              "license":      { "type": "string" },
+              "collected_at": { "type": "string", "description": "ISO-8601 acquisition or publication date." },
+              "ingested_at":  { "type": "string", "description": "ISO-8601 datetime when AirOS ingested this record." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

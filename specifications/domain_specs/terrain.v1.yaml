@@ -55,10 +55,18 @@ canonical_entities:
     description: H3 resolution-8 hexagonal cell (~0.74 km²) with terrain attributes attached.
     examples: [8828830a07fffff, 882883a6d5fffff]
 
+data_source_policy: >
+  Both SRTM 30 m (NASA, public domain) and Copernicus DEM 30 m (ESA, free for most uses)
+  are accepted as primary sources. The ingestor samples both and selects the higher-confidence
+  value per cell (Copernicus preferred where available; SRTM as fallback). The source used
+  per cell is recorded in provenance so agents can reason about coverage quality.
+
 observations:
   - observed_property: elevation_m
-    description: Mean elevation above sea level within the H3 cell, derived from SRTM 30 m DEM.
-    typical_sources: [srtm_dem_nasa, open_elevation_api, copernicus_dem]
+    description: >
+      Mean elevation above sea level within the H3 cell. Sampled from SRTM 30 m and/or
+      Copernicus DEM 30 m; best-available value per cell is stored with its source recorded.
+    typical_sources: [srtm_dem_nasa, copernicus_dem_esa]
     required_provenance_fields: [source_id, source_type, license, collected_at, ingested_at]
   - observed_property: slope_deg
     description: >
@@ -74,11 +82,13 @@ observations:
     required_provenance_fields: [source_id, source_type, collected_at]
   - observed_property: terrain_class
     description: >
-      Categorical terrain classification per cell derived from elevation and slope
-      context: valley, plain, hill, ridge, escarpment. Used by agents as a
-      human-readable terrain label.
-    typical_sources: [derived_from_elevation_m_and_slope_deg]
-    required_provenance_fields: [source_id, collected_at]
+      Categorical terrain classification per cell: valley, plain, hill, ridge, escarpment.
+      NOT computed by the ingestor — this is an agent-layer derived signal. The H3 Expert
+      Agent reads ELEVATION_M, SLOPE_DEG, and neighbourhood statistics from the store and
+      writes TERRAIN_CLASS back as a derived signal after each sweep. This keeps
+      classification logic auditable and model-upgradeable without re-ingesting raw DEM data.
+    typical_sources: [agent_derived_from_elevation_m_slope_deg_neighbourhood_stats]
+    required_provenance_fields: [source_id, collected_at, agent_version]
   - observed_property: ruggedness_index
     description: >
       Terrain Ruggedness Index (TRI) — mean absolute difference in elevation between
@@ -298,8 +308,17 @@ blocked_uses:
   - treating_terrain_class_as_a_live_or_dynamic_signal
 
 open_questions:
-  - Should we prefer SRTM 30 m (global, proven) or Copernicus DEM 30 m (slightly newer)?
-  - What is the correct elevation statistics window for terrain class: per-city-bbox or per-ward?
-  - Should TERRAIN_CLASS be computed in the ingestor or exposed as an agent-computed feature?
+  - What is the correct elevation statistics window for TERRAIN_CLASS: per-city-bbox or per-ward?
   - How do we handle coastal cities where significant fractions of cells are at or below sea level?
   - Is RUGGEDNESS_INDEX meaningful at H3 resolution 8 (~0.74 km2) or should it use resolution 9?
+
+decisions_made:
+  - decision: Use both SRTM 30 m and Copernicus DEM 30 m; best-available per cell, Copernicus preferred.
+    rationale: Copernicus has better void-filling and newer acquisition; SRTM provides global fallback.
+    date: 2026-05-11
+  - decision: TERRAIN_CLASS is agent-computed, not ingestor-computed.
+    rationale: >
+      Keeps classification logic in one auditable place (the agent layer), allows the
+      classification algorithm to be improved without re-ingesting raw DEM data, and
+      makes the derivation chain visible in the agent's reasoning trace.
+    date: 2026-05-11

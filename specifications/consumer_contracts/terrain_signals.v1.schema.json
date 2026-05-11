@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/terrain_signals",
+  "title": "Consumer contract: terrain signals per H3 cell (v1)",
+  "description": "Terrain context signals read from the H3 knowledge store by domain agents and the dashboard. Ingestor-written signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG, RUGGEDNESS_INDEX, DATA_CONFIDENCE. Agent-written derived signal: TERRAIN_CLASS. Consumers must never use terrain signals as the sole basis for operational recommendations — they are structural context only.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["city_id", "generated_at", "cells", "provenance_summary", "data_quality_summary"],
+  "properties": {
+
+    "city_id": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "generated_at": {
+      "type": "string",
+      "description": "ISO-8601 datetime when this payload was assembled."
+    },
+
+    "cells": {
+      "type": "array",
+      "description": "One entry per H3 cell that has terrain signals in the store.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["h3_id", "signals"],
+        "properties": {
+
+          "h3_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "H3 cell index at resolution 8."
+          },
+
+          "signals": {
+            "type": "object",
+            "description": "Signal values keyed by signal name. All ingestor signals should be present; TERRAIN_CLASS is present only after the agent has run.",
+            "additionalProperties": true,
+            "properties": {
+
+              "ELEVATION_M": {
+                "type": ["number", "null"],
+                "description": "Mean cell elevation above sea level in metres."
+              },
+
+              "SLOPE_DEG": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 90,
+                "description": "Mean slope steepness in degrees."
+              },
+
+              "ASPECT_DEG": {
+                "type": ["number", "null"],
+                "minimum": -1,
+                "maximum": 360,
+                "description": "Dominant slope-facing direction in degrees. -1 = flat cell."
+              },
+
+              "RUGGEDNESS_INDEX": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "description": "Mean absolute elevation difference vs H3 k=1 ring neighbours, in metres."
+              },
+
+              "DATA_CONFIDENCE": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+                "description": "DEM data confidence for this cell. 0.90 = full coverage, 0.65 = void-filled."
+              },
+
+              "TERRAIN_CLASS": {
+                "type": ["string", "null"],
+                "enum": ["valley", "plain", "hill", "ridge", "escarpment", "water_body", null],
+                "description": "Agent-derived terrain class. Null if the agent has not yet classified this cell."
+              }
+            }
+          },
+
+          "dem_source": {
+            "type": "string",
+            "enum": ["srtm_30m", "copernicus_dem_30m", "aster_dem_30m", "other", "mixed"],
+            "description": "Which DEM product was used for this cell. 'mixed' means Copernicus and SRTM were blended."
+          },
+
+          "last_ingested_at": {
+            "type": "string",
+            "description": "ISO-8601 datetime of last ingest for this cell."
+          },
+
+          "terrain_class_computed_at": {
+            "type": ["string", "null"],
+            "description": "ISO-8601 datetime when the agent last wrote TERRAIN_CLASS for this cell. Null if not yet computed."
+          }
+        }
+      }
+    },
+
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "City-level terrain summary statistics for dashboard display.",
+      "properties": {
+        "total_cells": { "type": "integer" },
+        "cells_with_terrain_class": { "type": "integer" },
+        "elevation_min_m":  { "type": "number" },
+        "elevation_max_m":  { "type": "number" },
+        "elevation_mean_m": { "type": "number" },
+        "terrain_class_distribution": {
+          "type": "object",
+          "description": "Count of cells per TERRAIN_CLASS value.",
+          "additionalProperties": { "type": "integer" }
+        },
+        "void_filled_cell_count": {
+          "type": "integer",
+          "description": "Number of cells where DATA_CONFIDENCE < 0.70 (void-filled or suspected artefact)."
+        }
+      }
+    },
+
+    "provenance_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sources", "synthetic_used"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of DEM source IDs used in this payload."
+        },
+        "synthetic_used": {
+          "type": "boolean",
+          "description": "True if any synthetic or demo elevation data is present. Must trigger a warning in any dashboard consumer."
+        }
+      }
+    },
+
+    "data_quality_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["synthetic_data_used", "confidence_note"],
+      "properties": {
+        "synthetic_data_used": { "type": "boolean" },
+        "confidence_note": { "type": "string" },
+        "void_fill_notice": {
+          "type": ["string", "null"],
+          "description": "Non-null when void-filled cells are present. Dashboard must display this notice."
+        }
+      }
+    }
+  }
+}
