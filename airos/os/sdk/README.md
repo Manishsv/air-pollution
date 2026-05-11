@@ -18,14 +18,30 @@ The same functions are available on submodules (for example `urban_platform.sdk.
 `urban_platform.sdk.contracts`). CLI, API, and tests often import from submodules; both
 styles are valid in-repo.
 
-### Advanced
+### Runtime query client
 
-- **`UrbanPlatformClient`** — `from urban_platform.sdk.client import UrbanPlatformClient`  
-  Not included in `__all__` at the package root; import from `urban_platform.sdk.client`.
+```python
+from airos.os.sdk import AirOSClient
+
+client = AirOSClient()
+packets = client.get_decision_packets()
+```
+
+`AirOSClient` reads from the live store (SQLite + output files). It is included
+in `__all__` and is the recommended way to access runtime data.
+
+### Store helpers
+
+```python
+from airos.os.sdk import store
+
+signals  = store.get_signals("bangalore")
+patterns = store.get_city_patterns("bangalore")
+health   = store.get_city_health_summary("bangalore")
+```
 
 ### Internal (do not treat as a supported external API)
 
-- **`urban_platform.sdk.specs_helpers`** — shared spec load/sanitize; used by SDK/API internals.
-- **`urban_platform.sdk.builders`** — pilot metadata types only.
+- **`airos.os.sdk.specs_helpers`** — shared spec load/sanitize; used by SDK/API internals.
 
 See also `docs/REPO_RESTRUCTURING_PLAN.md` for repository layout context.

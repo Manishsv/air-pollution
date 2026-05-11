@@ -81,7 +81,7 @@ Submodules backing the public API today include:
 
 These are **used by first-party code** (for example dashboard or conformance flows) but are **not** included in `urban_platform.sdk.__all__` today. Treat them as **stabilizing**—prefer root imports for pure descriptor/contract workflows; use these when the use case matches.
 
-- **`UrbanPlatformClient`** — `from urban_platform.sdk.client import UrbanPlatformClient`  
+- **`AirOSClient`** — `from urban_platform.sdk.client import AirOSClient`  
   Minimal client for local platform data access (for example dashboard). Not an alias in `__all__`; intended consumers should import from `urban_platform.sdk.client` explicitly until the package root chooses to re-export it.
 
 ---
@@ -100,7 +100,7 @@ These are **used by first-party code** (for example dashboard or conformance flo
 1. **`__all__`** in `urban_platform/sdk/__init__.py` defines the **root-level public** names. Adding a name there is a **deliberate** change paired with **this doc** and `docs/EXECUTION_TRACKER.md`.
 2. **Naming:** Prefer a leading underscore for **module-private** symbols inside SDK modules; avoid growing “convenience” exports without review.
 3. **Import style:** External-style integrations should prefer **`from urban_platform.sdk import ...`** for symbols in `__all__`; submodule imports remain valid for internal consistency (CLI/API layering).
-4. **`UrbanPlatformClient`:** Remains **advanced** — import from `urban_platform.sdk.client` only (not in `__all__`). If the root package later re-exports the client, update **`__all__`** and this document in the **same** task, then run the **full verification trio** (pytest, conformance, supervisor).
+4. **`AirOSClient`:** Remains **advanced** — import from `urban_platform.sdk.client` only (not in `__all__`). If the root package later re-exports the client, update **`__all__`** and this document in the **same** task, then run the **full verification trio** (pytest, conformance, supervisor).
 5. **No dynamic plugin loading** and **no execution of untrusted code from descriptors** remain global AirOS rules; the SDK only surfaces **metadata** and **validation** helpers consistent with those policies.
 
 ---

@@ -89,27 +89,9 @@ def _slope_color(slope: float) -> list[int]:
 
 def _load_terrain_signals(city_id: str) -> pd.DataFrame:
     """Pull latest terrain signals for all H3 cells in the city."""
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        store = H3KnowledgeStore.get()
-        df = store.fetchdf(
-            """
-            SELECT s.h3_id, s.signal, s.value, s.unit,
-                   s.fetched_at
-            FROM   h3_signals s
-            WHERE  s.city_id = ?
-              AND  s.domain  = 'terrain'
-              AND  s.fetched_at = (
-                       SELECT MAX(s2.fetched_at)
-                       FROM   h3_signals s2
-                       WHERE  s2.h3_id  = s.h3_id
-                         AND  s2.domain = 'terrain'
-                         AND  s2.signal = s.signal
-                   )
-            ORDER BY s.h3_id, s.signal
-            """,
-            [city_id],
-        )
+        df = store.get_domain_signals_latest(city_id, "terrain")
         return df if df is not None else pd.DataFrame()
     except Exception as exc:
         logger.debug("Terrain signal load failed (%s): %s", city_id, exc)
@@ -381,9 +363,9 @@ def render_terrain_panel() -> None:
 
     # ── City selector ──────────────────────────────────────────────────────
     try:
-        from airos.drivers.store.ingestor import ALL_CITIES
+        from airos.os.sdk import store as _sdk_store
         from airos.os.city_config import get_bbox
-        cities = ALL_CITIES
+        cities = _sdk_store.list_cities()
     except Exception:
         cities = ["bangalore", "hyderabad", "mumbai", "delhi", "chennai", "pune"]
         get_bbox = None  # type: ignore[assignment]

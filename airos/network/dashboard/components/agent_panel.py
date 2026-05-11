@@ -152,49 +152,40 @@ def render_llm_settings(*, key_prefix: str = "llm") -> LLMConfig:
 # ---------------------------------------------------------------------------
 
 def _store_available() -> bool:
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().is_available()
+        return bool(store.get_stats())
     except Exception:
         return False
 
 
 def _get_high_risk_cells(city_id: str, limit: int = 30) -> pd.DataFrame:
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().fetchdf(
-            """
-            SELECT h3_id,
-                   GROUP_CONCAT(domain || '=' || risk_level) AS domains_summary,
-                   count(*) AS high_count
-            FROM h3_assessments
-            WHERE city_id = ?
-              AND risk_level IN ('high', 'severe')
-              AND day_bucket >= date('now', '-3 days')
-            GROUP BY h3_id
-            ORDER BY high_count DESC
-            LIMIT ?
-            """,
-            [city_id, limit],
+        df = store.get_assessments(city_id, lookback_hours=72, limit=limit * 10)
+        if df.empty:
+            return pd.DataFrame()
+        df = df[df["risk_level"].isin(["high", "severe"])]
+        summary = (
+            df.groupby("h3_id")
+            .apply(lambda g: pd.Series({
+                "domains_summary": ",".join(f"{r['domain']}={r['risk_level']}"
+                                           for _, r in g.iterrows()),
+                "high_count": len(g),
+            }))
+            .reset_index()
+            .sort_values("high_count", ascending=False)
+            .head(limit)
         )
+        return summary
     except Exception:
         return pd.DataFrame()
 
 
 def _get_recent_insights(city_id: str, limit: int = 50) -> pd.DataFrame:
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().fetchdf(
-            """
-            SELECT insight_id, h3_id, agent_type, created_at,
-                   domains_involved, finding, confidence, causal_chain_json
-            FROM h3_insights
-            WHERE city_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            [city_id, limit],
-        )
+        return store.get_insights(city_id, days_back=30, outcome_status=None, limit=limit)
     except Exception:
         return pd.DataFrame()
 

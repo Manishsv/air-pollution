@@ -20,7 +20,7 @@ except ImportError:
 import pandas as pd
 import streamlit as st
 
-from airos.os.sdk.client import UrbanPlatformClient
+from airos.os.sdk.client import AirOSClient
 
 # ── Stakeholder overview ──────────────────────────────────────────────────
 from airos.network.dashboard.components.overview_panel import render_overview_panel
@@ -77,47 +77,44 @@ apply_airos_design_system()
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_metrics(base_path: str) -> dict:
     try:
-        return UrbanPlatformClient(base_path=base_path).get_metrics()
+        return AirOSClient(base_path=base_path).get_metrics()
     except Exception:
         return {}
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_audit(base_path: str) -> dict:
     try:
-        return UrbanPlatformClient(base_path=base_path).get_data_audit()
+        return AirOSClient(base_path=base_path).get_data_audit()
     except Exception:
         return {}
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_events(base_path: str) -> pd.DataFrame:
     try:
-        return UrbanPlatformClient(base_path=base_path).get_events()
+        return AirOSClient(base_path=base_path).get_events()
     except Exception:
         return pd.DataFrame()
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_conformance(base_path: str) -> dict:
     try:
-        return UrbanPlatformClient(base_path=base_path).get_conformance_report()
+        return AirOSClient(base_path=base_path).get_conformance_report()
     except Exception:
         return {}
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_store_stats() -> dict:
     try:
-        from airos.drivers.store.reader import get_store_stats
-        return get_store_stats() or {}
+        from airos.os.sdk import store
+        return store.get_stats() or {}
     except Exception:
         return {}
 
 @st.cache_data(ttl=30, show_spinner=False)
 def _load_analysis_queue() -> pd.DataFrame:
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().fetchdf(
-            "SELECT status, count(*) AS count FROM h3_analysis_requests "
-            "GROUP BY status ORDER BY status"
-        )
+        from airos.os.sdk import store
+        return store.get_analysis_queue()
     except Exception:
         return pd.DataFrame()
 

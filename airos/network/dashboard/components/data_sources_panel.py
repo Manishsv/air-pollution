@@ -186,12 +186,9 @@ def _staleness_style(ts) -> str:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_ingest_log() -> pd.DataFrame:
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        return H3KnowledgeStore.get().fetchdf(
-            "SELECT city_id, domain, last_ingested_at, rows_written, status, error_msg "
-            "FROM h3_ingest_log ORDER BY city_id, domain"
-        )
+        return store.get_ingest_log(city_id=None)  # type: ignore[arg-type]
     except Exception as exc:
         st.warning(f"Could not load ingest log: {exc}")
         return pd.DataFrame()

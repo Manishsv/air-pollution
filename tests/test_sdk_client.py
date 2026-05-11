@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from airos.os.sdk.client import UrbanPlatformClient
+from airos.os.sdk.client import AirOSClient
 
 
 def _write_sdk_artifacts(tmp: Path) -> None:
@@ -84,7 +84,7 @@ def _write_sdk_artifacts(tmp: Path) -> None:
 
 def test_sdk_client_filters_and_loads(tmp_path: Path):
     _write_sdk_artifacts(tmp_path)
-    c = UrbanPlatformClient(base_path=str(tmp_path))
+    c = AirOSClient(base_path=str(tmp_path))
 
     all_pkts = c.get_decision_packets()
     assert len(all_pkts) == 2

@@ -11,11 +11,25 @@ from airos.network.api import local as local_api
 
 
 @dataclass(frozen=True)
-class UrbanPlatformClient:
+class AirOSClient:
     """
-    Minimal platform SDK client.
+    AirOS runtime query client (QUERY mode).
 
-    The dashboard must use this client (not direct file reads).
+    Reads from the live store (SQLite + output files) written by the AirOS
+    pipeline.  Use this for decision packets, observations, features,
+    recommendations, events, metrics, and audit data.
+
+    Requires the pipeline to have run at least once.
+
+    Example
+    -------
+    ::
+
+        from airos.os.sdk import AirOSClient
+
+        client = AirOSClient()
+        packets = client.get_decision_packets(category="air_quality")
+        obs = client.get_observations(variable="pm25")
     """
 
     base_path: str = "."
@@ -116,4 +130,63 @@ class UrbanPlatformClient:
         """
         packets = self.get_decision_packets()
         return {"decision_packets": packets}
+
+    # ------------------------------------------------------------------
+    # Mutations — write operations on the live store
+    # ------------------------------------------------------------------
+
+    def close_insight(
+        self,
+        insight_id: str,
+        outcome_status: str,
+        closed_by: str,
+    ) -> None:
+        """Record an officer's closure decision on an insight.
+
+        Parameters
+        ----------
+        insight_id:
+            The insight to close.
+        outcome_status:
+            One of ``"confirmed"``, ``"refuted"``, ``"unverifiable"``.
+        closed_by:
+            Non-empty reviewer identity string (email or officer ID).
+            Anonymous closure is prohibited by the Review Contract.
+
+        Raises
+        ------
+        ValueError
+            If ``closed_by`` is empty or ``outcome_status`` is not valid.
+        """
+        from airos.drivers.store.writer import close_insight as _close
+        _close(
+            insight_id=insight_id,
+            outcome_status=outcome_status,
+            closed_by=closed_by,
+        )
+
+    def submit_analysis_request(self, h3_id: str, city_id: str) -> tuple[bool, str]:
+        """Queue a cell for async analysis by the H3 Expert Agent.
+
+        Returns ``(ok, message)``.  Rejected if a request is already
+        pending/running, or a completed request is within the cooldown window.
+        """
+        from airos.drivers.store.writer import submit_analysis_request as _submit
+        return _submit(h3_id, city_id)
+
+    def get_request_status(self, h3_id: str, city_id: str) -> dict:
+        """Return the most recent analysis request for a cell.
+
+        Returns an empty dict if no request exists.
+
+        Keys: request_id, status, requested_at, started_at, completed_at,
+        insight_id, error_msg.
+        """
+        from airos.drivers.store.reader import get_request_status as _status
+        return _status(h3_id, city_id)
+
+
+# Backward-compatibility alias — will be removed in a future release.
+# Use AirOSClient for all new code.
+UrbanPlatformClient = AirOSClient
 

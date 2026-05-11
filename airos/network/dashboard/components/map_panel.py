@@ -62,87 +62,8 @@ _DEFAULT_VIEW = {"latitude": 20.5937, "longitude": 78.9629, "zoom": 5}
 def _load_assessment_cells(city_id: str, days_back: int) -> pd.DataFrame:
     """Load H3 cells for a single city with worst recent risk + top metric + latest insight."""
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        df = H3KnowledgeStore.get().fetchdf(f"""
-            WITH cell_risk AS (
-                -- Worst risk level seen per cell in the window
-                SELECT
-                    h3_id, city_id,
-                    max(CASE risk_level
-                        WHEN 'severe'   THEN 4
-                        WHEN 'high'     THEN 3
-                        WHEN 'moderate' THEN 2
-                        WHEN 'low'      THEN 1
-                        ELSE 0 END)  AS risk_score,
-                    GROUP_CONCAT(DISTINCT domain) AS domains,
-                    count(DISTINCT domain)         AS domain_count
-                FROM h3_assessments
-                WHERE city_id  = ?
-                  AND day_bucket >= date('now', '-{days_back} days')
-                GROUP BY h3_id, city_id
-            ),
-            top_assess AS (
-                -- Primary metric from the highest-risk domain per cell
-                SELECT h3_id, city_id,
-                       domain          AS top_domain,
-                       primary_index   AS top_index,
-                       primary_value   AS top_value,
-                       dominant_issue
-                FROM (
-                    SELECT *,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY h3_id, city_id
-                               ORDER BY CASE risk_level
-                                   WHEN 'severe'   THEN 4
-                                   WHEN 'high'     THEN 3
-                                   WHEN 'moderate' THEN 2
-                                   WHEN 'low'      THEN 1
-                                   ELSE 0 END DESC
-                           ) AS rn
-                    FROM h3_assessments
-                    WHERE city_id  = ?
-                      AND day_bucket >= date('now', '-{days_back} days')
-                ) WHERE rn = 1
-            ),
-            latest_insight AS (
-                SELECT h3_id, city_id, finding, confidence, insight_id, created_at
-                FROM (
-                    SELECT *,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY h3_id, city_id
-                               ORDER BY created_at DESC
-                           ) AS rn
-                    FROM h3_insights
-                    WHERE city_id = ?
-                ) WHERE rn = 1
-            )
-            SELECT
-                cr.h3_id,
-                cr.city_id,
-                cr.risk_score,
-                cr.domains,
-                cr.domain_count,
-                ta.top_domain,
-                ta.top_index,
-                ta.top_value,
-                ta.dominant_issue,
-                m.centroid_lat  AS lat,
-                m.centroid_lon  AS lon,
-                m.area_name,
-                m.land_use_class,
-                li.finding,
-                li.confidence,
-                li.insight_id,
-                li.created_at   AS insight_at
-            FROM cell_risk cr
-            LEFT JOIN top_assess ta
-                ON cr.h3_id = ta.h3_id AND cr.city_id = ta.city_id
-            LEFT JOIN h3_metadata m
-                ON cr.h3_id = m.h3_id  AND cr.city_id = m.city_id
-            LEFT JOIN latest_insight li
-                ON cr.h3_id = li.h3_id AND cr.city_id = li.city_id
-        """, [city_id, city_id, city_id])
-        return df
+        from airos.os.sdk import store
+        return store.get_map_cells(city_id, days_back=days_back)
     except Exception as exc:
         st.error(f"Map data load failed: {exc}")
         return pd.DataFrame()
@@ -270,25 +191,17 @@ def _time_ago(dt) -> str:
 
 def _render_selected_cell(h3_id: str, city_id: str) -> None:
     """Render rich cell detail: location, per-domain risk, signals, insight, analyse button."""
-    from airos.drivers.store.store import H3KnowledgeStore
-    from airos.drivers.store.writer import submit_analysis_request
-    from airos.drivers.store.reader import get_request_status
-
-    s = H3KnowledgeStore.get()
+    from airos.os.sdk import store as _store
 
     # ── 1. Metadata / location ─────────────────────────────────────────────
     try:
-        meta_df = s.fetchdf(
-            "SELECT centroid_lat, centroid_lon, area_name, land_use_class "
-            "FROM h3_metadata WHERE h3_id = ? AND city_id = ?",
-            [h3_id, city_id],
-        )
+        meta = _store.get_cell_metadata(h3_id, city_id)
         lat = lon = land_use = area_name_cell = None
-        if not meta_df.empty:
-            lat           = meta_df.iloc[0].get("centroid_lat")
-            lon           = meta_df.iloc[0].get("centroid_lon")
-            land_use      = meta_df.iloc[0].get("land_use_class")
-            _an = meta_df.iloc[0].get("area_name")
+        if meta:
+            lat           = meta.get("centroid_lat")
+            lon           = meta.get("centroid_lon")
+            land_use      = meta.get("land_use_class")
+            _an = meta.get("area_name")
             area_name_cell = (None if (not _an or not pd.notna(_an))
                               else str(_an).strip() or None)
 
@@ -313,18 +226,8 @@ def _render_selected_cell(h3_id: str, city_id: str) -> None:
 
     # ── 2. Per-domain risk badges ──────────────────────────────────────────
     try:
-        assess_df = s.fetchdf(
-            """
-            SELECT domain, risk_level, primary_index, primary_value, assessed_at
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY domain ORDER BY assessed_at DESC) AS rn
-                FROM h3_assessments
-                WHERE h3_id = ? AND city_id = ?
-            ) WHERE rn = 1
-            ORDER BY domain
-            """,
-            [h3_id, city_id],
-        )
+        _assessments = _store.get_cell_assessments(h3_id, city_id)
+        assess_df = pd.DataFrame(_assessments)
         if not assess_df.empty:
             badge_html = ""
             for _, row in assess_df.iterrows():
@@ -354,20 +257,12 @@ def _render_selected_cell(h3_id: str, city_id: str) -> None:
 
     # ── 3. Latest signals (collapsed) ─────────────────────────────────────
     try:
-        signals_df = s.fetchdf(
-            """
-            SELECT domain, signal, value, unit, observed_at
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY domain, signal ORDER BY observed_at DESC) AS rn
-                FROM h3_signals
-                WHERE h3_id = ? AND city_id = ?
-                  AND signal NOT IN ('DATA_CONFIDENCE', 'NEAREST_OBS_KM')
-                  AND observed_at >= datetime('now', '-3 days')
-            ) WHERE rn = 1
-            ORDER BY domain, signal
-            """,
-            [h3_id, city_id],
-        )
+        _sig_evidence = _store.get_cell_signal_evidence(h3_id, city_id)
+        signals_df = pd.DataFrame(_sig_evidence.get("rows", []))
+        if not signals_df.empty:
+            signals_df = signals_df[
+                ~signals_df["signal"].isin(["DATA_CONFIDENCE", "NEAREST_OBS_KM"])
+            ].sort_values(["domain", "signal"])
         if not signals_df.empty:
             with st.expander("📊 Latest signals", expanded=False):
                 for domain, grp in signals_df.groupby("domain"):
@@ -388,15 +283,8 @@ def _render_selected_cell(h3_id: str, city_id: str) -> None:
     # ── 4. Latest insight ─────────────────────────────────────────────────
     st.markdown("---")
     try:
-        insight_df = s.fetchdf(
-            """
-            SELECT insight_id, finding, confidence, domains_involved, created_at
-            FROM h3_insights
-            WHERE h3_id = ? AND city_id = ?
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            [h3_id, city_id],
+        insight_df = _store.get_insights(
+            city_id, h3_id=h3_id, days_back=90, outcome_status=None, limit=1
         )
         if not insight_df.empty:
             ins       = insight_df.iloc[0]
@@ -418,19 +306,21 @@ def _render_selected_cell(h3_id: str, city_id: str) -> None:
 
     # ── 5. Analysis request queue button ──────────────────────────────────
     try:
-        req    = get_request_status(h3_id, city_id)
-        status = req.get("status", "")
+        from airos.os.sdk import AirOSClient
+        _client = AirOSClient()
+        status = _client.get_request_status(h3_id, city_id)
+        req_status = status.get("status", "") if isinstance(status, dict) else ""
 
-        if status == "pending":
-            req_ago = _time_ago(req.get("requested_at"))
+        if req_status == "pending":
+            req_ago = _time_ago(status.get("requested_at"))
             st.warning(f"⏳ Analysis queued {req_ago} — will run on next scheduler sweep (≤ 15 min).")
-        elif status == "running":
+        elif req_status == "running":
             st.warning("⚙️ Analysis in progress…")
-        elif status == "failed":
-            err = req.get("error_msg") or "unknown error"
+        elif req_status == "failed":
+            err = status.get("error_msg") or "unknown error"
             st.error(f"❌ Last analysis failed: {err}")
             if st.button("🔬 Retry analysis", key=f"analyse_{h3_id}"):
-                ok, msg = submit_analysis_request(h3_id, city_id)
+                ok, msg = _client.submit_analysis_request(h3_id, city_id)
                 (st.success if ok else st.warning)(msg)
                 st.rerun()
         else:
@@ -441,7 +331,7 @@ def _render_selected_cell(h3_id: str, city_id: str) -> None:
                 "A 6-hour cooldown applies after each completed analysis."
             )
             if st.button("🔬 Analyse this cell", key=f"analyse_{h3_id}", help=help_txt):
-                ok, msg = submit_analysis_request(h3_id, city_id)
+                ok, msg = _client.submit_analysis_request(h3_id, city_id)
                 (st.success if ok else st.warning)(msg)
                 st.rerun()
     except Exception as exc:

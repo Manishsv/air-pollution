@@ -9,7 +9,7 @@ and shows:
   • Methodology note (how raw→H3 mapping works for this source)
 
 No decision packets. No H3 resolution sliders.
-All data is read from H3KnowledgeStore — no pipeline re-execution.
+All data is read via airos.os.sdk.store — no pipeline re-execution.
 """
 from __future__ import annotations
 
@@ -159,55 +159,29 @@ _STALENESS_THRESHOLDS = {
 
 
 # ---------------------------------------------------------------------------
-# Data loading (reads from H3KnowledgeStore)
+# Data loading (reads via airos.os.sdk.store)
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_ingest_log(city_id: str, domains: tuple[str, ...]) -> pd.DataFrame:
+    from airos.os.sdk import store
+    if not domains:
+        return pd.DataFrame()
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        s = H3KnowledgeStore.get()
-        if not domains:
-            return pd.DataFrame()
-        ph = ",".join(["?" for _ in domains])
-        return s.fetchdf(
-            f"SELECT domain, last_ingested_at, rows_written, status, error_msg "
-            f"FROM h3_ingest_log WHERE city_id = ? AND domain IN ({ph})",
-            [city_id, *domains],
-        )
-    except Exception as e:
+        return store.get_ingest_log(city_id, list(domains))
+    except Exception:
         return pd.DataFrame()
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_signals(city_id: str, domains: tuple[str, ...]) -> pd.DataFrame:
     """Latest signal value per (h3_id, domain, signal)."""
+    from airos.os.sdk import store
+    if not domains:
+        return pd.DataFrame()
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        s = H3KnowledgeStore.get()
-        if not domains:
-            return pd.DataFrame()
-        ph = ",".join(["?" for _ in domains])
-        return s.fetchdf(
-            f"""
-            SELECT s.h3_id, s.domain, s.signal, s.value, s.unit, s.hour_bucket, s.source
-            FROM h3_signals s
-            INNER JOIN (
-                SELECT h3_id, domain, signal, MAX(hour_bucket) AS max_hb
-                FROM h3_signals
-                WHERE city_id = ? AND domain IN ({ph})
-                GROUP BY h3_id, domain, signal
-            ) latest
-              ON  s.h3_id      = latest.h3_id
-              AND s.domain     = latest.domain
-              AND s.signal     = latest.signal
-              AND s.hour_bucket = latest.max_hb
-            WHERE s.city_id = ?
-            ORDER BY s.h3_id, s.domain, s.signal
-            """,
-            [city_id, *domains, city_id],
-        )
-    except Exception as e:
+        return store.get_latest_signals_table(city_id, list(domains))
+    except Exception:
         return pd.DataFrame()
 
 

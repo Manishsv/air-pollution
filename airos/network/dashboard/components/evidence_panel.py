@@ -106,23 +106,8 @@ def _badge(text: str, color: str) -> str:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_neighbors(h3_id: str, city_id: str) -> list[dict]:
     try:
-        import h3 as h3lib
-        from airos.drivers.store.store import H3KnowledgeStore
-        ring = list(h3lib.grid_disk(h3_id, 1) - {h3_id})
-        if not ring:
-            return []
-        phs = ",".join("?" * len(ring))
-        df = H3KnowledgeStore.get().fetchdf(
-            f"""
-            SELECT h3_id, domain, risk_level,
-                   ROW_NUMBER() OVER (PARTITION BY h3_id, domain ORDER BY assessed_at DESC) AS rn
-            FROM h3_assessments
-            WHERE h3_id IN ({phs}) AND city_id = ?
-            """,
-            ring + [city_id],
-        )
-        df = df[df["rn"] == 1].drop(columns=["rn"])
-        return df.to_dict(orient="records")
+        from airos.os.sdk import store
+        return store.get_cell_neighbors(h3_id, city_id)
     except Exception:
         return []
 
@@ -130,20 +115,8 @@ def _load_neighbors(h3_id: str, city_id: str) -> list[dict]:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_cell_assessments(h3_id: str, city_id: str) -> list[dict]:
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        df = H3KnowledgeStore.get().fetchdf(
-            """
-            SELECT domain, risk_level, assessed_at, primary_index, primary_value
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (
-                    PARTITION BY domain ORDER BY assessed_at DESC
-                ) AS rn
-                FROM h3_assessments WHERE h3_id = ? AND city_id = ?
-            ) WHERE rn = 1
-            """,
-            [h3_id, city_id],
-        )
-        return df.to_dict(orient="records")
+        from airos.os.sdk import store
+        return store.get_cell_assessments(h3_id, city_id)
     except Exception:
         return []
 
@@ -152,63 +125,8 @@ def _load_cell_assessments(h3_id: str, city_id: str) -> list[dict]:
 def _load_signal_evidence(h3_id: str, city_id: str) -> dict:
     """Latest signals + DATA_CONFIDENCE + 30-day percentile ranks for this cell."""
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        s = H3KnowledgeStore.get()
-
-        # Latest value per (domain, signal)
-        latest_df = s.fetchdf(
-            """
-            SELECT domain, signal, value, unit, data_quality, observed_at
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (
-                    PARTITION BY domain, signal ORDER BY observed_at DESC
-                ) AS rn
-                FROM h3_signals
-                WHERE h3_id = ? AND city_id = ?
-                  AND observed_at >= datetime('now', '-3 days')
-            ) WHERE rn = 1
-            """,
-            [h3_id, city_id],
-        )
-
-        # 30-day stats per (domain, signal) for percentile rank
-        stats_df = s.fetchdf(
-            """
-            SELECT domain, signal,
-                   COUNT(*) AS n, AVG(value) AS mean,
-                   GROUP_CONCAT(value) AS vals_csv
-            FROM h3_signals
-            WHERE h3_id = ? AND city_id = ?
-              AND observed_at >= datetime('now', '-30 days')
-              AND value IS NOT NULL
-            GROUP BY domain, signal
-            """,
-            [h3_id, city_id],
-        )
-
-        stats: dict[tuple, dict] = {}
-        for row in stats_df.to_dict(orient="records"):
-            try:
-                vals = sorted(float(v) for v in (row["vals_csv"] or "").split(",") if v)
-            except Exception:
-                vals = []
-            stats[(row["domain"], row["signal"])] = {"n": row["n"], "mean": row["mean"], "vals": vals}
-
-        result: list[dict] = []
-        for row in latest_df.to_dict(orient="records"):
-            entry = dict(row)
-            key = (row["domain"], row["signal"])
-            st_info = stats.get(key, {})
-            vals = st_info.get("vals", [])
-            n    = st_info.get("n", 0)
-            cur  = row.get("value")
-            if cur is not None and vals and n >= 10:
-                pct = sum(1 for v in vals if v <= cur) / len(vals) * 100
-                entry["pct_rank_30d"] = round(pct)
-                entry["mean_30d"]     = round(st_info.get("mean", 0), 3)
-            result.append(entry)
-
-        return {"rows": result}
+        from airos.os.sdk import store
+        return store.get_cell_signal_evidence(h3_id, city_id)
     except Exception as exc:
         return {"rows": [], "error": str(exc)}
 
@@ -216,21 +134,8 @@ def _load_signal_evidence(h3_id: str, city_id: str) -> dict:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_prior_outcomes(h3_id: str, city_id: str, current_insight_id: str) -> list[dict]:
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        df = H3KnowledgeStore.get().fetchdf(
-            """
-            SELECT insight_id, agent_type, created_at, domains_involved,
-                   finding, confidence, outcome_status, closed_by, closed_at
-            FROM h3_insights
-            WHERE h3_id = ? AND city_id = ?
-              AND insight_id != ?
-              AND outcome_status != 'open'
-            ORDER BY created_at DESC
-            LIMIT 10
-            """,
-            [h3_id, city_id, current_insight_id],
-        )
-        return df.to_dict(orient="records")
+        from airos.os.sdk import store
+        return store.get_prior_outcomes(h3_id, city_id, exclude_insight_id=current_insight_id)
     except Exception:
         return []
 
@@ -238,24 +143,8 @@ def _load_prior_outcomes(h3_id: str, city_id: str, current_insight_id: str) -> l
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_packets(h3_id: str, city_id: str) -> list[dict]:
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        df = H3KnowledgeStore.get().fetchdf(
-            """
-            SELECT packet_id, domain, created_at, risk_level, outcome_status,
-                   safety_gates_json, blocked_uses_json
-            FROM h3_packets
-            WHERE h3_id = ? AND city_id = ?
-            ORDER BY created_at DESC
-            LIMIT 5
-            """,
-            [h3_id, city_id],
-        )
-        rows = []
-        for r in df.to_dict(orient="records"):
-            r["safety_gates"] = _parse(r.pop("safety_gates_json", None)) or []
-            r["blocked_uses"] = _parse(r.pop("blocked_uses_json", None)) or []
-            rows.append(r)
-        return rows
+        from airos.os.sdk import store
+        return store.get_cell_packets(h3_id, city_id)
     except Exception:
         return []
 

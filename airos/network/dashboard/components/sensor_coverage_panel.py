@@ -26,35 +26,16 @@ from airos.os.city_config import CITIES as _CITY_REGISTRY, get_centre, PANEL_CIT
 # it is a write operation that belongs exclusively in the scheduler.
 # ---------------------------------------------------------------------------
 
-try:
-    from airos.drivers.store.data_quality import (
-        get_cell_confidence      as _get_cell_confidence,
-        get_city_quality_summary as _get_city_quality_summary,
-    )
-    _DQ_AVAILABLE = True
-except Exception:
-    _DQ_AVAILABLE = False
-
-
 @st.cache_data(ttl=300, show_spinner=False)
 def _cell_confidence(city_id: str, domain: str | None = None) -> pd.DataFrame:
-    if not _DQ_AVAILABLE:
-        return pd.DataFrame()
-    try:
-        return _get_cell_confidence(city_id, domain)
-    except Exception:
-        return pd.DataFrame()
-
+    from airos.os.sdk import store
+    return store.get_cell_confidence(city_id, domain)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _city_quality_summary(city_id: str) -> dict:
-    if not _DQ_AVAILABLE:
-        return {}
-    try:
-        return _get_city_quality_summary(city_id) or {}
-    except Exception:
-        return {}
+    from airos.os.sdk import store
+    return store.get_quality_summary(city_id)
 
 
 # ---------------------------------------------------------------------------
@@ -133,11 +114,8 @@ def _render_coverage_map(city_id: str) -> None:
         "Domain filter", _DOMAINS, key="sc_map_domain",
     )
 
-    if not _DQ_AVAILABLE:
-        st.info(
-            "Module `airos.drivers.store.data_quality` is not yet available. "
-            "Coverage map will appear once that module is built and importable."
-        )
+    if False:  # guard removed — store.get_cell_confidence handles unavailability gracefully
+        pass
         return
 
     domain_key = _DOMAIN_KEY.get(domain_choice)
@@ -262,9 +240,7 @@ def _render_domain_coverage(city_id: str) -> None:
         "Ward-level breakdown is not yet available — ward boundary data has not been loaded."
     )
 
-    if not _DQ_AVAILABLE:
-        st.info("Data quality module not yet available.")
-        return
+    # store.get_cell_confidence returns empty DataFrame when unavailable — handled below
 
     with st.spinner("Loading cell confidence data…"):
         df = _cell_confidence(city_id)   # reuse the same cached data as the map tab

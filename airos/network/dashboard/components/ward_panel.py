@@ -197,8 +197,8 @@ def _render_data_quality_callout(city_id: str) -> None:
     available yet (it is being built in parallel).
     """
     try:
-        from airos.drivers.store.data_quality import get_city_quality_summary
-        summary = get_city_quality_summary(city_id)
+        from airos.os.sdk import store as _sdk_store
+        summary = _sdk_store.get_quality_summary(city_id)
     except Exception:
         return  # Module not yet available — stay silent
 

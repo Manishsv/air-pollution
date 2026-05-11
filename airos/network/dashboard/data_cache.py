@@ -29,9 +29,10 @@ def load_firms(lat_min: float, lon_min: float, lat_max: float, lon_max: float,
 def load_live_aq(city_id: str, lat_min: float, lon_min: float,
                  lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
     try:
-        from airos.drivers.observation_store import ObservationStoreReader, to_wide
-        cached = ObservationStoreReader().read_recent("air", city_id, max_age_hours=1)
+        from airos.os.sdk import store as _sdk_store
+        cached = _sdk_store.get_recent_observations("air", city_id, max_age_hours=1)
         if not cached.empty:
+            from airos.drivers.observation_store import to_wide
             return to_wide(cached)
     except Exception:
         pass
@@ -82,9 +83,10 @@ def load_ch4(h3_ids: tuple, lat_min: float, lon_min: float,
 def load_live_temperature(city_id: str, lat_min: float, lon_min: float,
                           lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
     try:
-        from airos.drivers.observation_store import ObservationStoreReader, to_wide
-        cached = ObservationStoreReader().read_recent("heat", city_id, max_age_hours=1)
+        from airos.os.sdk import store as _sdk_store
+        cached = _sdk_store.get_recent_observations("heat", city_id, max_age_hours=1)
         if not cached.empty:
+            from airos.drivers.observation_store import to_wide
             return to_wide(cached)
     except Exception:
         pass
@@ -102,9 +104,10 @@ def load_live_temperature(city_id: str, lat_min: float, lon_min: float,
 def load_live_rainfall(city_id: str, lat_min: float, lon_min: float,
                        lat_max: float, lon_max: float, lookback_hours: int) -> pd.DataFrame:
     try:
-        from airos.drivers.observation_store import ObservationStoreReader, to_wide
-        cached = ObservationStoreReader().read_recent("flood", city_id, max_age_hours=1)
+        from airos.os.sdk import store as _sdk_store
+        cached = _sdk_store.get_recent_observations("flood", city_id, max_age_hours=1)
         if not cached.empty:
+            from airos.drivers.observation_store import to_wide
             return to_wide(cached)
     except Exception:
         pass

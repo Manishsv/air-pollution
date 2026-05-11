@@ -11,7 +11,7 @@ import pytest
 from shapely.geometry import Polygon
 
 from airos.os.decision_support.explainability import build_decision_packets, sanitize_for_json
-from airos.os.sdk.client import UrbanPlatformClient
+from airos.os.sdk.client import AirOSClient
 from airos.os.specifications.runtime_validation import validate_artifact, validate_output_artifacts
 
 
@@ -202,7 +202,7 @@ def test_validate_output_artifacts_writes_conformance_report(tmp_path: Path, aq_
 
 def test_sdk_reads_conformance_report(tmp_path: Path, aq_packet_dict):
     validate_output_artifacts(tmp_path)
-    c = UrbanPlatformClient(base_path=str(tmp_path))
+    c = AirOSClient(base_path=str(tmp_path))
     r = c.get_conformance_report()
     assert r.get("validated_at")
     assert "artifacts" in r

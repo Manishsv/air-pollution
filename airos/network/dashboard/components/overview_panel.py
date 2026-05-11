@@ -114,8 +114,8 @@ def _worst_risk(risk_dict: dict[str, str]) -> tuple[str, str]:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_health(city_id: str) -> dict:
     try:
-        from airos.drivers.store.reader import get_city_health_summary
-        return get_city_health_summary(city_id) or {}
+        from airos.os.sdk import store
+        return store.get_city_health_summary(city_id) or {}
     except Exception:
         return {}
 
@@ -123,8 +123,8 @@ def _load_health(city_id: str) -> dict:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_domain_drivers(city_id: str) -> list:
     try:
-        from airos.drivers.store.reader import get_domain_driver_summary
-        return get_domain_driver_summary(city_id)
+        from airos.os.sdk import store
+        return store.get_domain_drivers(city_id)
     except Exception:
         return []
 
@@ -132,8 +132,8 @@ def _load_domain_drivers(city_id: str) -> list:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_patterns(city_id: str) -> list:
     try:
-        from airos.drivers.store.reader import get_city_patterns
-        return get_city_patterns(city_id, limit=5)
+        from airos.os.sdk import store
+        return store.get_city_patterns(city_id)
     except Exception:
         return []
 
@@ -141,8 +141,8 @@ def _load_patterns(city_id: str) -> list:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_ward_risk(city_id: str, domain: str) -> pd.DataFrame:
     try:
-        from airos.drivers.store.reader import get_ward_domain_risk
-        return get_ward_domain_risk(city_id, domain, top_n=15)
+        from airos.os.sdk import store
+        return store.get_ward_domain_risk(city_id, domain)
     except Exception:
         return pd.DataFrame()
 
@@ -150,8 +150,8 @@ def _load_ward_risk(city_id: str, domain: str) -> pd.DataFrame:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_field_tasks(city_id: str) -> pd.DataFrame:
     try:
-        from airos.drivers.store.reader import get_field_tasks
-        return get_field_tasks(city_id, limit=50)
+        from airos.os.sdk import store
+        return store.get_field_tasks(city_id)
     except Exception:
         return pd.DataFrame()
 
@@ -160,18 +160,8 @@ def _load_field_tasks(city_id: str) -> pd.DataFrame:
 def _load_latest_aqi(city_id: str) -> float | None:
     """Return the most recent AQI signal value for a city."""
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        row = H3KnowledgeStore.get().fetchone(
-            """
-            SELECT value FROM h3_signals
-            WHERE city_id = ? AND domain = 'air'
-              AND signal IN ('AQI','aqi','pm25_aqi','PM25_AQI','PM2.5_AQI')
-            ORDER BY observed_at DESC
-            LIMIT 1
-            """,
-            [city_id],
-        )
-        return float(row[0]) if row and row[0] is not None else None
+        from airos.os.sdk import store
+        return store.get_latest_aqi(city_id)
     except Exception:
         return None
 
@@ -182,17 +172,8 @@ def _load_latest_aqi(city_id: str) -> float | None:
 
 def _city_selector(key: str) -> str:
     """Return currently selected city_id."""
-    try:
-        from airos.drivers.place.city_registry import all_city_ids
-        cities = all_city_ids()
-    except Exception:
-        cities = []
-    if not cities:
-        try:
-            from airos.os.city_config import CITIES
-            cities = list(CITIES.keys())
-        except Exception:
-            cities = ["bangalore"]
+    from airos.os.sdk import store
+    cities = store.list_cities()
     default = cities.index("bangalore") if "bangalore" in cities else 0
     return st.selectbox("City", cities, index=default, key=f"overview_city_{key}")
 

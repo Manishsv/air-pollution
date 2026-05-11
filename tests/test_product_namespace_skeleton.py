@@ -13,4 +13,5 @@ def test_product_namespace_skeleton_imports() -> None:
     import airos.drivers         # noqa: F401
     import airos.network         # noqa: F401
 
-    from airos.os.sdk.client import UrbanPlatformClient  # noqa: F401
+    from airos.os.sdk.client import AirOSClient  # noqa: F401
+    from airos.os.sdk.client import UrbanPlatformClient  # noqa: F401 — backward-compat alias

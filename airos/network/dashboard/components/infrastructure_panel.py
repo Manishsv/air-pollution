@@ -61,29 +61,10 @@ _INFRA_DOMAINS = {
 
 
 def _load_infra_signals(city_id: str, domain: str) -> pd.DataFrame:
-    """Pull the latest signal snapshot from the H3 knowledge store for one domain."""
+    """Pull the latest signal snapshot for one infrastructure domain."""
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        store = H3KnowledgeStore.get()
-        df = store.fetchdf(
-            """
-            SELECT s.h3_id, s.signal_name AS signal, s.value, s.unit,
-                   s.recorded_at
-            FROM h3_signals s
-            JOIN h3_cell_metadata m ON m.h3_id = s.h3_id
-            WHERE m.city_id = ?
-              AND s.domain   = ?
-              AND s.recorded_at = (
-                  SELECT MAX(s2.recorded_at)
-                  FROM h3_signals s2
-                  WHERE s2.h3_id       = s.h3_id
-                    AND s2.domain      = s.domain
-                    AND s2.signal_name = s.signal_name
-              )
-            ORDER BY s.h3_id, s.signal_name
-            """,
-            [city_id, domain],
-        )
+        df = store.get_domain_signals_latest(city_id, domain)
         return df if df is not None else pd.DataFrame()
     except Exception as exc:
         logger.debug("Infrastructure signal load failed (%s/%s): %s", city_id, domain, exc)
@@ -247,8 +228,8 @@ def render_infrastructure_panel() -> None:
 
     # City selector
     try:
-        from airos.drivers.store.ingestor import ALL_CITIES
-        cities = ALL_CITIES
+        from airos.os.sdk import store as _sdk_store
+        cities = _sdk_store.list_cities()
     except Exception:
         cities = ["bangalore", "hyderabad", "mumbai", "delhi", "chennai", "pune"]
 

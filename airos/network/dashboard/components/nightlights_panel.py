@@ -75,27 +75,9 @@ def _radiance_color(val: float) -> list[int]:
 
 def _load_nightlights_signals(city_id: str) -> pd.DataFrame:
     """Pull latest night lights signals for all H3 cells in the city."""
+    from airos.os.sdk import store
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-        store = H3KnowledgeStore.get()
-        df = store.fetchdf(
-            """
-            SELECT s.h3_id, s.signal, s.value, s.unit,
-                   s.fetched_at
-            FROM   h3_signals s
-            WHERE  s.city_id = ?
-              AND  s.domain  = 'nightlights'
-              AND  s.fetched_at = (
-                       SELECT MAX(s2.fetched_at)
-                       FROM   h3_signals s2
-                       WHERE  s2.h3_id  = s.h3_id
-                         AND  s2.domain = 'nightlights'
-                         AND  s2.signal = s.signal
-                   )
-            ORDER BY s.h3_id, s.signal
-            """,
-            [city_id],
-        )
+        df = store.get_domain_signals_latest(city_id, "nightlights")
         return df if df is not None else pd.DataFrame()
     except Exception as exc:
         logger.debug("Night lights signal load failed (%s): %s", city_id, exc)
@@ -341,8 +323,8 @@ def render_nightlights_panel() -> None:
 
     # ── City selector ──────────────────────────────────────────────────────
     try:
-        from airos.drivers.store.ingestor import ALL_CITIES
-        cities = ALL_CITIES
+        from airos.os.sdk import store as _sdk_store
+        cities = _sdk_store.list_cities()
     except Exception:
         cities = ["bangalore", "hyderabad", "mumbai", "delhi", "chennai", "pune"]
 

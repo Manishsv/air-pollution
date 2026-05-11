@@ -95,82 +95,16 @@ def _load_insights(
     limit: int = 300,
 ) -> pd.DataFrame:
     try:
-        from airos.drivers.store.store import H3KnowledgeStore
-
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
-        where  = ["i.created_at >= ?", "i.confidence >= ?"]
-        params: list = [cutoff, min_confidence]
-        if city_id:
-            where.append("i.city_id = ?")
-            params.append(city_id)
-        if priority_tier:
-            where.append("i.priority_tier = ?")
-            params.append(priority_tier)
-        if outcome_status:
-            where.append("i.outcome_status = ?")
-            params.append(outcome_status)
-
-        # Sort order per REVIEW_CONTRACT §Inbox:
-        #   1. priority_tier — high before medium before low
-        #   2. confidence descending within tier
-        #   3. created_at ascending within same confidence (oldest unreviewed first)
-        df = H3KnowledgeStore.get().fetchdf(f"""
-            SELECT
-                i.insight_id,
-                i.h3_id,
-                i.city_id,
-                i.created_at,
-                i.domains_involved,
-                i.finding,
-                i.confidence,
-                i.priority_tier,
-                i.outcome_status,
-                i.closed_by,
-                i.closed_at,
-                i.hypothesis_chain_json,
-                m.area_name,
-                m.land_use_class,
-                m.centroid_lat,
-                m.centroid_lon,
-                coalesce(max(CASE a.risk_level
-                    WHEN 'severe'   THEN 4
-                    WHEN 'high'     THEN 3
-                    WHEN 'moderate' THEN 2
-                    WHEN 'low'      THEN 1
-                    ELSE 0 END), 0) AS risk_score
-            FROM h3_insights i
-            LEFT JOIN h3_metadata m
-                ON i.h3_id = m.h3_id AND i.city_id = m.city_id
-            LEFT JOIN h3_assessments a
-                ON i.h3_id = a.h3_id AND i.city_id = a.city_id
-                AND a.day_bucket >= date('now', '-3 days')
-            WHERE {" AND ".join(where)}
-            GROUP BY i.insight_id, i.h3_id, i.city_id, i.created_at,
-                     i.domains_involved, i.finding, i.confidence,
-                     i.priority_tier, i.outcome_status, i.closed_by, i.closed_at,
-                     i.hypothesis_chain_json, m.area_name, m.land_use_class,
-                     m.centroid_lat, m.centroid_lon
-            ORDER BY
-                CASE i.priority_tier
-                    WHEN 'high'   THEN 1
-                    WHEN 'medium' THEN 2
-                    WHEN 'low'    THEN 3
-                    ELSE 4 END,
-                i.confidence DESC,
-                i.created_at ASC
-            LIMIT {limit}
-        """, params)
-
-        if df.empty:
-            return df
-
-        df["risk_level"] = df["risk_score"].map(_SCORE_RISK).fillna("unknown")
-
-        if domains:
-            df = df[df["domains_involved"].apply(
-                lambda v: any(d in str(v) for d in domains) if pd.notna(v) else False
-            )]
-        return df
+        from airos.os.sdk import store
+        return store.get_insights(
+            city_id,
+            min_confidence=min_confidence,
+            domains=domains,
+            days_back=days_back,
+            priority_tier=priority_tier,
+            outcome_status=outcome_status,
+            limit=limit,
+        )
     except Exception as exc:
         st.error(f"Could not load insights: {exc}")
         return pd.DataFrame()
@@ -373,8 +307,8 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
                     disabled=submit_disabled,
                 ):
                     try:
-                        from airos.drivers.store.writer import close_insight
-                        close_insight(
+                        from airos.os.sdk import AirOSClient
+                        AirOSClient().close_insight(
                             insight_id=insight_id,
                             outcome_status=verdict,
                             closed_by=officer.strip(),
@@ -396,7 +330,7 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
 
 def _render_empty_state(city_id: str | None, city_registry: dict) -> None:
     """Informational empty state — no triggers, just status and guidance."""
-    from airos.drivers.store.store import H3KnowledgeStore
+    from airos.os.sdk import store
 
     city_label = "all cities" if not city_id else (
         city_registry.get(city_id, {}).get("display_name", city_id.title())
@@ -404,15 +338,13 @@ def _render_empty_state(city_id: str | None, city_registry: dict) -> None:
 
     # Pull ingest log and cell counts to explain *why* there are no insights
     try:
-        store = H3KnowledgeStore.get()
-        cell_q = ("SELECT count(*) FROM h3_assessments WHERE city_id = ?"
-                  if city_id else "SELECT count(*) FROM h3_assessments")
-        cell_row   = store.fetchone(cell_q, [city_id] if city_id else [])
-        cell_count = int(cell_row[0]) if cell_row else 0
-
-        log_q = ("SELECT domain, last_ingested_at, status FROM h3_ingest_log WHERE city_id = ?"
-                 if city_id else "SELECT domain, last_ingested_at, status FROM h3_ingest_log")
-        log_df = store.fetchdf(log_q, [city_id] if city_id else [])
+        stats = store.get_stats()
+        if not bool(stats):  # non-empty means store is available
+            cell_count = 0
+            log_df     = pd.DataFrame()
+        else:
+            cell_count = int(stats.get("cell_count", 0))
+            log_df     = stats.get("ingest_log", pd.DataFrame())
     except Exception:
         cell_count = 0
         log_df     = pd.DataFrame()
@@ -512,14 +444,13 @@ def _load_full_row(row: dict) -> dict:
     """Enrich a summary row dict with all JSON columns from the DB."""
     try:
         import json as _json
-        from airos.drivers.store.store import H3KnowledgeStore
-        extra = H3KnowledgeStore.get().fetchdf(
-            "SELECT * FROM h3_insights WHERE insight_id = ?",
-            [row["insight_id"]],
-        )
-        if not extra.empty:
-            erow = extra.iloc[0]
-            for col in extra.columns:
+        from airos.os.sdk import store
+        city_id = row.get("city_id")
+        h3_id   = row.get("h3_id")
+        df = store.get_signals(city_id, h3_id=h3_id, lookback_days=7)
+        if not df.empty:
+            erow = df.iloc[0]
+            for col in df.columns:
                 if col not in row or (isinstance(row.get(col), float) and pd.isna(row[col])):
                     row[col] = erow[col]
             for json_col, dest_key in [

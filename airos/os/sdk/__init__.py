@@ -1,21 +1,30 @@
 """
-AirOS SDK namespace.
+AirOS SDK — public namespace.
 
-This namespace is reserved for developer-facing helpers and client surfaces.
+Three interaction modes
+-----------------------
+DISCOVER   airos.os.sdk.*              Metadata & contracts (reads specifications/)
+QUERY      airos.os.sdk.store.*        Live store queries   (reads SQLite store)
+INGEST     HTTP POST /records          Push data in via the REST API
 
-The SDK is an internal Python module (not a separate package yet). It provides a
-small, stable helper surface for app and adapter developers:
+Quick start
+-----------
+# Discover what the platform supports
+from airos.os.sdk import list_app_ids, list_builders, get_contract_schema
 
-- inspect app descriptors (metadata only; not plugins)
-- inspect contracts and validate payloads/fixtures by manifest contract_key
-- compute deterministic payload hashes
+# Query what the platform has produced (requires pipeline to have run)
+from airos.os.sdk import AirOSClient
+client = AirOSClient()
+packets = client.get_decision_packets()
 
-**Supported imports at package root:** only names listed in ``__all__`` below are
-the declared public surface. See ``docs/SDK_SURFACE.md`` for the full contract
-(root re-exports vs submodules vs advanced/internal modules).
+# Or use the store query helpers directly
+from airos.os.sdk import store
+signals = store.get_signals(city_id="bangalore")
 
-**Advanced:** ``UrbanPlatformClient`` is not re-exported here; import from
-``airos.os.sdk.client`` (see ``docs/SDK_SURFACE.md``).
+See ARCHITECTURE.md for the full three-mode interaction model.
+
+**Public surface:** names listed in ``__all__`` below. Expanding it is a
+deliberate API change — update ARCHITECTURE.md in the same commit.
 """
 
 from airos.os.sdk.apps import get_app_descriptor, list_app_descriptors, list_app_ids
@@ -50,49 +59,53 @@ from airos.os.sdk.store_backup import (
     restore_file_store_dry_run,
     verify_store_backup,
 )
+from airos.os.sdk.builders import list_builders, get_builder_spec
+from airos.os.sdk.client import AirOSClient
+from airos.os.sdk import store
 
-# Canonical public names for `from airos.os.sdk import ...`.
-# Keep this list aligned with docs/SDK_SURFACE.md; expanding it is a deliberate
-# API change (update that doc + EXECUTION_TRACKER in the same change set).
 __all__ = [
-    # apps
+    # ── DISCOVER: apps ────────────────────────────────────────────────────────
     "get_app_descriptor",
     "list_app_descriptors",
     "list_app_ids",
-    # adapters
+    # ── DISCOVER: adapters ────────────────────────────────────────────────────
     "get_provider_adapter_descriptor",
     "list_provider_adapter_descriptors",
     "list_provider_adapter_ids",
-    # reference catalogs
+    # ── DISCOVER: builders / agents ───────────────────────────────────────────
+    "list_builders",
+    "get_builder_spec",
+    # ── DISCOVER: reference catalogs ──────────────────────────────────────────
     "get_reference_catalog",
     "list_reference_catalog_ids",
     "list_reference_catalogs",
-    # deployments
+    # ── DISCOVER: deployments ─────────────────────────────────────────────────
     "get_deployment_profile",
     "list_deployment_ids",
     "list_deployment_profiles",
-    # inventory
+    # ── DISCOVER: inventory ───────────────────────────────────────────────────
     "get_platform_inventory",
-    # evidence
-    "export_evidence_bundle",
-    "inspect_evidence_bundle",
-    "redact_evidence_bundle",
-    "verify_evidence_bundle",
-    # store backup
-    "backup_file_store",
-    "inspect_store_backup",
-    "verify_store_backup",
-    "restore_file_store_dry_run",
-    # contracts
+    # ── DISCOVER: contracts & validation ─────────────────────────────────────
     "contract_exists",
     "get_contract_schema",
     "list_contract_keys",
     "validate_payload",
-    # hashing
+    # ── DISCOVER: evidence & governance ──────────────────────────────────────
+    "export_evidence_bundle",
+    "inspect_evidence_bundle",
+    "redact_evidence_bundle",
+    "verify_evidence_bundle",
+    "backup_file_store",
+    "inspect_store_backup",
+    "verify_store_backup",
+    "restore_file_store_dry_run",
+    # ── DISCOVER: hashing & testing ───────────────────────────────────────────
     "compute_hash",
-    # testing
     "assert_fixture_valid",
     "assert_payload_valid",
     "load_json_fixture",
+    # ── QUERY: runtime client & store helpers ─────────────────────────────────
+    "AirOSClient",
+    "store",
 ]
 
