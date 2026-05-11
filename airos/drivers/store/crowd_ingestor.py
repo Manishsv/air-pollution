@@ -209,7 +209,7 @@ def ingest_crowd(city_id: str, bbox: dict, *, force: bool = False) -> int:
         return 0
 
     # Resolve project root (two levels up from this file)
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = Path(__file__).resolve().parents[3]
 
     _lbm = _lookback_minutes()
     logger.info("[%s/crowd] Loading people_count observations (last %dm) …", city_id, _lbm)

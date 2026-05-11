@@ -47,8 +47,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_HERE        = Path(__file__).resolve().parent
-PROJECT_ROOT = _HERE.parent
+_HERE        = Path(__file__).resolve().parent   # airos/os/
+PROJECT_ROOT = _HERE.parents[1]                  # airos/os/ → 2 levels up → repo root
 STATUS_FILE  = PROJECT_ROOT / "data" / "scheduler_status.json"
 
 DEFAULT_SWEEP_INTERVAL = 900   # 15 minutes — matches the shortest domain interval

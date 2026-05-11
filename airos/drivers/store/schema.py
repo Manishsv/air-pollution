@@ -30,7 +30,7 @@ from pathlib import Path
 # DB location
 # ---------------------------------------------------------------------------
 _HERE = Path(__file__).resolve()
-PROJECT_ROOT = _HERE.parent.parent.parent
+PROJECT_ROOT = _HERE.parents[3]  # airos/drivers/store/schema.py → parents[3] == repo root
 DB_PATH = PROJECT_ROOT / "data" / "h3" / "knowledge.sqlite"
 
 # ---------------------------------------------------------------------------

@@ -68,12 +68,12 @@ logger = logging.getLogger(__name__)
 
 # Path for the change-history audit log (sibling of the registry YAML)
 _DEFAULT_HISTORY_PATH = (
-    Path(__file__).resolve().parent.parent.parent
+    Path(__file__).resolve().parents[3]
     / "data" / "config" / "rules_registry_history.yaml"
 )
 
 _DEFAULT_REGISTRY_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "config" / "rules_registry.yaml"
+    Path(__file__).resolve().parents[3] / "data" / "config" / "rules_registry.yaml"
 )
 
 # ---------------------------------------------------------------------------

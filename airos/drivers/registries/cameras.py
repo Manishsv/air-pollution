@@ -30,7 +30,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # Default path — relative to project root.  Override via CAMERA_REGISTRY env var.
-_DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "config" / "camera_registry.json"
+_DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parents[3] / "data" / "config" / "camera_registry.json"
 
 # Module-level cache
 _registry_df: pd.DataFrame | None = None

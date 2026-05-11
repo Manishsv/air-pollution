@@ -243,7 +243,7 @@ def _run_conformance(
 # Singleton registry (for use by ingestor.py)
 # ---------------------------------------------------------------------------
 
-_REGISTRY_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "config" / "drivers_registry.yaml"
+_REGISTRY_PATH = Path(__file__).resolve().parents[3] / "data" / "config" / "drivers_registry.yaml"
 _active_drivers: dict[str, "H3DataSourceDriver"] | None = None
 
 
