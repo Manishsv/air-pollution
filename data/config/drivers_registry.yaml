@@ -32,70 +32,70 @@ drivers:
   # --------------------------------------------------------------------------
 
   air:
-    builtin_class: urban_platform.h3_knowledge.drivers.air_driver:AirDriver
+    builtin_class: airos.drivers.store.drivers.air_driver:AirDriver
     trust_level: core
     trusted: true
     cadence_hint: "15 minutes"
     notes: "AQICN/CPCB sensor network. Requires AQICN_API_KEY for live data."
 
   fire:
-    builtin_class: urban_platform.h3_knowledge.drivers.fire_driver:FireDriver
+    builtin_class: airos.drivers.store.drivers.fire_driver:FireDriver
     trust_level: core
     trusted: true
     cadence_hint: "15 minutes"
     notes: "MODIS/VIIRS active fire data. No API key required."
 
   heat:
-    builtin_class: urban_platform.h3_knowledge.drivers.heat_driver:HeatDriver
+    builtin_class: airos.drivers.store.drivers.heat_driver:HeatDriver
     trust_level: core
     trusted: true
     cadence_hint: "30 minutes"
     notes: "Sentinel-2 LST + OpenMeteo. Requires GEE credentials for satellite data."
 
   flood:
-    builtin_class: urban_platform.h3_knowledge.drivers.flood_driver:FloodDriver
+    builtin_class: airos.drivers.store.drivers.flood_driver:FloodDriver
     trust_level: core
     trusted: true
     cadence_hint: "1 hour"
     notes: "Sentinel-2 SAR + DEM. Requires GEE credentials."
 
   water:
-    builtin_class: urban_platform.h3_knowledge.drivers.water_driver:WaterDriver
+    builtin_class: airos.drivers.store.drivers.water_driver:WaterDriver
     trust_level: core
     trusted: true
     cadence_hint: "1 hour"
     notes: "Sentinel-2 spectral indices (MNDWI, NDTI, CI, FAI). Requires GEE credentials."
 
   waste:
-    builtin_class: urban_platform.h3_knowledge.drivers.waste_driver:WasteDriver
+    builtin_class: airos.drivers.store.drivers.waste_driver:WasteDriver
     trust_level: core
     trusted: true
     cadence_hint: "1 hour"
     notes: "Sentinel-2 spectral + MODIS fire at known dump sites."
 
   construction:
-    builtin_class: urban_platform.h3_knowledge.drivers.construction_driver:ConstructionDriver
+    builtin_class: airos.drivers.store.drivers.construction_driver:ConstructionDriver
     trust_level: core
     trusted: true
     cadence_hint: "6 hours"
     notes: "Permit API + SAR change detection."
 
   green:
-    builtin_class: urban_platform.h3_knowledge.drivers.green_driver:GreenDriver
+    builtin_class: airos.drivers.store.drivers.green_driver:GreenDriver
     trust_level: core
     trusted: true
     cadence_hint: "6 hours"
     notes: "Sentinel-2 NDVI. Requires GEE credentials for full satellite data."
 
   noise:
-    builtin_class: urban_platform.h3_knowledge.drivers.noise_driver:NoiseDriver
+    builtin_class: airos.drivers.store.drivers.noise_driver:NoiseDriver
     trust_level: core
     trusted: true
     cadence_hint: "6 hours"
     notes: "Noise sensor API. Requires NOISE_API_URL."
 
   crowd:
-    builtin_class: urban_platform.h3_knowledge.drivers.crowd_driver:CrowdDriver
+    builtin_class: airos.drivers.store.drivers.crowd_driver:CrowdDriver
     trust_level: core
     trusted: true
     cadence_hint: "15 minutes"
@@ -106,28 +106,28 @@ drivers:
   # --------------------------------------------------------------------------
 
   weather:
-    builtin_class: urban_platform.h3_knowledge.drivers.weather_driver:WeatherDriver
+    builtin_class: airos.drivers.store.drivers.weather_driver:WeatherDriver
     trust_level: core
     trusted: true
     cadence_hint: "15 minutes"
     notes: "OpenMeteo API. No key required."
 
   buildings:
-    builtin_class: urban_platform.h3_knowledge.drivers.buildings_driver:BuildingsDriver
+    builtin_class: airos.drivers.store.drivers.buildings_driver:BuildingsDriver
     trust_level: core
     trusted: true
     cadence_hint: "90 days"
     notes: "OSM Overpass API. No key required. Quarterly refresh."
 
   roads:
-    builtin_class: urban_platform.h3_knowledge.drivers.roads_driver:RoadsDriver
+    builtin_class: airos.drivers.store.drivers.roads_driver:RoadsDriver
     trust_level: core
     trusted: true
     cadence_hint: "90 days"
     notes: "OSM Overpass API + osmnx. No key required. Quarterly refresh."
 
   drains:
-    builtin_class: urban_platform.h3_knowledge.drivers.drains_driver:DrainsDriver
+    builtin_class: airos.drivers.store.drivers.drains_driver:DrainsDriver
     trust_level: core
     trusted: true
     cadence_hint: "90 days"
