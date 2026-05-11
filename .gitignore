@@ -15,6 +15,7 @@ data/store/
 data/h3/
 data/*.duckdb
 data/*.duckdb.wal
+data/scheduler_status.json
 
 # Local tooling / AI agent runtime state
 .claire/

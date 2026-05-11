@@ -608,7 +608,10 @@ def get_last_ingest(city_id: str, domain: str) -> datetime | None:
         if isinstance(ts, datetime):
             return ts
         try:
-            return datetime.fromisoformat(str(ts))
+            # Python 3.9 fromisoformat does not accept the 'Z' suffix;
+            # normalise it to '+00:00' before parsing.
+            ts_str = str(ts).replace("Z", "+00:00")
+            return datetime.fromisoformat(ts_str)
         except Exception:
             return None
     return None

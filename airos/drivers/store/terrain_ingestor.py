@@ -28,6 +28,8 @@ from typing import Any
 
 import numpy as np
 
+from airos.drivers.connectors.terrain.srtm import fetch_dem_samples  # noqa: E402 — kept here for mockability
+
 logger = logging.getLogger(__name__)
 
 # Threshold fraction of void/void_filled samples above which DATA_CONFIDENCE
@@ -181,7 +183,6 @@ def ingest_terrain(city_id: str, bbox: dict, *, force: bool = False) -> int:
     from airos.drivers.store.ingestor import _check_interval, DEFAULT_H3_RES
     from airos.drivers.store.writer import write_signals, upsert_metadata, record_ingest
     from airos.drivers.store.geo_agg import cells_for_bbox
-    from airos.drivers.connectors.terrain.srtm import fetch_dem_samples
     import h3 as _h3
 
     try:

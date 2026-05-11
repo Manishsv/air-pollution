@@ -1,0 +1,148 @@
+# Declarative maturity checklist for AI dev supervisor (file-existence gates).
+# Run:  airos maturity terrain
+# All required items must be present before the domain is considered production-ready.
+
+domain_id: terrain
+label: Terrain (DEM elevation context)
+
+open_data_first_sequence:
+  - step: domain_spec
+  - step: provider_contract
+  - step: consumer_contract
+  - step: examples
+  - step: connector
+  - step: ingestor
+  - step: driver_class
+  - step: dashboard_panel
+  - step: registry
+  - step: tests
+  - step: checklist
+
+recommended_next_by_stage:
+  tests_green: >-
+    Install srtm.py (`pip install srtm.py`) to enable real SRTM tile downloads
+    and replace the synthetic fallback path in CI.  Consider adding a Copernicus
+    GLO-30 connector tier when ESA credentials are available.
+  agent_classification: >-
+    Train or prompt-tune the H3 Expert Agent to write TERRAIN_CLASS back to
+    h3_signals using ELEVATION_M + SLOPE_DEG + neighbourhood statistics.
+    Add consumer_contract/terrain_classification.v1.schema.json once the
+    agent output schema stabilises.
+
+checklist_groups:
+
+  - id: domain_spec
+    label: Domain specification
+    items:
+      - id: terrain_domain_spec_v1
+        label: Terrain domain spec
+        path: specifications/domain_specs/terrain.v1.yaml
+        required: true
+        category: domain_spec
+
+  - id: provider_contracts
+    label: Provider contracts
+    items:
+      - id: provider_terrain_dem_feed
+        label: DEM elevation samples feed schema
+        path: specifications/provider_contracts/terrain_dem_feed.v1.schema.json
+        required: true
+        category: provider_contract
+
+  - id: consumer_contracts
+    label: Consumer contracts / profiles
+    items:
+      - id: consumer_terrain_signals
+        label: Terrain H3 signals schema (read by agents + dashboard)
+        path: specifications/consumer_contracts/terrain_signals.v1.schema.json
+        required: true
+        category: consumer_contract
+
+  - id: examples
+    label: Example data fixtures
+    items:
+      - id: example_provider_dem_samples
+        label: Provider DEM samples fixture (9 raw pixels, 3 H3 cells)
+        path: specifications/examples/terrain/provider_dem_samples.sample.json
+        required: true
+        category: example
+      - id: example_terrain_signals_dashboard
+        label: Dashboard terrain signals fixture (5 cells, incl. agent-derived class)
+        path: specifications/examples/terrain/terrain_signals_dashboard.sample.json
+        required: true
+        category: example
+
+  - id: connector
+    label: DEM connector
+    items:
+      - id: connector_srtm
+        label: SRTM / Open-Elevation connector (3-tier: API → srtm.py → synthetic)
+        path: airos/drivers/connectors/terrain/srtm.py
+        required: true
+        category: ingestion
+
+  - id: ingestor
+    label: Terrain ingestor
+    items:
+      - id: terrain_ingestor
+        label: Terrain ingestor (H3 aggregation, slope/aspect, ruggedness)
+        path: airos/drivers/store/terrain_ingestor.py
+        required: true
+        category: ingestion
+
+  - id: driver_class
+    label: Driver class
+    items:
+      - id: terrain_driver
+        label: TerrainDriver (_InTreeDriver subclass)
+        path: airos/drivers/store/drivers/terrain_driver.py
+        required: true
+        category: ingestion
+
+  - id: registry
+    label: Driver registry entry
+    items:
+      - id: drivers_registry_terrain_entry
+        label: terrain entry in drivers_registry.yaml
+        path: data/config/drivers_registry.yaml
+        required: true
+        category: config
+        note: >-
+          Verify `terrain:` key exists with trusted=true and correct builtin_class.
+          File presence alone does not confirm the entry — run
+          `airos maturity terrain --deep` or inspect manually.
+
+  - id: dashboard_panel
+    label: Dashboard panel
+    items:
+      - id: terrain_panel
+        label: Terrain Streamlit panel (elevation/slope maps, distributions)
+        path: airos/network/dashboard/components/terrain_panel.py
+        required: true
+        category: dashboard
+      - id: app_terrain_import
+        label: terrain_panel import wired into app.py
+        path: airos/network/dashboard/app.py
+        required: true
+        category: dashboard
+        note: >-
+          File presence alone does not confirm the import.  Verify
+          `render_terrain_panel` appears in `_DOMAIN_PANELS`.
+
+  - id: tests
+    label: Tests
+    items:
+      - id: test_terrain_pipeline
+        label: End-to-end terrain pipeline tests (54 tests)
+        path: tests/test_terrain_pipeline.py
+        required: true
+        category: tests
+
+  - id: checklist
+    label: This checklist
+    items:
+      - id: terrain_checklist
+        label: Terrain domain maturity checklist
+        path: airos/network/cli/ai_dev_supervisor/domain_checklists/terrain.yaml
+        required: true
+        category: meta
