@@ -621,6 +621,235 @@ def get_packets_for_domain(
 
 
 # ---------------------------------------------------------------------------
+# City-level pattern reader (commissioner / strategic view)
+# ---------------------------------------------------------------------------
+
+def get_city_patterns(
+    city_id: str,
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the most recent city-level pattern summaries for *city_id*.
+
+    Each record has:
+        pattern_id, city_id, created_at, lookback_hours,
+        n_insights, theme_count, summary   (parsed JSON dict)
+    """
+    try:
+        df = _store().fetchdf(
+            f"""
+            SELECT pattern_id, city_id, created_at, lookback_hours,
+                   n_insights, theme_count, summary_json
+            FROM city_patterns
+            WHERE city_id = ?
+            ORDER BY created_at DESC
+            LIMIT {int(limit)}
+            """,
+            [city_id],
+        )
+        records = []
+        for row in df.to_dict(orient="records"):
+            if row.get("summary_json"):
+                row["summary"] = _parse_json(row.pop("summary_json"))
+            else:
+                row.pop("summary_json", None)
+                row["summary"] = {}
+            records.append(row)
+        return records
+    except Exception as exc:
+        logger.warning("get_city_patterns failed for %s: %s", city_id, exc)
+        return []
+
+
+def get_city_health_summary(city_id: str) -> dict[str, Any]:
+    """Return a lightweight city-health snapshot used by the Commissioner view.
+
+    Returns
+    -------
+    {
+        "city_id": str,
+        "total_cells": int,
+        "cells_assessed_24h": int,
+        "open_insights": int,
+        "critical_insights": int,       # priority_tier == 'high'
+        "field_tasks_pending": int,     # packets with field_verification_required=1
+        "domain_risk": {domain: worst_risk_level, ...},
+        "latest_pattern_at": str | None,
+        "latest_pattern_themes": int,
+    }
+    """
+    s = _store()
+    out: dict[str, Any] = {
+        "city_id": city_id,
+        "total_cells": 0,
+        "cells_assessed_24h": 0,
+        "open_insights": 0,
+        "critical_insights": 0,
+        "field_tasks_pending": 0,
+        "domain_risk": {},
+        "latest_pattern_at": None,
+        "latest_pattern_themes": 0,
+    }
+    try:
+        row = s.fetchone(
+            "SELECT COUNT(*) FROM h3_metadata WHERE city_id = ?", [city_id]
+        )
+        out["total_cells"] = int(row[0]) if row else 0
+
+        row = s.fetchone(
+            "SELECT COUNT(DISTINCT h3_id) FROM h3_assessments "
+            "WHERE city_id = ? AND assessed_at >= datetime('now', '-1 day')",
+            [city_id],
+        )
+        out["cells_assessed_24h"] = int(row[0]) if row else 0
+
+        row = s.fetchone(
+            "SELECT COUNT(*) FROM h3_insights "
+            "WHERE city_id = ? AND outcome_status = 'open'",
+            [city_id],
+        )
+        out["open_insights"] = int(row[0]) if row else 0
+
+        row = s.fetchone(
+            "SELECT COUNT(*) FROM h3_insights "
+            "WHERE city_id = ? AND outcome_status = 'open' AND priority_tier = 'high'",
+            [city_id],
+        )
+        out["critical_insights"] = int(row[0]) if row else 0
+
+        row = s.fetchone(
+            "SELECT COUNT(*) FROM h3_packets "
+            "WHERE city_id = ? AND field_verification_required = 1 "
+            "AND outcome_status = 'pending'",
+            [city_id],
+        )
+        out["field_tasks_pending"] = int(row[0]) if row else 0
+
+        # Worst risk per domain (from latest assessment per cell)
+        _RISK_ORDER = "CASE risk_level "
+        _RISK_ORDER += "WHEN 'severe' THEN 4 WHEN 'high' THEN 3 "
+        _RISK_ORDER += "WHEN 'moderate' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+        domain_df = s.fetchdf(
+            f"""
+            SELECT domain, risk_level
+            FROM (
+                SELECT domain, risk_level,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY domain
+                           ORDER BY {_RISK_ORDER} DESC, assessed_at DESC
+                       ) AS rn
+                FROM h3_assessments
+                WHERE city_id = ?
+                  AND assessed_at >= datetime('now', '-2 days')
+            ) WHERE rn = 1
+            """,
+            [city_id],
+        )
+        out["domain_risk"] = dict(zip(domain_df["domain"], domain_df["risk_level"]))
+
+        row = s.fetchone(
+            "SELECT created_at, theme_count FROM city_patterns "
+            "WHERE city_id = ? ORDER BY created_at DESC LIMIT 1",
+            [city_id],
+        )
+        if row:
+            out["latest_pattern_at"] = row[0]
+            out["latest_pattern_themes"] = int(row[1]) if row[1] else 0
+
+    except Exception as exc:
+        logger.warning("get_city_health_summary failed for %s: %s", city_id, exc)
+    return out
+
+
+def get_ward_domain_risk(
+    city_id: str,
+    domain: str,
+    *,
+    top_n: int = 20,
+) -> pd.DataFrame:
+    """Return top-N highest-risk H3 cells for a domain, for the Dept-Head view.
+
+    Columns: h3_id, area_name, risk_level, primary_value, dominant_issue,
+             assessed_at, centroid_lat, centroid_lon
+    """
+    s = _store()
+    _RISK_ORDER = (
+        "CASE a.risk_level "
+        "WHEN 'severe' THEN 4 WHEN 'high' THEN 3 "
+        "WHEN 'moderate' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+    )
+    df = s.fetchdf(
+        f"""
+        SELECT a.h3_id,
+               COALESCE(m.area_name, a.h3_id) AS area_name,
+               a.risk_level,
+               a.primary_value,
+               a.dominant_issue,
+               a.assessed_at,
+               m.centroid_lat,
+               m.centroid_lon
+        FROM (
+            SELECT h3_id, city_id, domain, risk_level, primary_value,
+                   dominant_issue, assessed_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY h3_id
+                       ORDER BY assessed_at DESC
+                   ) AS rn
+            FROM h3_assessments
+            WHERE city_id = ? AND domain = ?
+              AND assessed_at >= datetime('now', '-2 days')
+        ) a
+        LEFT JOIN h3_metadata m ON m.h3_id = a.h3_id AND m.city_id = ?
+        WHERE a.rn = 1
+        ORDER BY {_RISK_ORDER} DESC, a.assessed_at DESC
+        LIMIT {int(top_n)}
+        """,
+        [city_id, domain, city_id],
+    )
+    return df
+
+
+def get_field_tasks(
+    city_id: str,
+    *,
+    limit: int = 50,
+) -> pd.DataFrame:
+    """Return pending field-verification packets for the Ward Officer view.
+
+    Columns: packet_id, h3_id, domain, risk_level, created_at,
+             area_name, centroid_lat, centroid_lon, dominant_issue
+    """
+    s = _store()
+    df = s.fetchdf(
+        f"""
+        SELECT p.packet_id,
+               p.h3_id,
+               p.domain,
+               p.risk_level,
+               p.created_at,
+               p.confidence_score,
+               COALESCE(m.area_name, p.h3_id) AS area_name,
+               m.centroid_lat,
+               m.centroid_lon
+        FROM h3_packets p
+        LEFT JOIN h3_metadata m ON m.h3_id = p.h3_id AND m.city_id = p.city_id
+        WHERE p.city_id = ?
+          AND p.field_verification_required = 1
+          AND p.outcome_status = 'pending'
+        ORDER BY
+            CASE p.risk_level
+                WHEN 'severe' THEN 4 WHEN 'high' THEN 3
+                WHEN 'moderate' THEN 2 WHEN 'low' THEN 1 ELSE 0
+            END DESC,
+            p.created_at DESC
+        LIMIT {int(limit)}
+        """,
+        [city_id],
+    )
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Store health
 # ---------------------------------------------------------------------------
 

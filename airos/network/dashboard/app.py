@@ -22,6 +22,9 @@ import streamlit as st
 
 from airos.os.sdk.client import UrbanPlatformClient
 
+# ── Stakeholder overview ──────────────────────────────────────────────────
+from airos.network.dashboard.components.overview_panel import render_overview_panel
+
 # ── Primary views ─────────────────────────────────────────────────────────
 from airos.network.dashboard.components.inbox_panel import render_inbox_panel
 from airos.network.dashboard.components.map_panel import render_map_panel
@@ -282,13 +285,18 @@ def main():
         unsafe_allow_html=True,
     )
 
-    t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
+    t_overview, t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
+        "🏙️ Overview",
         "📬 Inbox",
         "🗺️ City Map",
         "🔬 Raw Data",
         "📊 Domains",
         "🔧 Operations",
     ])
+
+    # ── Overview (stakeholder views) ──────────────────────────────────────
+    with t_overview:
+        render_overview_panel()
 
     # ── Inbox ─────────────────────────────────────────────────────────────
     with t_inbox:
