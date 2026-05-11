@@ -90,6 +90,8 @@ ALL_DOMAINS = [
     "buildings", "roads", "drains", "crowd",
     # Terrain — DEM-derived static context (quarterly cadence)
     "terrain",
+    # Night Lights — VIIRS monthly composite (30-day cadence)
+    "nightlights",
 ]
 
 # Siting is computed separately from regular domain ingest — monthly cadence.
@@ -118,6 +120,8 @@ _DOMAIN_INTERVAL: dict[str, timedelta] = {
     "crowd":        timedelta(minutes=15),
     # Terrain: DEM static context — refresh quarterly (effectively static)
     "terrain":      timedelta(days=90),
+    # Night Lights: VIIRS monthly composite — refresh monthly
+    "nightlights":  timedelta(days=30),
 }
 
 DEFAULT_H3_RES = 8
@@ -799,7 +803,7 @@ def run_siting_batch(
     cities  = cities  or ALL_CITIES
     # Exclude structural/context domains that produce no h3_assessments rows.
     # "crowd" IS included — gathering alerts write assessments (risk_level="high").
-    _NO_ASSESSMENT_DOMAINS = {"weather", "buildings", "roads", "drains", "terrain"}
+    _NO_ASSESSMENT_DOMAINS = {"weather", "buildings", "roads", "drains", "terrain", "nightlights"}
     domains = domains or [d for d in ALL_DOMAINS if d not in _NO_ASSESSMENT_DOMAINS]
 
     results: dict[str, dict[str, int]] = {}
@@ -870,6 +874,11 @@ def _ingest_terrain(city_id: str, bbox: dict, *, force: bool = False) -> int:
     return ingest_terrain(city_id, bbox, force=force)
 
 
+def _ingest_nightlights(city_id: str, bbox: dict, *, force: bool = False) -> int:
+    from airos.drivers.store.nightlights_ingestor import ingest_nightlights
+    return ingest_nightlights(city_id, bbox, force=force)
+
+
 _DOMAIN_FN: dict[str, Callable] = {
     "air":          _ingest_air,
     "water":        _ingest_water,
@@ -888,6 +897,8 @@ _DOMAIN_FN: dict[str, Callable] = {
     "crowd":        _ingest_crowd,
     # Terrain (DEM static context)
     "terrain":      _ingest_terrain,
+    # Night Lights (VIIRS monthly composite)
+    "nightlights":  _ingest_nightlights,
 }
 
 

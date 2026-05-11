@@ -1,0 +1,148 @@
+# Declarative maturity checklist for AI dev supervisor (file-existence gates).
+# Run:  airos maturity nightlights
+# All required items must be present before the domain is considered production-ready.
+
+domain_id: nightlights
+label: Night Lights (VIIRS NTL monthly composite)
+
+open_data_first_sequence:
+  - step: domain_spec
+  - step: provider_contract
+  - step: consumer_contract
+  - step: examples
+  - step: connector
+  - step: ingestor
+  - step: driver_class
+  - step: dashboard_panel
+  - step: registry
+  - step: tests
+  - step: checklist
+
+recommended_next_by_stage:
+  tests_green: >-
+    Set EARTHDATA_TOKEN (free NASA Earthdata account at urs.earthdata.nasa.gov) to
+    enable real NASA Black Marble VNP46A2 VIIRS tile downloads and replace the
+    synthetic fallback path in CI.  Consider implementing the EOG VIIRS GeoTIFF
+    connector tier when the NASA tier is stable.
+  production_ready: >-
+    Add temporal NTL change signals (month-over-month delta radiance) as a
+    first-class domain signal to detect new development zones and informal
+    industrial activity emergence.  Consider NTL_CHANGE_DELTA as a new signal.
+
+checklist_groups:
+
+  - id: domain_spec
+    label: Domain specification
+    items:
+      - id: nightlights_domain_spec_v1
+        label: Night lights domain spec
+        path: specifications/domain_specs/nightlights.v1.yaml
+        required: true
+        category: domain_spec
+
+  - id: provider_contracts
+    label: Provider contracts
+    items:
+      - id: provider_nightlights_ntl_feed
+        label: VIIRS NTL samples feed schema
+        path: specifications/provider_contracts/nightlights_ntl_feed.v1.schema.json
+        required: true
+        category: provider_contract
+
+  - id: consumer_contracts
+    label: Consumer contracts / profiles
+    items:
+      - id: consumer_nightlights_signals
+        label: Night lights H3 signals schema (read by agents + dashboard)
+        path: specifications/consumer_contracts/nightlights_signals.v1.schema.json
+        required: true
+        category: consumer_contract
+
+  - id: examples
+    label: Example data fixtures
+    items:
+      - id: example_provider_ntl_samples
+        label: Provider NTL samples fixture (6 raw points, all 4 quality flags)
+        path: specifications/examples/nightlights/provider_ntl_samples.sample.json
+        required: true
+        category: example
+      - id: example_nightlights_signals_dashboard
+        label: Dashboard night lights signals fixture (3 cells, all 5 signals)
+        path: specifications/examples/nightlights/nightlights_signals_dashboard.sample.json
+        required: true
+        category: example
+
+  - id: connector
+    label: VIIRS NTL connector
+    items:
+      - id: connector_viirs
+        label: VIIRS connector (3-tier: NASA Black Marble → EOG composite → synthetic)
+        path: airos/drivers/connectors/nightlights/viirs.py
+        required: true
+        category: ingestion
+
+  - id: ingestor
+    label: Night lights ingestor
+    items:
+      - id: nightlights_ingestor
+        label: Night lights ingestor (H3 aggregation, EAI, activity classification)
+        path: airos/drivers/store/nightlights_ingestor.py
+        required: true
+        category: ingestion
+
+  - id: driver_class
+    label: Driver class
+    items:
+      - id: nightlights_driver
+        label: NightLightsDriver (_InTreeDriver subclass)
+        path: airos/drivers/store/drivers/nightlights_driver.py
+        required: true
+        category: ingestion
+
+  - id: registry
+    label: Driver registry entry
+    items:
+      - id: drivers_registry_nightlights_entry
+        label: nightlights entry in drivers_registry.yaml
+        path: data/config/drivers_registry.yaml
+        required: true
+        category: config
+        note: >-
+          Verify `nightlights:` key exists with trusted=true and correct builtin_class.
+          File presence alone does not confirm the entry — run
+          `airos maturity nightlights --deep` or inspect manually.
+
+  - id: dashboard_panel
+    label: Dashboard panel
+    items:
+      - id: nightlights_panel
+        label: Night lights Streamlit panel (radiance/activity maps, distributions)
+        path: airos/network/dashboard/components/nightlights_panel.py
+        required: true
+        category: dashboard
+      - id: app_nightlights_import
+        label: nightlights_panel import wired into app.py
+        path: airos/network/dashboard/app.py
+        required: true
+        category: dashboard
+        note: >-
+          File presence alone does not confirm the import.  Verify
+          `render_nightlights_panel` appears in `_DOMAIN_PANELS`.
+
+  - id: tests
+    label: Tests
+    items:
+      - id: test_nightlights_pipeline
+        label: End-to-end night lights pipeline tests
+        path: tests/test_nightlights_pipeline.py
+        required: true
+        category: tests
+
+  - id: checklist
+    label: This checklist
+    items:
+      - id: nightlights_checklist
+        label: Night lights domain maturity checklist
+        path: airos/network/cli/ai_dev_supervisor/domain_checklists/nightlights.yaml
+        required: true
+        category: meta

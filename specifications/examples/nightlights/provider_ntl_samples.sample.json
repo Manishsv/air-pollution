@@ -1,0 +1,114 @@
+{
+  "_comment": "Provider contract example — nightlights_ntl_feed.v1. Raw VIIRS NTL point samples for a Bangalore bbox, as the ingestor receives them before H3 aggregation. Six samples across 2 H3 cells illustrate all four quality_flag values (ok, cloud_contaminated, void_filled, no_data) as well as both real and synthetic provenance.",
+
+  "provider_id": "nasa_black_marble",
+  "source_name": "NASA Black Marble VNP46A2",
+  "source_type": "viirs_hdf5",
+
+  "bbox": {
+    "lat_min": 12.87,
+    "lat_max": 13.08,
+    "lon_min": 77.47,
+    "lon_max": 77.70
+  },
+
+  "samples": [
+    {
+      "_comment": "Cell 8860145b39fffff — Central Bangalore CBD. High radiance (commercial core), clean data.",
+      "lat": 12.9998,
+      "lon": 77.5601,
+      "radiance_nw": 31.4,
+      "lit_fraction": 0.87,
+      "quality_flag": "ok",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_0832_1471",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "_comment": "Central Bangalore — second pixel, still clean.",
+      "lat": 13.0004,
+      "lon": 77.5609,
+      "radiance_nw": 28.7,
+      "lit_fraction": 0.82,
+      "quality_flag": "ok",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_0833_1471",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "_comment": "Central Bangalore — cloud-contaminated pixel; confidence reduced to 0.65.",
+      "lat": 13.0011,
+      "lon": 77.5618,
+      "radiance_nw": 25.1,
+      "lit_fraction": 0.71,
+      "quality_flag": "cloud_contaminated",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_0834_1472",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+
+    {
+      "_comment": "Cell 8860145a1bfffff — Peri-urban Bangalore / Kengeri. Low radiance (residential fringe).",
+      "lat": 12.9258,
+      "lon": 77.5172,
+      "radiance_nw": 5.2,
+      "lit_fraction": 0.41,
+      "quality_flag": "ok",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_1104_1398",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "_comment": "Peri-urban — gap-filled pixel (cloud cover for the whole month).",
+      "lat": 12.9265,
+      "lon": 77.5181,
+      "radiance_nw": 4.8,
+      "lit_fraction": 0.38,
+      "quality_flag": "void_filled",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_1105_1399",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "_comment": "Peri-urban — no-data pixel (missing observations for composite period).",
+      "lat": 12.9271,
+      "lon": 77.5189,
+      "radiance_nw": null,
+      "lit_fraction": null,
+      "quality_flag": "no_data",
+      "source_record_id": "VNP46A2_h25v07_2025-12_px_1106_1400",
+      "provenance": {
+        "source_id": "nasa_black_marble_vnp46a2",
+        "source_type": "viirs_hdf5",
+        "license": "NASA Earthdata — open access with attribution",
+        "collected_at": "2025-12-01T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+domain_id: nightlights
+version: v1
+status: draft
+
+purpose: >
+  Provide VIIRS night-time light (NTL) context — raw radiance, lit fraction,
+  city-relative economic activity index, and data confidence — per H3 cell across
+  each monitored city.  Night-time light is a structural-context domain: it does not
+  produce risk assessments or decision packets of its own, but it is consumed as
+  spatial substrate by Air Quality, Heat, Construction, and Waste domain agents when
+  reasoning about urbanisation intensity and economic activity.  High NTL radiance
+  indicates dense artificial lighting, closely correlated with energy use, traffic
+  density, commercial activity, and fine-particulate emission sources.
+
+produces_assessments: false
+cadence_hint: "30 days"   # monthly VIIRS composites; NASA Black Marble VNP46A2
+
+target_actors:
+  - h3_expert_agent           # reads NTL signals as urbanisation context
+  - city_pattern_agent        # reads NTL for cross-domain pattern analysis
+  - air_quality_domain_agent  # industrial NTL cells → higher PM2.5 prior
+  - heat_domain_agent         # high-NTL commercial areas retain heat at night
+  - construction_domain_agent # NTL change over time flags new development zones
+  - waste_domain_agent        # dark industrial areas at night may indicate informal dumps
+
+supported_decisions:
+  - decision_id: contextualise_air_quality_by_nightlights
+    description: >
+      Adjust air quality priors for cells based on ACTIVITY_CLASS.  Industrial cells
+      receive a higher PM2.5 base-rate; dark rural cells receive a lower prior.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: contextualise_heat_risk_by_nightlights
+    description: >
+      Night-time light intensity correlates with anthropogenic heat emission from traffic
+      and commercial activity.  High-NTL cells are weighted higher in urban heat island
+      assessments.
+    decision_scope: grid_cell
+    operational_risk: low
+  - decision_id: flag_economic_activity_for_reporting
+    description: >
+      Surface H3 cells with high ECONOMIC_ACTIVITY_INDEX for programme reporting on
+      spatial distribution of urban economic intensity.
+    decision_scope: grid_cell
+    operational_risk: low
+
+canonical_entities:
+  - entity_type: h3_cell
+    description: H3 resolution-8 hexagonal cell (~0.74 km²) with night-time light attributes.
+    examples: [8828830a07fffff, 882883a6d5fffff]
+
+data_source_policy: >
+  Primary source: NASA Black Marble VNP46A2 (VIIRS DNB monthly composite, 500 m).
+  Requires a free Earthdata account (EARTHDATA_TOKEN).
+  Secondary source: EOG VIIRS monthly composite (no auth, coarser).
+  Tertiary/test source: synthetic radiance estimates derived from published literature
+  values for Indian cities, with spatial variation.  Synthetic data sets DATA_CONFIDENCE=0.0
+  and must not be used for any operational recommendation.
+
+observations:
+  - observed_property: ntl_radiance
+    description: >
+      Mean VIIRS Day/Night Band radiance within the H3 cell in nW/cm²/sr.
+      0 = completely dark; ~60 = saturated bright urban core.
+    typical_sources: [nasa_black_marble_vnp46a2, eog_viirs_monthly]
+    required_provenance_fields: [source_id, source_type, collected_at, ingested_at]
+  - observed_property: ntl_lit_fraction
+    description: >
+      Fraction of sub-pixels within the H3 cell with radiance above the 0.3 nW/cm²/sr
+      lit-surface threshold (0=all dark, 1=all lit).
+    typical_sources: [nasa_black_marble_vnp46a2]
+    required_provenance_fields: [source_id, collected_at]
+  - observed_property: economic_activity_index
+    description: >
+      City-relative normalised radiance (0–1).  Computed as NTL_RADIANCE / saturation_value
+      where saturation_value = 60.0 nW/cm²/sr, capped at 1.0.
+    typical_sources: [derived_from_ntl_radiance]
+  - observed_property: data_confidence
+    description: >
+      Confidence in the NTL signals for this cell.  0.90 = real VIIRS; 0.65 = cloud-
+      contaminated or gap-filled; 0.0 = synthetic.
+    typical_sources: [derived_from_quality_flag]
+  - observed_property: activity_class
+    description: >
+      Rule-based activity classification per cell: dark, residential, commercial, industrial.
+      Written at the end of ingest (same pass as terrain's TERRAIN_CLASS).
+      Based on NTL_RADIANCE thresholds (not city-relative percentiles).
+    typical_sources: [derived_from_ntl_radiance]
+
+features:
+  - feature_id: urban_intensity
+    description: >
+      Combines NTL_RADIANCE and ACTIVITY_CLASS to characterise the urban land-use
+      intensity of a cell — useful as a prior for emission estimates and heat sources.
+    inputs: [ntl_radiance, activity_class]
+  - feature_id: economic_activity_gradient
+    description: >
+      Spatial gradient of ECONOMIC_ACTIVITY_INDEX across neighbouring cells — steep
+      gradients indicate sharp land-use transitions (e.g. industrial edge next to residential).
+    inputs: [economic_activity_index]
+
+allowed_variables:
+  - variable: NTL_RADIANCE
+    description: Mean VIIRS Day/Night Band radiance in nW/cm²/sr.
+    type: number
+    unit: nW/cm²/sr
+    value_range: 0..200
+    allowed_values: []
+    notes: Values above 60 indicate saturation-level urban cores (city centres, airports).
+
+  - variable: NTL_LIT_FRACTION
+    description: Fraction of sub-pixels above 0.3 nW/cm²/sr threshold (0–1).
+    type: number
+    unit: ratio
+    value_range: 0..1
+    allowed_values: []
+
+  - variable: ECONOMIC_ACTIVITY_INDEX
+    description: Normalised radiance capped at 1.0 (NTL_RADIANCE / 60.0).
+    type: number
+    unit: index
+    value_range: 0..1
+    allowed_values: []
+
+  - variable: DATA_CONFIDENCE
+    description: Confidence in NTL signals for this cell (0–1).
+    type: number
+    unit: ratio
+    value_range: 0..1
+    allowed_values: []
+    notes: >
+      0.90 real VIIRS, 0.65 cloud-contaminated or gap-filled, 0.0 synthetic.
+
+  - variable: ACTIVITY_CLASS
+    description: >
+      Rule-based activity classification.  Stored as integer ordinal (0–3);
+      decode with ACTIVITY_CLASS_LABELS: 0=dark, 1=residential, 2=commercial, 3=industrial.
+    type: enum
+    unit: none
+    value_range: null
+    allowed_values: [dark, residential, commercial, industrial]
+    notes: >
+      Thresholds: dark < 1.0 nW, residential 1–10 nW, commercial 10–35 nW, industrial > 35 nW.
+
+units:
+  - unit: "nW/cm²/sr"
+    symbol: nW
+    description: Nano-watts per square centimetre per steradian — VIIRS radiance unit.
+  - unit: ratio
+    symbol: ""
+    description: Dimensionless ratio between 0 and 1.
+  - unit: index
+    symbol: ""
+    description: Dimensionless normalised index between 0 and 1.
+  - unit: none
+    symbol: ""
+    description: Unitless categorical value.
+
+thresholds_or_categories:
+  - id: activity_class_definitions
+    variable: ACTIVITY_CLASS
+    type: categories
+    definition: >
+      Absolute NTL_RADIANCE thresholds (nW/cm²/sr).  Unlike terrain classification,
+      these are not city-relative — they are based on published VIIRS literature
+      calibration for Indian urban environments.
+    levels:
+      - level: dark
+        criteria: NTL_RADIANCE < 1.0
+        severity: low
+      - level: residential
+        criteria: NTL_RADIANCE >= 1.0 AND < 10.0
+        severity: low
+      - level: commercial
+        criteria: NTL_RADIANCE >= 10.0 AND < 35.0
+        severity: medium
+      - level: industrial
+        criteria: NTL_RADIANCE >= 35.0
+        severity: high
+
+safety_gates:
+  - gate_id: block_nightlights_as_sole_risk_basis
+    description: >
+      Night-time light signals are structural context only.  They must not be used
+      as the sole basis for operational risk recommendations, alerts, or enforcement
+      actions.  Any recommendation citing NTL signals must also include at least one
+      dynamic signal from a risk domain (e.g. air quality, heat, waste).
+    when_to_block: operational_risk_recommendations, public_advisories, enforcement
+    required_evidence: [at_least_one_dynamic_domain_signal_co_cited]
+    override_policy: human_approval_only
+
+  - gate_id: block_synthetic_ntl_for_operational_use
+    description: >
+      Cells with DATA_CONFIDENCE = 0.0 (synthetic fallback) must not be used for
+      any operational recommendation.
+    when_to_block: all_operational_use
+    required_evidence: [real_or_cloud_corrected_viirs_data]
+    override_policy: human_approval_only
+
+provenance_requirements:
+  required_fields:
+    - source_id
+    - source_type
+    - collected_at
+    - ingested_at
+  synthetic_data_policy:
+    allowed_for: [demo_only, testing]
+    must_be_flagged: true
+    operational_use: prohibited
+
+blocked_uses:
+  - using_nightlights_signals_as_sole_basis_for_any_operational_recommendation
+  - using_synthetic_ntl_cells_for_any_operational_use
+  - treating_activity_class_as_a_live_or_dynamic_signal
+
+open_questions:
+  - Should ECONOMIC_ACTIVITY_INDEX use a city-specific saturation value rather than 60 nW?
+  - Is H3 resolution 8 the right scale for NTL aggregation (VIIRS pixel is ~500 m)?
+  - Should NTL temporal change (month-over-month delta) be a first-class signal?
+
+decisions_made:
+  - decision: Use saturation_value=60.0 nW/cm²/sr for ECONOMIC_ACTIVITY_INDEX normalisation.
+    rationale: >
+      60 nW/cm²/sr corresponds to dense commercial core areas in major Indian cities
+      (published VIIRS-India calibration studies). Values above this are uncommon but
+      capped at 1.0 to avoid out-of-range indices.
+    date: 2026-05-11
+  - decision: ACTIVITY_CLASS written by ingestor (not agent-derived), same as TERRAIN_CLASS.
+    rationale: >
+      NTL activity classification uses absolute thresholds (not city-relative percentiles),
+      so it can be computed deterministically by the ingestor immediately after radiance
+      signals are written.  No city-wide context accumulation is needed.
+    date: 2026-05-11

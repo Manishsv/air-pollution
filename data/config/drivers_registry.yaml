@@ -140,6 +140,13 @@ drivers:
     cadence_hint: "90 days"
     notes: "SRTM 30m / Copernicus DEM. No API key required. Quarterly refresh. Signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG, RUGGEDNESS_INDEX, DATA_CONFIDENCE. TERRAIN_CLASS is agent-derived."
 
+  nightlights:
+    builtin_class: airos.drivers.store.drivers.nightlights_driver:NightLightsDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "30 days"
+    notes: "VIIRS night-time light (NASA Black Marble VNP46A2). No key required for synthetic mode. Set EARTHDATA_TOKEN for real VIIRS data. Signals: NTL_RADIANCE, NTL_LIT_FRACTION, ECONOMIC_ACTIVITY_INDEX, DATA_CONFIDENCE, ACTIVITY_CLASS."
+
   # --------------------------------------------------------------------------
   # Example third-party driver (commented out — shows the format)
   # --------------------------------------------------------------------------

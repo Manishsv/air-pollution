@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/consumer/v1/nightlights_signals",
+  "title": "Consumer contract: nightlights signals per H3 cell (v1)",
+  "description": "Night-time light context signals read from the H3 knowledge store by domain agents and the dashboard. Ingestor-written signals: NTL_RADIANCE, NTL_LIT_FRACTION, ECONOMIC_ACTIVITY_INDEX, DATA_CONFIDENCE, ACTIVITY_CLASS. Consumers must never use nightlights signals as the sole basis for operational recommendations — they are structural context only.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["city_id", "generated_at", "cells", "provenance_summary", "data_quality_summary"],
+  "properties": {
+
+    "city_id": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "generated_at": {
+      "type": "string",
+      "description": "ISO-8601 datetime when this payload was assembled."
+    },
+
+    "cells": {
+      "type": "array",
+      "description": "One entry per H3 cell that has nightlights signals in the store.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["h3_id", "signals"],
+        "properties": {
+
+          "h3_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "H3 cell index at resolution 8."
+          },
+
+          "signals": {
+            "type": "object",
+            "description": "Signal values keyed by signal name.",
+            "additionalProperties": true,
+            "properties": {
+
+              "NTL_RADIANCE": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "description": "Mean VIIRS Day/Night Band radiance in nW/cm²/sr."
+              },
+
+              "NTL_LIT_FRACTION": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Fraction of sub-pixels above 0.3 nW/cm²/sr threshold (0–1)."
+              },
+
+              "ECONOMIC_ACTIVITY_INDEX": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Normalised radiance index (NTL_RADIANCE / 60.0, capped at 1.0)."
+              },
+
+              "DATA_CONFIDENCE": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+                "description": "NTL data confidence. 0.90 = real VIIRS, 0.65 = cloud/gap-filled, 0.0 = synthetic."
+              },
+
+              "ACTIVITY_CLASS": {
+                "type": ["number", "null"],
+                "description": "Activity class stored as integer ordinal (0=dark, 1=residential, 2=commercial, 3=industrial). Decode with ACTIVITY_CLASS_LABELS."
+              }
+            }
+          },
+
+          "last_ingested_at": {
+            "type": "string",
+            "description": "ISO-8601 datetime of last ingest for this cell."
+          }
+        }
+      }
+    },
+
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "City-level nightlights summary statistics for dashboard display.",
+      "properties": {
+        "total_cells":            { "type": "integer" },
+        "lit_cells":              { "type": "integer", "description": "Cells with NTL_LIT_FRACTION > 0.5." },
+        "mean_radiance_nw":       { "type": "number" },
+        "max_radiance_nw":        { "type": "number" },
+        "industrial_cells":       { "type": "integer", "description": "Cells with ACTIVITY_CLASS = 3 (industrial)." },
+        "activity_class_distribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        }
+      }
+    },
+
+    "provenance_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sources", "synthetic_used"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "synthetic_used": {
+          "type": "boolean",
+          "description": "True if any synthetic NTL data is present. Must trigger a warning in any dashboard consumer."
+        }
+      }
+    },
+
+    "data_quality_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["synthetic_data_used", "confidence_note"],
+      "properties": {
+        "synthetic_data_used": { "type": "boolean" },
+        "confidence_note":     { "type": "string" },
+        "cloud_contamination_notice": {
+          "type": ["string", "null"],
+          "description": "Non-null when cloud-contaminated cells are present."
+        }
+      }
+    }
+  }
+}

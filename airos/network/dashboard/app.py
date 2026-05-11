@@ -42,6 +42,7 @@ from airos.network.dashboard.components.noise_panel import render_noise_panel
 
 # ── Infrastructure, ward, programme panels ────────────────────────────────
 from airos.network.dashboard.components.terrain_panel import render_terrain_panel
+from airos.network.dashboard.components.nightlights_panel import render_nightlights_panel
 from airos.network.dashboard.components.infrastructure_panel import render_infrastructure_panel
 from airos.network.dashboard.components.ward_panel import render_ward_panel
 from airos.network.dashboard.components.ward_decisions_panel import render_ward_decisions_panel
@@ -328,6 +329,7 @@ def main():
             "🌿 Green Cover":       render_green_panel,
             "🔊 Noise":             render_noise_panel,
             "🏔️ Terrain":            render_terrain_panel,
+            "💡 Night Lights":       render_nightlights_panel,
             "🏙️ Infrastructure":    render_infrastructure_panel,
             "🏘️ Ward QoL":          render_ward_panel,
             "📋 Ward Decisions":    render_ward_decisions_panel,

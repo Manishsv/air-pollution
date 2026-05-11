@@ -1,0 +1,70 @@
+{
+  "_comment": "Consumer contract example — nightlights_signals.v1. Post-ingest H3 cell signals as the dashboard would read them from the H3 knowledge store. 3 cells representing a commercial core, a residential fringe, and a dark rural edge. All 5 signals present per cell.",
+
+  "city_id": "bangalore",
+  "generated_at": "2026-05-11T09:30:00Z",
+
+  "cells": [
+    {
+      "_comment": "Commercial core — Central Bangalore CBD. High radiance, activity_class=2 (commercial).",
+      "h3_id": "8860145b39fffff",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "signals": {
+        "NTL_RADIANCE":           28.4,
+        "NTL_LIT_FRACTION":       0.83,
+        "ECONOMIC_ACTIVITY_INDEX": 0.47,
+        "DATA_CONFIDENCE":        0.65,
+        "ACTIVITY_CLASS":         2.0
+      }
+    },
+    {
+      "_comment": "Residential fringe — Peri-urban Bangalore / Kengeri. Low-medium radiance, activity_class=1 (residential).",
+      "h3_id": "8860145a1bfffff",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "signals": {
+        "NTL_RADIANCE":           5.0,
+        "NTL_LIT_FRACTION":       0.40,
+        "ECONOMIC_ACTIVITY_INDEX": 0.083,
+        "DATA_CONFIDENCE":        0.65,
+        "ACTIVITY_CLASS":         1.0
+      }
+    },
+    {
+      "_comment": "Dark rural edge — outer bbox. Near-zero radiance, activity_class=0 (dark).",
+      "h3_id": "8860169651fffff",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "signals": {
+        "NTL_RADIANCE":           0.3,
+        "NTL_LIT_FRACTION":       0.05,
+        "ECONOMIC_ACTIVITY_INDEX": 0.005,
+        "DATA_CONFIDENCE":        0.90,
+        "ACTIVITY_CLASS":         0.0
+      }
+    }
+  ],
+
+  "summary": {
+    "total_cells": 3,
+    "lit_cells": 1,
+    "mean_radiance_nw": 11.23,
+    "max_radiance_nw": 28.4,
+    "industrial_cells": 0,
+    "activity_class_distribution": {
+      "dark": 1,
+      "residential": 1,
+      "commercial": 1,
+      "industrial": 0
+    }
+  },
+
+  "provenance_summary": {
+    "sources": ["nasa_black_marble_vnp46a2"],
+    "synthetic_used": false
+  },
+
+  "data_quality_summary": {
+    "synthetic_data_used": false,
+    "confidence_note": "2 cells are cloud-contaminated (DATA_CONFIDENCE=0.65). 1 cell has full real VIIRS coverage.",
+    "cloud_contamination_notice": "2 cells in view have reduced confidence due to cloud cover during the composite period."
+  }
+}

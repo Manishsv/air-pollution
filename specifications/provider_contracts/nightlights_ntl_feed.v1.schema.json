@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urban-platform.local/spec/provider/v1/nightlights_ntl_feed",
+  "title": "Provider contract: nightlights NTL feed (v1)",
+  "description": "VIIRS night-time light point samples covering a city bounding box, sourced from NASA Black Marble VNP46A2, EOG VIIRS monthly composites, or a synthetic fallback. Each record is one sampled NTL point with its lat/lon, radiance in nW/cm²/sr, lit fraction, and provenance. The ingestor aggregates these points to H3 cells and derives ECONOMIC_ACTIVITY_INDEX, DATA_CONFIDENCE, and ACTIVITY_CLASS.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider_id", "source_name", "source_type", "bbox", "samples"],
+  "properties": {
+
+    "provider_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for the data provider (e.g. 'nasa_black_marble', 'eog_viirs_monthly', 'synthetic_fallback')."
+    },
+
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable source name (e.g. 'NASA Black Marble VNP46A2', 'EOG VIIRS Monthly Composite')."
+    },
+
+    "source_type": {
+      "type": "string",
+      "enum": ["viirs_hdf5", "viirs_geotiff", "viirs_api", "synthetic"],
+      "description": "How the NTL data was acquired."
+    },
+
+    "bbox": {
+      "type": "object",
+      "description": "Bounding box for which NTL samples were collected.",
+      "required": ["lat_min", "lat_max", "lon_min", "lon_max"],
+      "additionalProperties": false,
+      "properties": {
+        "lat_min": { "type": "number", "minimum": -90,  "maximum": 90  },
+        "lat_max": { "type": "number", "minimum": -90,  "maximum": 90  },
+        "lon_min": { "type": "number", "minimum": -180, "maximum": 180 },
+        "lon_max": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array of individual NTL point samples covering the bbox.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["lat", "lon", "radiance_nw", "quality_flag"],
+        "properties": {
+
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "description": "Latitude of the sample point in decimal degrees (WGS84)."
+          },
+
+          "lon": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "description": "Longitude of the sample point in decimal degrees (WGS84)."
+          },
+
+          "radiance_nw": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "VIIRS Day/Night Band radiance in nW/cm²/sr. Null indicates no-data."
+          },
+
+          "lit_fraction": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Fraction of sub-pixels above the 0.3 nW/cm²/sr lit threshold (0–1). Optional."
+          },
+
+          "quality_flag": {
+            "type": "string",
+            "enum": ["ok", "cloud_contaminated", "void_filled", "no_data"],
+            "description": "Data quality at this sample point. 'void_filled' means gap-filled; 'cloud_contaminated' means cloud cover reduced quality."
+          },
+
+          "source_record_id": {
+            "type": "string",
+            "description": "Optional tile or pixel identifier from the source dataset for traceability."
+          },
+
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["source_id", "collected_at", "ingested_at"],
+            "properties": {
+              "source_id":    { "type": "string" },
+              "source_type":  { "type": "string" },
+              "license":      { "type": "string" },
+              "collected_at": { "type": "string", "description": "ISO-8601 acquisition or composite period start date." },
+              "ingested_at":  { "type": "string", "description": "ISO-8601 datetime when AirOS ingested this record." }
+            }
+          }
+        }
+      }
+    }
+  }
+}
