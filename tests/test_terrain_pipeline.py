@@ -313,10 +313,10 @@ class TestIngestTerrainEndToEnd:
         assert isinstance(rows_written, int)
         assert rows_written > 0
 
-    def test_five_signals_per_cell(self, rows_written):
-        """Each cell gets exactly 5 signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG,
-        RUGGEDNESS_INDEX, DATA_CONFIDENCE."""
-        assert rows_written % 5 == 0
+    def test_six_signals_per_cell(self, rows_written):
+        """Each cell gets exactly 6 signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG,
+        RUGGEDNESS_INDEX, DATA_CONFIDENCE, TERRAIN_CLASS."""
+        assert rows_written % 6 == 0
 
     def test_signals_readable_from_store(self, rows_written):
         from airos.drivers.store.store import H3KnowledgeStore
@@ -332,8 +332,8 @@ class TestIngestTerrainEndToEnd:
                     "RUGGEDNESS_INDEX", "DATA_CONFIDENCE"}
         assert expected.issubset(signal_names)
 
-    def test_terrain_class_not_written_by_ingestor(self, rows_written):
-        """TERRAIN_CLASS must NOT be present — it is agent-derived."""
+    def test_terrain_class_written_by_ingestor(self, rows_written):
+        """TERRAIN_CLASS is written by classify_terrain() called at end of ingest."""
         from airos.drivers.store.store import H3KnowledgeStore
         store = H3KnowledgeStore.get()
         df = store.fetchdf(
@@ -341,9 +341,9 @@ class TestIngestTerrainEndToEnd:
             "WHERE domain = 'terrain' AND signal_name = 'TERRAIN_CLASS'"
         )
         if df is None or df.empty:
-            return
-        assert int(df["n"].iloc[0]) == 0, \
-            "TERRAIN_CLASS should not be written by the ingestor"
+            pytest.skip("Store read returned empty — likely a test-isolation issue")
+        assert int(df["n"].iloc[0]) > 0, \
+            "TERRAIN_CLASS should be written by classify_terrain() at end of ingest"
 
     def test_data_confidence_zero_for_synthetic(self, rows_written):
         """Synthetic source → DATA_CONFIDENCE = 0.0 for all cells."""
@@ -398,12 +398,12 @@ class TestTerrainDriver:
 
     def test_signal_names_match_spec(self, driver):
         expected = {"ELEVATION_M", "SLOPE_DEG", "ASPECT_DEG",
-                    "RUGGEDNESS_INDEX", "DATA_CONFIDENCE"}
+                    "RUGGEDNESS_INDEX", "DATA_CONFIDENCE", "TERRAIN_CLASS"}
         assert expected.issubset(set(driver.signal_names))
 
-    def test_terrain_class_not_in_signal_names(self, driver):
-        """TERRAIN_CLASS is agent-derived — must not appear in the driver's signal list."""
-        assert "TERRAIN_CLASS" not in driver.signal_names
+    def test_terrain_class_in_signal_names(self, driver):
+        """TERRAIN_CLASS is rule-derived by classify_terrain() and declared in signal_names."""
+        assert "TERRAIN_CLASS" in driver.signal_names
 
     def test_no_required_env_vars(self, driver):
         assert driver._required_env_vars == []
