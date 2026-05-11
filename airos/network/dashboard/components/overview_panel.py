@@ -238,8 +238,12 @@ def _render_commissioner(city_id: str) -> None:
     domain_risk = health.get("domain_risk", {})
     if domain_risk:
         # Display as a compact grid of colored chips
-        chips_html = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">'
-        for domain, risk in sorted(domain_risk.items(),
+        # Split into tiered (known risk) and index-only (unknown risk)
+        tiered   = {d: r for d, r in domain_risk.items() if r != "unknown"}
+        untiered = {d: r for d, r in domain_risk.items() if r == "unknown"}
+
+        chips_html = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
+        for domain, risk in sorted(tiered.items(),
                                    key=lambda x: _RISK_SCORE.get(x[1], 0),
                                    reverse=True):
             color = _RISK_COLOR.get(risk, "#6b7280")
@@ -253,6 +257,22 @@ def _render_commissioner(city_id: str) -> None:
                 f'{emoji} {risk}</span></div>'
             )
         chips_html += "</div>"
+        if untiered:
+            chips_html += (
+                '<div style="font-size:11px;color:rgba(0,0,0,.4);margin:4px 0 6px;">'
+                'Index data collected — risk tier pending next agent sweep:</div>'
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">'
+            )
+            for domain in sorted(untiered):
+                label = _DOMAIN_LABEL.get(domain, domain.title())
+                chips_html += (
+                    f'<div style="border:0.5px solid rgba(0,0,0,.18);border-radius:6px;'
+                    f'padding:4px 9px;background:rgba(0,0,0,.04);">'
+                    f'<span style="font-size:11px;color:rgba(0,0,0,.5);">{label}</span>'
+                    f'<span style="font-size:10px;color:rgba(0,0,0,.32);margin-left:5px;">'
+                    f'📊 index only</span></div>'
+                )
+            chips_html += "</div>"
         st.markdown(chips_html, unsafe_allow_html=True)
     else:
         st.caption("No domain assessments yet. Run `python main.py --step ingest-h3` then start the scheduler.")
@@ -357,11 +377,20 @@ def _render_dept_head(city_id: str) -> None:
     # ── Metric strip ───────────────────────────────────────────────────────
     if not df.empty:
         by_risk = df["risk_level"].value_counts()
+        n_unknown = int(by_risk.get("unknown", 0))
+        all_unknown = (n_unknown == len(df))
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Severe cells", int(by_risk.get("severe", 0)))
+        c1.metric("Severe cells",   int(by_risk.get("severe", 0)))
         c2.metric("High risk cells", int(by_risk.get("high", 0)))
         c3.metric("Moderate cells", int(by_risk.get("moderate", 0)))
-        c4.metric("Total assessed", len(df))
+        c4.metric("Total assessed",  len(df))
+        if all_unknown:
+            st.info(
+                f"All {len(df)} {chosen_domain} cells have raw index data but no risk tier yet. "
+                "Re-run `python main.py --step ingest-h3 --domains "
+                + chosen_domain + " --force` to apply updated thresholds.",
+                icon="📊",
+            )
 
     st.divider()
 
@@ -375,15 +404,30 @@ def _render_dept_head(city_id: str) -> None:
         )
         return
 
+    def _area_label(row: Any) -> str:
+        """Return a readable location label, falling back gracefully."""
+        name = str(row.get("area_name") or "").strip()
+        if name and name not in ("None", "nan"):
+            return name
+        h3 = str(row.get("h3_id") or "")
+        lat = row.get("centroid_lat")
+        lon = row.get("centroid_lon")
+        if lat and lon:
+            return f"{float(lat):.3f}°N {float(lon):.3f}°E"
+        return h3[:10] + "…" if len(h3) > 10 else h3
+
     # Build display table
-    display = df[["area_name", "risk_level", "dominant_issue", "primary_value", "assessed_at"]].copy()
+    display = df.copy()
+    display["area_label"] = display.apply(_area_label, axis=1)
     display["risk_level"] = display["risk_level"].apply(
         lambda r: f"{_RISK_EMOJI.get(str(r), '⚪')} {str(r).upper()}"
     )
     display["assessed_at"] = display["assessed_at"].apply(
         lambda t: _time_ago(str(t)) if t else "—"
     )
-    display.columns = ["Area", "Risk", "Primary issue", "Value", "Last assessed"]
+    show_cols = ["area_label", "risk_level", "dominant_issue", "primary_value", "assessed_at"]
+    display = display[[c for c in show_cols if c in display.columns]]
+    display.columns = ["Area", "Risk", "Primary issue", "Value", "Last assessed"][:len(display.columns)]
     st.dataframe(display, hide_index=True, use_container_width=True)
 
     # ── Top issues as action items ─────────────────────────────────────────
@@ -391,7 +435,7 @@ def _render_dept_head(city_id: str) -> None:
     seen = set()
     for _, row in df[df["risk_level"].str.contains("severe|high", case=False, na=False)].head(5).iterrows():
         issue = str(row.get("dominant_issue") or "")
-        area  = str(row.get("area_name") or row.get("h3_id") or "")
+        area  = _area_label(row)
         risk  = str(row.get("risk_level") or "")
         key   = f"{area}:{issue}"
         if key in seen or not issue:

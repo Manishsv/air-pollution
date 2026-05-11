@@ -126,6 +126,62 @@ DEFAULT_H3_RES = 8
 
 
 # ---------------------------------------------------------------------------
+# Index → risk-tier thresholds (rule-based, applied before write)
+# ---------------------------------------------------------------------------
+# These translate domain-specific index values to the 4-tier risk vocabulary
+# (low / moderate / high / severe) when the upstream connector doesn't supply
+# a risk_level.  Thresholds are calibrated to the observed value ranges:
+#
+#   Construction risk index   0–1  (higher = more activity / disturbance)
+#   Green cover change index  -1–+1 (negative = cover loss = higher risk)
+#   Water quality / clarity   0–1  (higher = clearer / better quality)
+
+def _tier_construction(val: float | None) -> str:
+    """Map CONSTRUCTION_RISK_INDEX (0–1) → risk tier."""
+    if val is None:
+        return "unknown"
+    if val >= 0.5:
+        return "high"
+    if val >= 0.3:
+        return "moderate"
+    if val >= 0.05:
+        return "low"
+    return "low"
+
+
+def _tier_green(val: float | None) -> str:
+    """Map GREEN_COVER_CHANGE_INDEX (-1 to +1) → risk tier.
+
+    Negative = vegetation loss (bad); positive = gain (good).
+    """
+    if val is None:
+        return "unknown"
+    if val <= -0.25:
+        return "severe"
+    if val <= -0.10:
+        return "high"
+    if val <= 0.05:
+        return "moderate"
+    return "low"
+
+
+def _tier_water(val: float | None) -> str:
+    """Map OPTICAL_WATER_CLARITY_INDEX (0–1) → risk tier.
+
+    Higher clarity = better quality = lower risk.
+    """
+    if val is None:
+        return "unknown"
+    if val >= 0.65:
+        return "low"
+    if val >= 0.45:
+        return "moderate"
+    if val >= 0.25:
+        return "high"
+    return "severe"
+
+
+# ---------------------------------------------------------------------------
 # Per-domain ingest functions
 # ---------------------------------------------------------------------------
 
@@ -277,6 +333,10 @@ def _ingest_water(city_id: str, bbox: dict, *, force: bool = False) -> int:
     for cell in cell_list:
         if "optical_water_clarity_index" not in cell:
             cell["optical_water_clarity_index"] = cell.get("water_quality_index")
+        # Apply rule-based tier when the upstream connector doesn't set one
+        if not cell.get("risk_level") or cell.get("risk_level") == "unknown":
+            idx_val = cell.get("optical_water_clarity_index") or cell.get("water_quality_index")
+            cell["risk_level"] = _tier_water(idx_val)
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="water",
                                       signal_key="optical_water_clarity_index", risk_key="risk_level",
                                       issue_key="dominant_issue", unit="index", source="gee")
@@ -309,6 +369,9 @@ def _ingest_construction(city_id: str, bbox: dict, *, force: bool = False) -> in
                       error_msg="no live GEE construction data")
         return 0
     cell_list = [{"h3_id": k, **v} for k, v in cells_dict.items()]
+    for cell in cell_list:
+        if not cell.get("risk_level") or cell.get("risk_level") == "unknown":
+            cell["risk_level"] = _tier_construction(cell.get("construction_risk_index"))
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="construction",
                                       signal_key="construction_risk_index", risk_key="risk_level",
                                       issue_key="dominant_issue", unit="index", source="gee")
@@ -338,9 +401,22 @@ def _ingest_green(city_id: str, bbox: dict, *, force: bool = False) -> int:
                       error_msg="no live GEE green data")
         return 0
     cell_list = [{"h3_id": k, **v} for k, v in cells_dict.items()]
+    for cell in cell_list:
+        if not cell.get("risk_level") or cell.get("risk_level") == "unknown":
+            cell["risk_level"] = _tier_green(cell.get("green_cover_change_index"))
+        # Derive a human-readable issue from the index sign
+        if not cell.get("dominant_issue"):
+            gci = cell.get("green_cover_change_index")
+            if gci is not None:
+                if gci <= -0.10:
+                    cell["dominant_issue"] = "vegetation_loss"
+                elif gci <= 0.05:
+                    cell["dominant_issue"] = "stable_cover"
+                else:
+                    cell["dominant_issue"] = "vegetation_gain"
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="green",
                                       signal_key="green_cover_change_index", risk_key="risk_level",
-                                      unit="index", source="gee")
+                                      unit="index", source="gee", issue_key="dominant_issue")
     packets = build_green_decision_packets(cells_dict, DEFAULT_H3_RES, city_id, **bbox)
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
