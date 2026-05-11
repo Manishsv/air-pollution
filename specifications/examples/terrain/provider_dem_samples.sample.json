@@ -1,0 +1,162 @@
+{
+  "_comment": "Provider contract example — terrain_dem_feed.v1. Raw DEM point samples for a Bangalore bbox, as the ingestor receives them before H3 aggregation. Each sample is one 30m DEM pixel. In practice there are ~2500 samples per H3 res-8 cell; this example shows 9 representative points across 3 cells to illustrate the full schema including the three quality_flag states.",
+
+  "provider_id": "copernicus_dem_esa",
+  "source_name": "Copernicus DEM GLO-30",
+  "source_type": "dem_raster_sampled",
+  "dem_source": "copernicus_dem_30m",
+  "license": "Copernicus Data Space Ecosystem — free use with attribution",
+  "void_fill_applied": true,
+
+  "bbox": {
+    "lat_min": 12.87,
+    "lat_max": 13.08,
+    "lon_min": 77.47,
+    "lon_max": 77.70
+  },
+  "resolution_m": 30,
+
+  "source_metadata": {
+    "tile_ids": ["N12E077", "N13E077"],
+    "product_version": "2021_1",
+    "acquisition_period": "2011-2015",
+    "processing_system": "airos_terrain_connector_v1"
+  },
+
+  "samples": [
+    {
+      "_comment": "Cell 8860145b39fffff — Central Bangalore (~13.001, 77.561). Flat plateau, clean data.",
+      "lat": 12.9998,
+      "lon": 77.5601,
+      "elevation_m": 921.4,
+      "quality_flag": "ok",
+      "source_record_id": "N12E077_px_14832_22071",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 13.0004,
+      "lon": 77.5609,
+      "elevation_m": 919.8,
+      "quality_flag": "ok",
+      "source_record_id": "N12E077_px_14833_22071",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 13.0011,
+      "lon": 77.5618,
+      "elevation_m": 922.1,
+      "quality_flag": "ok",
+      "source_record_id": "N12E077_px_14834_22072",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+
+    {
+      "_comment": "Cell 8860169651fffff — North Bangalore / Hebbal lake area (~13.076, 77.571). Low-lying, near water — void-filled pixels present.",
+      "lat": 13.0752,
+      "lon": 77.5704,
+      "elevation_m": 877.2,
+      "quality_flag": "ok",
+      "source_record_id": "N13E077_px_09201_22105",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 13.0761,
+      "lon": 77.5712,
+      "elevation_m": null,
+      "quality_flag": "void",
+      "_comment": "Void pixel over Hebbal lake water surface — no valid radar return.",
+      "source_record_id": "N13E077_px_09202_22106",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 13.0768,
+      "lon": 77.5719,
+      "elevation_m": 875.0,
+      "quality_flag": "void_filled",
+      "_comment": "Void-filled interpolation from neighbours — confidence reduced to 0.65 for this cell.",
+      "source_record_id": "N13E077_px_09203_22107",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+
+    {
+      "_comment": "Cell 8860145a1bfffff — West Bangalore / Kengeri escarpment (~12.926, 77.518). Steeper terrain, one suspected building artefact.",
+      "lat": 12.9258,
+      "lon": 77.5172,
+      "elevation_m": 851.3,
+      "quality_flag": "ok",
+      "source_record_id": "N12E077_px_16041_21983",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 12.9265,
+      "lon": 77.5181,
+      "elevation_m": 884.6,
+      "quality_flag": "suspected_artefact",
+      "_comment": "Anomalously high pixel — likely radar reflection off a tall building. Ingestor excludes suspected_artefact pixels from cell mean.",
+      "source_record_id": "N12E077_px_16042_21984",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    },
+    {
+      "lat": 12.9271,
+      "lon": 77.5189,
+      "elevation_m": 858.9,
+      "quality_flag": "ok",
+      "source_record_id": "N12E077_px_16043_21985",
+      "provenance": {
+        "source_id": "copernicus_dem_esa",
+        "source_type": "dem_raster_sampled",
+        "license": "Copernicus Data Space Ecosystem",
+        "collected_at": "2021-01-15T00:00:00Z",
+        "ingested_at": "2026-05-11T09:00:00Z"
+      }
+    }
+  ]
+}

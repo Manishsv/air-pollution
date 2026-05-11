@@ -1,0 +1,109 @@
+{
+  "_comment": "Consumer contract example — terrain_signals.v1. Per-H3-cell terrain signals as read by domain agents and the dashboard. 5 real Bangalore cells showing the full range of terrain types and quality states. TERRAIN_CLASS is agent-derived (present on 4 of 5 cells; null on the void-fill cell pending re-classification).",
+
+  "city_id": "bangalore",
+  "generated_at": "2026-05-11T09:15:00Z",
+
+  "cells": [
+    {
+      "_comment": "Central Bangalore — flat plateau, excellent DEM coverage, classified as plain.",
+      "h3_id": "8860145b39fffff",
+      "dem_source": "copernicus_dem_30m",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "terrain_class_computed_at": "2026-05-11T09:10:00Z",
+      "signals": {
+        "ELEVATION_M":      921.1,
+        "SLOPE_DEG":        2.1,
+        "ASPECT_DEG":       185.0,
+        "RUGGEDNESS_INDEX": 8.2,
+        "DATA_CONFIDENCE":  0.90,
+        "TERRAIN_CLASS":    "plain"
+      }
+    },
+    {
+      "_comment": "SE Bangalore / HSR-Koramangala — slightly lower, gentle south-facing slope. Historically flood-prone street-level but not a valley at H3 res-8 scale.",
+      "h3_id": "8861892433fffff",
+      "dem_source": "copernicus_dem_30m",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "terrain_class_computed_at": "2026-05-11T09:10:00Z",
+      "signals": {
+        "ELEVATION_M":      891.4,
+        "SLOPE_DEG":        4.3,
+        "ASPECT_DEG":       220.0,
+        "RUGGEDNESS_INDEX": 15.6,
+        "DATA_CONFIDENCE":  0.90,
+        "TERRAIN_CLASS":    "plain"
+      }
+    },
+    {
+      "_comment": "North Bangalore / Hebbal — adjacent to Hebbal lake. void_fill_applied reduces confidence to 0.65. TERRAIN_CLASS is null because the agent deferred classification for low-confidence cells pending a void-fill review policy decision.",
+      "h3_id": "8860169651fffff",
+      "dem_source": "mixed",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "terrain_class_computed_at": null,
+      "signals": {
+        "ELEVATION_M":      876.1,
+        "SLOPE_DEG":        1.2,
+        "ASPECT_DEG":       -1,
+        "RUGGEDNESS_INDEX": 4.1,
+        "DATA_CONFIDENCE":  0.65,
+        "TERRAIN_CLASS":    null
+      }
+    },
+    {
+      "_comment": "West Bangalore / Kengeri escarpment — steeper terrain, higher ruggedness, classified as hill. suspected_artefact pixel excluded from ELEVATION_M mean before aggregation.",
+      "h3_id": "8860145a1bfffff",
+      "dem_source": "copernicus_dem_30m",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "terrain_class_computed_at": "2026-05-11T09:10:00Z",
+      "signals": {
+        "ELEVATION_M":      855.1,
+        "SLOPE_DEG":        7.8,
+        "ASPECT_DEG":       270.0,
+        "RUGGEDNESS_INDEX": 31.4,
+        "DATA_CONFIDENCE":  0.90,
+        "TERRAIN_CLASS":    "hill"
+      }
+    },
+    {
+      "_comment": "NE Bangalore / Whitefield — highest cell in this sample, east-facing, classified as ridge relative to the city-bbox median.",
+      "h3_id": "8861892c03fffff",
+      "dem_source": "copernicus_dem_30m",
+      "last_ingested_at": "2026-05-11T09:00:00Z",
+      "terrain_class_computed_at": "2026-05-11T09:10:00Z",
+      "signals": {
+        "ELEVATION_M":      935.2,
+        "SLOPE_DEG":        3.6,
+        "ASPECT_DEG":       95.0,
+        "RUGGEDNESS_INDEX": 12.3,
+        "DATA_CONFIDENCE":  0.90,
+        "TERRAIN_CLASS":    "ridge"
+      }
+    }
+  ],
+
+  "summary": {
+    "total_cells": 5,
+    "cells_with_terrain_class": 4,
+    "elevation_min_m":  855.1,
+    "elevation_max_m":  935.2,
+    "elevation_mean_m": 895.8,
+    "terrain_class_distribution": {
+      "plain": 2,
+      "hill":  1,
+      "ridge": 1
+    },
+    "void_filled_cell_count": 1
+  },
+
+  "provenance_summary": {
+    "sources": ["copernicus_dem_esa"],
+    "synthetic_used": false
+  },
+
+  "data_quality_summary": {
+    "synthetic_data_used": false,
+    "confidence_note": "4 of 5 cells at full confidence (0.90). 1 cell near Hebbal lake has void-filled pixels (confidence 0.65) — TERRAIN_CLASS deferred pending classification policy for low-confidence cells.",
+    "void_fill_notice": "Cell 8860169651fffff contains void-filled DEM pixels adjacent to Hebbal lake. Slope and aspect values for this cell should not be used for precision construction decisions without a field survey."
+  }
+}
