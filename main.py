@@ -43,6 +43,12 @@ def main() -> None:
                     help="geocode-h3: re-geocode cells that already have an area name")
     ap.add_argument("--city", default=None,
                     help="geocode-h3: restrict to a single city id (e.g. bangalore)")
+    ap.add_argument("--cities", nargs="+", default=None, metavar="CITY",
+                    help="ingest-h3: city ids to ingest (default: all configured cities)")
+    ap.add_argument("--domains", nargs="+", default=None, metavar="DOMAIN",
+                    help="ingest-h3: domain names to ingest (default: all domains)")
+    ap.add_argument("--force", action="store_true",
+                    help="ingest-h3: bypass the watermark interval and re-ingest")
     args = ap.parse_args()
 
     if args.step == "scheduler":
