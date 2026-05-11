@@ -445,31 +445,67 @@ def _render_s5_spatial(h3_id: str, city_id: str, row: dict) -> None:
                     if order.index(rl) > order.index(target_risk):
                         target_risk = rl
 
-            _RGBA = {
-                "severe":   [180, 35, 24, 220],
-                "high":     [196, 82, 10, 200],
-                "moderate": [202,138,  4, 180],
-                "low":      [ 22,163, 74, 160],
-                "unknown":  [156,163,175, 120],
+            # Neighbour cells: semi-transparent fill (alpha 140)
+            _RGBA_NB = {
+                "severe":   [180, 35,  24, 140],
+                "high":     [196, 82,  10, 130],
+                "moderate": [202, 138,  4, 110],
+                "low":      [ 22, 163, 74,  90],
+                "unknown":  [156, 163,175,  70],
             }
-            cells_data = [{"h3_id": h3_id, "color": _RGBA.get(target_risk, _RGBA["unknown"])}]
-            for nb_id, nb_risk in risk_by_cell.items():
-                cells_data.append({"h3_id": nb_id, "color": _RGBA.get(nb_risk, _RGBA["unknown"])})
+            # Target cell stroke colours (RGB only — alpha on line is separate)
+            _STROKE = {
+                "severe":   [180,  35,  24],
+                "high":     [196,  82,  10],
+                "moderate": [202, 138,   4],
+                "low":      [ 22, 163,  74],
+                "unknown":  [107, 114, 128],
+            }
+            # Target cell: very low fill so map shows through, bright border
+            _target_stroke = _STROKE.get(target_risk, _STROKE["unknown"])
+            target_fill = _target_stroke + [35]   # alpha=35 → ~14% opaque
 
-            layer = pdk.Layer(
+            nb_cells = [
+                {"h3_id": nb_id, "color": _RGBA_NB.get(nb_risk, _RGBA_NB["unknown"])}
+                for nb_id, nb_risk in risk_by_cell.items()
+            ]
+            target_cell = [{"h3_id": h3_id, "color": target_fill,
+                             "line_color": _target_stroke + [255]}]
+
+            # Layer 1: neighbour cells (filled, no stroke)
+            nb_layer = pdk.Layer(
                 "H3HexagonLayer",
-                data=clean_h3_data(cells_data),
+                data=clean_h3_data(nb_cells),
                 get_hexagon="h3_id",
                 get_fill_color="color",
                 get_elevation=0,
                 elevation_scale=0,
                 pickable=False,
                 filled=True,
+                stroked=False,
+                extruded=False,
+            )
+            # Layer 2: target cell (transparent fill + bright stroke)
+            target_layer = pdk.Layer(
+                "H3HexagonLayer",
+                data=clean_h3_data(target_cell),
+                get_hexagon="h3_id",
+                get_fill_color="color",
+                get_line_color="line_color",
+                get_elevation=0,
+                elevation_scale=0,
+                pickable=False,
+                filled=True,
+                stroked=True,
+                line_width_min_pixels=3,
                 extruded=False,
             )
             view = pdk.ViewState(latitude=float(lat), longitude=float(lon), zoom=13, pitch=0)
-            st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view,
-                                     map_style="light"), use_container_width=True)
+            st.pydeck_chart(
+                pdk.Deck(layers=[nb_layer, target_layer], initial_view_state=view,
+                         map_style="light"),
+                use_container_width=True,
+            )
 
             # k=1 ring summary table
             if neighbors:

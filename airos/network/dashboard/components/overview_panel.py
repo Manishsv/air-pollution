@@ -15,11 +15,18 @@ Each view has:
 from __future__ import annotations
 
 import json
+import textwrap
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import pandas as pd
 import streamlit as st
+
+
+def _html(s: str) -> str:
+    """Strip common leading whitespace so Streamlit's Markdown parser
+    never sees 4-space-indented lines (which it renders as code blocks)."""
+    return textwrap.dedent(s).strip()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -194,33 +201,22 @@ def _render_commissioner(city_id: str) -> None:
     risk_color = _RISK_COLOR.get(worst_risk, "#6b7280")
     risk_emoji = _RISK_EMOJI.get(worst_risk, "⚪")
 
-    st.markdown(
-        f"""
-        <div style="
-            background:linear-gradient(135deg,{risk_color}18 0%,{risk_color}08 100%);
-            border:0.5px solid {risk_color}55;
-            border-radius:12px;
-            padding:24px 28px 18px;
-            margin-bottom:16px;
-        ">
-            <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-                        color:rgba(0,0,0,.4);text-transform:uppercase;">
-                City health — {city_id.title()}
-            </div>
-            <div style="display:flex;align-items:baseline;gap:12px;margin-top:4px;">
-                <span style="font-size:42px;font-weight:700;color:{risk_color};
-                             line-height:1.1;">{risk_emoji} {worst_risk.upper()}</span>
-                <span style="font-size:14px;color:rgba(0,0,0,.55);">
-                    worst risk · {_DOMAIN_LABEL.get(worst_domain, worst_domain)}
-                </span>
-            </div>
-            <div style="font-size:12px;color:rgba(0,0,0,.45);margin-top:6px;">
-                Updated {_time_ago(health.get("latest_pattern_at"))}
-            </div>
+    st.markdown(_html(f"""
+        <div style="background:linear-gradient(135deg,{risk_color}18 0%,{risk_color}08 100%);
+            border:0.5px solid {risk_color}55;border-radius:12px;
+            padding:24px 28px 18px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
+            color:rgba(0,0,0,.4);text-transform:uppercase;">City health — {city_id.title()}</div>
+        <div style="display:flex;align-items:baseline;gap:12px;margin-top:4px;">
+        <span style="font-size:42px;font-weight:700;color:{risk_color};line-height:1.1;">
+        {risk_emoji} {worst_risk.upper()}</span>
+        <span style="font-size:14px;color:rgba(0,0,0,.55);">
+        worst risk · {_DOMAIN_LABEL.get(worst_domain, worst_domain)}</span>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div style="font-size:12px;color:rgba(0,0,0,.45);margin-top:6px;">
+        Updated {_time_ago(health.get("latest_pattern_at"))}</div>
+        </div>
+    """), unsafe_allow_html=True)
 
     # ── Metric strip ───────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -343,29 +339,20 @@ def _render_dept_head(city_id: str) -> None:
     risk_color = _RISK_COLOR.get(worst_risk, "#6b7280")
     risk_emoji = _RISK_EMOJI.get(worst_risk, "⚪")
 
-    st.markdown(
-        f"""
-        <div style="
-            border:0.5px solid {risk_color}66;border-radius:10px;
-            padding:18px 22px 14px;margin-bottom:16px;
-            background:{risk_color}0d;
-        ">
-            <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-                        color:rgba(0,0,0,.4);text-transform:uppercase;">
-                {chosen_label} · Highest Risk Area
-            </div>
-            <div style="font-size:30px;font-weight:700;color:{risk_color};
-                        margin-top:4px;line-height:1.2;">
-                {risk_emoji} {worst_area}
-            </div>
-            <div style="font-size:12px;color:rgba(0,0,0,.5);margin-top:4px;">
-                Risk: <strong>{worst_risk.upper()}</strong>
-                {"  ·  " + str(worst.get("dominant_issue","")) if not df.empty and worst.get("dominant_issue") else ""}
-            </div>
+    _issue = str(worst.get("dominant_issue", "")) if not df.empty and worst.get("dominant_issue") else ""
+    _issue_html = f"  &middot;  {_issue}" if _issue else ""
+    st.markdown(_html(f"""
+        <div style="border:0.5px solid {risk_color}66;border-radius:10px;
+            padding:18px 22px 14px;margin-bottom:16px;background:{risk_color}0d;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
+            color:rgba(0,0,0,.4);text-transform:uppercase;">
+        {chosen_label} · Highest Risk Area</div>
+        <div style="font-size:30px;font-weight:700;color:{risk_color};
+            margin-top:4px;line-height:1.2;">{risk_emoji} {worst_area}</div>
+        <div style="font-size:12px;color:rgba(0,0,0,.5);margin-top:4px;">
+        Risk: <strong>{worst_risk.upper()}</strong>{_issue_html}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """), unsafe_allow_html=True)
 
     # ── Metric strip ───────────────────────────────────────────────────────
     if not df.empty:
@@ -442,23 +429,16 @@ def _render_ward_officer(city_id: str) -> None:
               else "No field tasks — all clear")
     )
 
-    st.markdown(
-        f"""
+    _hero_icon = "🚨" if n_severe > 0 else ("📋" if n_tasks > 0 else "✅")
+    st.markdown(_html(f"""
         <div style="border:0.5px solid {hero_color}66;border-radius:10px;
-                    padding:18px 22px 14px;margin-bottom:16px;
-                    background:{hero_color}0d;">
-            <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-                        color:rgba(0,0,0,.4);text-transform:uppercase;">
-                Field tasks — {city_id.title()}
-            </div>
-            <div style="font-size:28px;font-weight:700;color:{hero_color};
-                        margin-top:4px;line-height:1.2;">
-                {"🚨" if n_severe > 0 else ("📋" if n_tasks > 0 else "✅")} {hero_msg}
-            </div>
+            padding:18px 22px 14px;margin-bottom:16px;background:{hero_color}0d;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
+            color:rgba(0,0,0,.4);text-transform:uppercase;">Field tasks — {city_id.title()}</div>
+        <div style="font-size:28px;font-weight:700;color:{hero_color};
+            margin-top:4px;line-height:1.2;">{_hero_icon} {hero_msg}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """), unsafe_allow_html=True)
 
     if df.empty:
         st.success("No pending field verifications. Check back after the next scheduler sweep.")
@@ -494,28 +474,21 @@ def _render_ward_officer(city_id: str) -> None:
             if lat and lon else None
         )
 
+        _nav = f'  &middot; <a href="{maps_url}" target="_blank">📍 Navigate</a>' if maps_url else ""
+        _pid = str(row.get("packet_id", ""))[:12]
         with st.container():
-            st.markdown(
-                f"""
+            st.markdown(_html(f"""
                 <div style="border:0.5px solid {color}66;border-radius:8px;
-                            padding:12px 14px;margin-bottom:8px;background:{color}0a;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-size:14px;font-weight:600;">{area}</span>
-                        <span style="font-size:12px;color:{color};font-weight:500;">
-                            {emoji} {risk.upper()}
-                        </span>
-                    </div>
-                    <div style="font-size:12px;color:rgba(0,0,0,.55);margin-top:4px;">
-                        {domain_label}  ·  Confidence: {conf_str}
-                        {"  · " + f'<a href="{maps_url}" target="_blank">📍 Navigate</a>' if maps_url else ""}
-                    </div>
-                    <div style="font-size:11px;color:rgba(0,0,0,.4);margin-top:2px;">
-                        Task ID: {str(row.get("packet_id", ""))[:12]}…
-                    </div>
+                    padding:12px 14px;margin-bottom:8px;background:{color}0a;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:14px;font-weight:600;">{area}</span>
+                <span style="font-size:12px;color:{color};font-weight:500;">{emoji} {risk.upper()}</span>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                <div style="font-size:12px;color:rgba(0,0,0,.55);margin-top:4px;">
+                {domain_label} &middot; Confidence: {conf_str}{_nav}</div>
+                <div style="font-size:11px;color:rgba(0,0,0,.4);margin-top:2px;">Task ID: {_pid}…</div>
+                </div>
+            """), unsafe_allow_html=True)
 
     st.caption(
         "Mark tasks complete in the **📬 Inbox** tab → select packet → set outcome to 'verified_clean' or 'verified_issue'."
@@ -532,33 +505,19 @@ def _render_citizen(city_id: str) -> None:
 
     # ── Hero ───────────────────────────────────────────────────────────────
     aqi_display = f"{aqi:.0f}" if aqi is not None else "—"
-    st.markdown(
-        f"""
+    st.markdown(_html(f"""
         <div style="text-align:center;padding:32px 24px 24px;
-                    background:linear-gradient(160deg,{color}18,{color}06);
-                    border:0.5px solid {color}55;border-radius:16px;
-                    margin-bottom:20px;">
-            <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-                        color:rgba(0,0,0,.4);text-transform:uppercase;
-                        margin-bottom:8px;">
-                Air Quality Index · {city_id.title()}
-            </div>
-            <div style="font-size:80px;font-weight:800;color:{color};
-                        line-height:1;margin-bottom:8px;">
-                {aqi_display}
-            </div>
-            <div style="font-size:22px;font-weight:600;color:{color};
-                        margin-bottom:12px;">
-                {label}
-            </div>
-            <div style="font-size:14px;color:rgba(0,0,0,.62);max-width:380px;
-                        margin:0 auto;">
-                {advice}
-            </div>
+            background:linear-gradient(160deg,{color}18,{color}06);
+            border:0.5px solid {color}55;border-radius:16px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
+            color:rgba(0,0,0,.4);text-transform:uppercase;margin-bottom:8px;">
+        Air Quality Index · {city_id.title()}</div>
+        <div style="font-size:80px;font-weight:800;color:{color};
+            line-height:1;margin-bottom:8px;">{aqi_display}</div>
+        <div style="font-size:22px;font-weight:600;color:{color};margin-bottom:12px;">{label}</div>
+        <div style="font-size:14px;color:rgba(0,0,0,.62);max-width:380px;margin:0 auto;">{advice}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """), unsafe_allow_html=True)
 
     # ── Health guidance strip ──────────────────────────────────────────────
     score = _RISK_SCORE.get(label.lower().replace(" ", "_"), 0) if aqi else 0
@@ -603,17 +562,14 @@ def _render_citizen(city_id: str) -> None:
     cols = st.columns(min(len(cards), 3))
     for i, (icon, title, desc) in enumerate(cards):
         with cols[i % len(cols)]:
-            st.markdown(
-                f"""
+            st.markdown(_html(f"""
                 <div style="border:0.5px solid rgba(0,0,0,.12);border-radius:10px;
-                            padding:14px 16px;height:100%;">
-                    <div style="font-size:24px;margin-bottom:6px;">{icon}</div>
-                    <div style="font-size:13px;font-weight:600;margin-bottom:4px;">{title}</div>
-                    <div style="font-size:12px;color:rgba(0,0,0,.55);">{desc}</div>
+                    padding:14px 16px;height:100%;">
+                <div style="font-size:24px;margin-bottom:6px;">{icon}</div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:4px;">{title}</div>
+                <div style="font-size:12px;color:rgba(0,0,0,.55);">{desc}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            """), unsafe_allow_html=True)
 
     # ── Nearby domain summary ──────────────────────────────────────────────
     st.divider()
