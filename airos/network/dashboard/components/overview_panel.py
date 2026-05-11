@@ -156,16 +156,6 @@ def _load_field_tasks(city_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
-def _load_latest_aqi(city_id: str) -> float | None:
-    """Return the most recent AQI signal value for a city (ground station)."""
-    try:
-        from airos.os.sdk import store
-        return store.get_latest_aqi(city_id)
-    except Exception:
-        return None
-
-
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_air_risk(city_id: str) -> str:
     """Return the worst assessed air quality risk level for the city.
@@ -694,14 +684,6 @@ def _render_citizen(city_id: str) -> None:
     label = _RISK_HERO_LABEL.get(risk, "No data")
     advice = _RISK_HERO_ADVICE.get(risk, "")
 
-    # Secondary: raw ground-station reading (context only)
-    station_aqi = _load_latest_aqi(city_id)
-    station_line = (
-        f'<div style="font-size:12px;color:rgba(0,0,0,.4);margin-top:10px;">'
-        f'Nearest ground station: AQI {station_aqi:.0f}</div>'
-        if station_aqi is not None else ""
-    )
-
     # ── Hero ───────────────────────────────────────────────────────────────
     st.markdown(_html(f"""
         <div style="text-align:center;padding:32px 24px 24px;
@@ -713,7 +695,6 @@ def _render_citizen(city_id: str) -> None:
         <div style="font-size:72px;line-height:1;margin-bottom:6px;">{emoji}</div>
         <div style="font-size:28px;font-weight:700;color:{color};margin-bottom:10px;">{label}</div>
         <div style="font-size:14px;color:rgba(0,0,0,.62);max-width:380px;margin:0 auto;">{advice}</div>
-        {station_line}
         </div>
     """), unsafe_allow_html=True)
 
