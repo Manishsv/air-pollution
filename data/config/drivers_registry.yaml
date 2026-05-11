@@ -133,6 +133,13 @@ drivers:
     cadence_hint: "90 days"
     notes: "OSM Overpass API waterways. No key required. Quarterly refresh."
 
+  terrain:
+    builtin_class: airos.drivers.store.drivers.terrain_driver:TerrainDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "90 days"
+    notes: "SRTM 30m / Copernicus DEM. No API key required. Quarterly refresh. Signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG, RUGGEDNESS_INDEX, DATA_CONFIDENCE. TERRAIN_CLASS is agent-derived."
+
   # --------------------------------------------------------------------------
   # Example third-party driver (commented out — shows the format)
   # --------------------------------------------------------------------------
