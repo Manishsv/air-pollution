@@ -744,9 +744,10 @@ def _ingest_weather(city_id: str, bbox: dict, *, force: bool = False) -> int:
     # Register metadata and broadcast signals to every cell
     from airos.drivers.store.coverage import coverage_signals, distance_to_confidence
     import math
+    import h3 as _h3lib
     signal_rows: list[dict] = []
     for h3_id in h3_ids:
-        lat, lon = h3.cell_to_latlng(h3_id)
+        lat, lon = _h3lib.cell_to_latlng(h3_id)
         upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=DEFAULT_H3_RES,
                         centroid_lat=lat, centroid_lon=lon)
         for sig, val, unit in available_signals:
