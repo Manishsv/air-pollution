@@ -94,20 +94,19 @@ def _load_terrain_signals(city_id: str) -> pd.DataFrame:
         store = H3KnowledgeStore.get()
         df = store.fetchdf(
             """
-            SELECT s.h3_id, s.signal_name AS signal, s.value, s.unit,
-                   s.recorded_at
+            SELECT s.h3_id, s.signal, s.value, s.unit,
+                   s.fetched_at
             FROM   h3_signals s
-            JOIN   h3_cell_metadata m ON m.h3_id = s.h3_id
-            WHERE  m.city_id = ?
+            WHERE  s.city_id = ?
               AND  s.domain  = 'terrain'
-              AND  s.recorded_at = (
-                       SELECT MAX(s2.recorded_at)
+              AND  s.fetched_at = (
+                       SELECT MAX(s2.fetched_at)
                        FROM   h3_signals s2
-                       WHERE  s2.h3_id       = s.h3_id
-                         AND  s2.domain      = 'terrain'
-                         AND  s2.signal_name = s.signal_name
+                       WHERE  s2.h3_id  = s.h3_id
+                         AND  s2.domain = 'terrain'
+                         AND  s2.signal = s.signal
                    )
-            ORDER BY s.h3_id, s.signal_name
+            ORDER BY s.h3_id, s.signal
             """,
             [city_id],
         )
