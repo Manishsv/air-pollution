@@ -31,12 +31,13 @@ _SOURCES = {
     #                    = 1.0 everywhere. Sensor siting does NOT apply; coverage can be
     #                    improved by changing the sampling resolution in the connector.
     "air": {
-        "provider":         "CPCB AQI API",
+        "provider":         "CPCB AQI API / OpenAQ",
         "url":              "https://api.cpcbccr.com/",
         "api_key_env":      "CPCB_API_KEY",
         "fallback":         "synthetic (no live data)",
         "acquisition_mode": "sensor_list",
         "notes":            "Real-time AQI readings from fixed CPCB monitoring stations. "
+                            "OpenAQ v3 provides additional global station coverage. "
                             "IDW interpolation from station lat/lngs to H3 cells.",
     },
     "fire": {
@@ -45,62 +46,71 @@ _SOURCES = {
         "api_key_env":      "FIRMS_API_KEY",
         "fallback":         "none — skipped if no key",
         "acquisition_mode": "query_driven",
-        "notes":            "VIIRS/MODIS thermal anomaly detections. Satellite pixels "
-                            "directly assigned to H3 cells at native resolution.",
+        "notes":            "VIIRS/MODIS thermal anomaly detections (VIIRS_SNPP_NRT, "
+                            "VIIRS_NOAA20_NRT, MODIS_NRT). Satellite pixels "
+                            "directly assigned to H3 cells at native resolution. "
+                            "0.5° airshed buffer applied around city bbox.",
     },
     "heat": {
-        "provider":         "Open-Meteo",
-        "url":              "https://api.open-meteo.com/",
-        "api_key_env":      None,
-        "fallback":         "computed from Open-Meteo (free, no key needed)",
+        "provider":         "Google Earth Engine (MODIS LST + Sentinel-2)",
+        "url":              "https://earthengine.google.com/",
+        "api_key_env":      "GEE_PROJECT",
+        "fallback":         "Open-Meteo temperature (no GEE key)",
         "acquisition_mode": "query_driven",
-        "notes":            "Queried at each H3 cell centroid. Land surface temperature "
-                            "+ forecast data. Free API, no key required.",
+        "notes":            "MODIS MOD11A1 Land Surface Temperature (1 km, daily) + "
+                            "Sentinel-2 NDVI for urban heat island index. "
+                            "Falls back to Open-Meteo air temperature if GEE_PROJECT unset.",
     },
     "flood": {
-        "provider":         "OpenMeteo (rainfall) + OSM (drains)",
-        "url":              "https://api.open-meteo.com/",
-        "api_key_env":      None,
-        "fallback":         "synthetic rainfall model",
+        "provider":         "GEE (NASA GPM IMERG) + OSM (drains)",
+        "url":              "https://earthengine.google.com/",
+        "api_key_env":      "GEE_PROJECT",
+        "fallback":         "Open-Meteo rainfall + synthetic drain capacity",
         "acquisition_mode": "query_driven",
-        "notes":            "Rainfall queried per H3 centroid (OpenMeteo, no key). "
-                            "Drain capacity from OSM polygon geometry — quarterly ingest.",
+        "notes":            "NASA GPM IMERG V07 precipitation (0.1°, 30-min) via GEE. "
+                            "SRTM DEM + JRC Global Surface Water for terrain/flood-extent context. "
+                            "Drain capacity from OSM waterway geometry — quarterly ingest. "
+                            "Falls back to Open-Meteo rainfall if GEE_PROJECT unset.",
     },
     "water": {
-        "provider":         "Google Earth Engine",
+        "provider":         "Google Earth Engine (Sentinel-2)",
         "url":              "https://earthengine.google.com/",
         "api_key_env":      "GEE_PROJECT",
         "fallback":         "none — skipped if no key",
         "acquisition_mode": "query_driven",
-        "notes":            "JRC surface water + NDWI from Sentinel-2. Satellite pixels "
-                            "sampled at H3 cell centroids.",
+        "notes":            "Sentinel-2 optical bands: MNDWI (water body), NDTI (turbidity), "
+                            "CI (chlorophyll index), FAI (floating algae index). "
+                            "Water threshold: MNDWI > 0. Cloud filter: 30%.",
     },
     "waste": {
-        "provider":         "NASA FIRMS (proxy)",
-        "url":              "https://firms.modaps.eosdis.nasa.gov/",
-        "api_key_env":      "FIRMS_API_KEY",
-        "fallback":         "none — skipped if no key",
+        "provider":         "GEE (Sentinel-2 + Sentinel-5P) + NASA FIRMS",
+        "url":              "https://earthengine.google.com/",
+        "api_key_env":      "GEE_PROJECT",
+        "fallback":         "FIRMS thermal proxy only (if FIRMS_API_KEY set)",
         "acquisition_mode": "query_driven",
-        "notes":            "Thermal proxy for open waste burning. Satellite pixels "
-                            "directly assigned to H3 cells.",
+        "notes":            "Sentinel-2 NDVI for dump site detection (NDVI < 0.15 = exposed waste). "
+                            "Sentinel-5P CH₄ for landfill methane signature. "
+                            "NASA FIRMS thermal detections as proxy for open waste burning.",
     },
     "construction": {
-        "provider":         "Google Earth Engine",
+        "provider":         "Google Earth Engine (Sentinel-2 + Sentinel-5P)",
         "url":              "https://earthengine.google.com/",
         "api_key_env":      "GEE_PROJECT",
         "fallback":         "none — skipped if no key",
         "acquisition_mode": "query_driven",
-        "notes":            "SAR/optical change detection. Satellite raster sampled "
-                            "per H3 cell — no interpolation needed.",
+        "notes":            "Bare Soil Index (BSI) from Sentinel-2 for disturbed-ground detection. "
+                            "Sentinel-5P tropospheric NO₂ as construction activity proxy. "
+                            "BSI threshold > 0.05. Cloud filter: 30%.",
     },
     "green": {
-        "provider":         "Google Earth Engine",
+        "provider":         "Google Earth Engine (Sentinel-2)",
         "url":              "https://earthengine.google.com/",
         "api_key_env":      "GEE_PROJECT",
         "fallback":         "none — skipped if no key",
         "acquisition_mode": "query_driven",
-        "notes":            "NDVI from Sentinel-2 / Landsat. Pixel-to-cell direct "
-                            "assignment at H3 res 8.",
+        "notes":            "NDVI, EVI, ΔNDVI change detection from Sentinel-2 Level-2A. "
+                            "NDVI > 0.15 to include cell as vegetated. Cloud filter: 30%. "
+                            "Change categories: significant_loss, moderate_loss, stable, gain.",
     },
     "noise": {
         "provider":         "OpenStreetMap + computed",
@@ -109,7 +119,8 @@ _SOURCES = {
         "fallback":         "computed from OSM road/rail network",
         "acquisition_mode": "query_driven",
         "notes":            "Road traffic + rail proximity noise model. Computed "
-                            "analytically per H3 cell from OSM geometry — no physical sensors.",
+                            "analytically per H3 cell from OSM geometry — no physical sensors. "
+                            "NRI = 0.6 × dB level + 0.4 × receptor proximity index.",
     },
     "weather": {
         "provider":         "Open-Meteo Forecast API",
@@ -120,10 +131,47 @@ _SOURCES = {
         "notes":            "Wind, humidity, pressure, temperature — queried per H3 cell "
                             "centroid. Free, no key required.",
     },
+    "nightlights": {
+        "provider":         "NASA VIIRS Black Marble (VNP46A3)",
+        "url":              "https://ladsweb.modaps.eosdis.nasa.gov/",
+        "api_key_env":      "EARTHDATA_TOKEN",
+        "fallback":         "EOG HTTP mirror → synthetic (literature-based)",
+        "acquisition_mode": "query_driven",
+        "notes":            "Monthly cloud-free radiance composites (500 m). "
+                            "Tier 1: NASA Earthdata HTTPS (EARTHDATA_TOKEN). "
+                            "Tier 2: EOG HTTP mirror (no key). "
+                            "Tier 3: synthetic estimates (DATA_CONFIDENCE = 0.0). "
+                            "Signals: NTL_RADIANCE, NTL_LIT_FRACTION, ECONOMIC_ACTIVITY_INDEX.",
+    },
+    "terrain": {
+        "provider":         "SRTM / Open-Elevation API",
+        "url":              "https://api.open-elevation.com/",
+        "api_key_env":      None,
+        "fallback":         "srtm.py local tile cache → synthetic flat terrain",
+        "acquisition_mode": "query_driven",
+        "notes":            "SRTM 30 m DEM sampled at ~250 m grid per H3 cell. "
+                            "Primary: Open-Elevation public API (free, no key). "
+                            "Fallback: srtm.py downloads HGT tiles locally. "
+                            "Signals: ELEVATION_M, SLOPE_DEG, ASPECT_DEG, TERRAIN_CLASS.",
+    },
+    "buildings": {
+        "provider":         "OpenStreetMap (Overpass API)",
+        "url":              "https://overpass-api.de/",
+        "api_key_env":      None,
+        "fallback":         "none — skipped if Overpass unavailable",
+        "acquisition_mode": "query_driven",
+        "notes":            "Building footprints (building=*), road network, and waterways "
+                            "from OSM Overpass API. 1.5s inter-request sleep for polite usage. "
+                            "Signals: BUILDING_COUNT, BUILDING_DENSITY, AVG_FLOORS, "
+                            "ROAD_LENGTH_M, ROAD_DENSITY, DRAIN_LENGTH_M.",
+    },
 }
 
-_DOMAIN_ORDER = ["air", "weather", "heat", "flood", "fire", "waste", "water",
-                 "construction", "green", "noise"]
+_DOMAIN_ORDER = [
+    "air", "weather", "heat", "flood", "fire",
+    "waste", "water", "construction", "green", "noise",
+    "nightlights", "terrain", "buildings",
+]
 
 # Derived from the central city registry — single source of truth.
 _CITY_DISPLAY: dict[str, str] = {k: v["display_name"] for k, v in _CITY_REGISTRY.items()}

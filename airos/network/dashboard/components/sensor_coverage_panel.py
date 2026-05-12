@@ -42,13 +42,28 @@ def _city_quality_summary(city_id: str) -> dict:
 # Constants
 # ---------------------------------------------------------------------------
 
-_DOMAINS = ["All", "Air Quality", "Flood", "Heat", "Noise"]
+_DOMAINS = [
+    "All",
+    "Air Quality", "Weather",
+    "Heat", "Flood", "Fire",
+    "Water Quality", "Waste", "Construction", "Green Cover",
+    "Noise", "Night Lights", "Terrain", "Buildings",
+]
 
 _DOMAIN_KEY = {
-    "Air Quality": "air",
-    "Flood":       "flood",
-    "Heat":        "heat",
-    "Noise":       "noise",
+    "Air Quality":  "air",
+    "Weather":      "weather",
+    "Heat":         "heat",
+    "Flood":        "flood",
+    "Fire":         "fire",
+    "Water Quality":"water",
+    "Waste":        "waste",
+    "Construction": "construction",
+    "Green Cover":  "green",
+    "Noise":        "noise",
+    "Night Lights": "nightlights",
+    "Terrain":      "terrain",
+    "Buildings":    "buildings",
 }
 
 _MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"

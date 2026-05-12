@@ -145,16 +145,60 @@ _DATA_SOURCES: dict[str, dict] = {
         "coverage_note": "Sensor density varies significantly by city.",
         "conf_floor": 0.40,
     },
+    "nightlights_viirs": {
+        "emoji": "💡",
+        "label": "Night Lights — VIIRS",
+        "subtitle": "NASA Black Marble VNP46A3 / EOG monthly radiance composites",
+        "domains": ["nightlights"],
+        "key_signals": [
+            "NTL_RADIANCE", "NTL_LIT_FRACTION",
+            "ECONOMIC_ACTIVITY_INDEX", "ACTIVITY_CLASS", "DATA_CONFIDENCE",
+        ],
+        "cadence": "Monthly",
+        "methodology": (
+            "NASA VIIRS Black Marble VNP46A3 monthly cloud-free composites (500 m). "
+            "Primary: NASA Earthdata HTTPS (requires EARTHDATA_TOKEN). "
+            "Fallback 1: EOG HTTP mirror (no key). "
+            "Fallback 2: literature-based synthetic radiance estimates (DATA_CONFIDENCE = 0.0). "
+            "Radiance values (nW/cm²/sr) averaged across all pixels within each H3 res-8 cell."
+        ),
+        "coverage_note": "Monthly cadence — values are stable between updates. "
+                         "Synthetic fallback has DATA_CONFIDENCE = 0.0.",
+        "conf_floor": 0.50,
+    },
+    "terrain_srtm": {
+        "emoji": "🏔️",
+        "label": "Terrain — SRTM",
+        "subtitle": "Open-Elevation / SRTM 30 m DEM — elevation, slope, aspect",
+        "domains": ["terrain"],
+        "key_signals": [
+            "ELEVATION_M", "SLOPE_DEG", "ASPECT_DEG",
+            "RUGGEDNESS_INDEX", "TERRAIN_CLASS", "DATA_CONFIDENCE",
+        ],
+        "cadence": "Static (quarterly refresh)",
+        "methodology": (
+            "Shuttle Radar Topography Mission (SRTM) 30 m DEM. "
+            "Primary: Open-Elevation API (backed by SRTM/Mapzen, free, no key). "
+            "Fallback: srtm.py package downloads and caches HGT tiles locally (~30 MB per 1°×1° tile). "
+            "~250 m sampling grid (~10–12 points per H3 cell). "
+            "Slope and aspect derived via finite-difference gradient of elevation grid."
+        ),
+        "coverage_note": "Global coverage. No API key required. Quarterly refresh is sufficient "
+                         "as terrain is effectively static.",
+        "conf_floor": 0.70,
+    },
 }
 
 _STALENESS_THRESHOLDS = {
-    "air_sensors":    timedelta(hours=2),
-    "weather":        timedelta(hours=2),
-    "fire_firms":     timedelta(hours=6),
-    "satellite_gee":  timedelta(days=2),
-    "osm":            timedelta(days=7),
-    "cctv_cameras":   timedelta(minutes=30),
-    "noise_sensors":  timedelta(hours=2),
+    "air_sensors":       timedelta(hours=2),
+    "weather":           timedelta(hours=2),
+    "fire_firms":        timedelta(hours=6),
+    "satellite_gee":     timedelta(days=2),
+    "osm":               timedelta(days=7),
+    "cctv_cameras":      timedelta(minutes=30),
+    "noise_sensors":     timedelta(hours=2),
+    "nightlights_viirs": timedelta(days=35),
+    "terrain_srtm":      timedelta(days=90),
 }
 
 

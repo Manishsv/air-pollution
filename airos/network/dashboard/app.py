@@ -282,12 +282,13 @@ def main():
         unsafe_allow_html=True,
     )
 
-    t_overview, t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
+    t_overview, t_inbox, t_map, t_raw, t_domains, t_wards, t_ops = st.tabs([
         "🏙️ Overview",
         "📬 Inbox",
         "🗺️ City Map",
         "🔬 Raw Data",
         "📊 Domains",
+        "🏘️ Wards & Planning",
         "🔧 Operations",
     ])
 
@@ -316,7 +317,7 @@ def main():
                 "resolution 8 (~0.74 km² cells). "
                 "For cross-domain risk assessment use the City Map. "
                 "For AI insights use the Inbox. "
-                "For decision packets use Ward Decisions."
+                "For ward-level decisions and planning use Wards & Planning."
             ),
             primary_alert=None,
         )
@@ -336,10 +337,6 @@ def main():
             "🏔️ Terrain":            render_terrain_panel,
             "💡 Night Lights":       render_nightlights_panel,
             "🏙️ Infrastructure":    render_infrastructure_panel,
-            "🏘️ Ward QoL":          render_ward_panel,
-            "📋 Ward Decisions":    render_ward_decisions_panel,
-            "🏢 Property":          render_property_buildings_panel,
-            "📁 Program Reporting": render_program_reporting_panel,
         }
         domain_choice = st.selectbox(
             "Domain", list(_DOMAIN_PANELS.keys()), key="domain_panel_selector",
@@ -347,6 +344,31 @@ def main():
         )
         st.divider()
         _DOMAIN_PANELS[domain_choice]()
+
+    # ── Wards & Planning ─────────────────────────────────────────────────
+    with t_wards:
+        render_domain_header(
+            title="Wards & Planning",
+            caption=(
+                "Ward-level quality-of-life analysis, decision packets, property intelligence, "
+                "and programme reporting. These views aggregate across domains to support "
+                "planning and governance decisions."
+            ),
+            primary_alert=None,
+        )
+
+        _WARD_PANELS = {
+            "🏘️ Ward QoL":          render_ward_panel,
+            "📋 Ward Decisions":    render_ward_decisions_panel,
+            "🏢 Property":          render_property_buildings_panel,
+            "📁 Program Reporting": render_program_reporting_panel,
+        }
+        ward_choice = st.selectbox(
+            "View", list(_WARD_PANELS.keys()), key="ward_panel_selector",
+            label_visibility="collapsed",
+        )
+        st.divider()
+        _WARD_PANELS[ward_choice]()
 
     # ── Operations ────────────────────────────────────────────────────────
     with t_ops:
