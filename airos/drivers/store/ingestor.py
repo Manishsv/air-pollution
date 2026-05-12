@@ -389,7 +389,7 @@ def _ingest_construction(city_id: str, bbox: dict, *, force: bool = False) -> in
 
 def _ingest_green(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("green", city_id, force)
-    from airos.drivers.connectors.satellite.pc_green import fetch_green_cover
+    from airos.drivers.connectors.satellite.cdse_green import fetch_green_cover
     from airos.apps.green.green_pipeline import build_green_decision_packets
     h3_ids = _h3_grid_for_bbox(bbox, DEFAULT_H3_RES)
     cells_dict = fetch_green_cover(

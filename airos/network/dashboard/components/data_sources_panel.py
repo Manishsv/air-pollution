@@ -103,14 +103,15 @@ _SOURCES = {
                             "BSI threshold > 0.05. Cloud filter: 30%.",
     },
     "green": {
-        "provider":         "Google Earth Engine (Sentinel-2)",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
-        "fallback":         "none — skipped if no key",
+        "provider":         "CDSE Sentinel Hub (Sentinel-2 L2A)",
+        "url":              "https://dataspace.copernicus.eu/",
+        "api_key_env":      "CDSE_CLIENT_ID",
+        "fallback":         "none — skipped if no credentials",
         "acquisition_mode": "query_driven",
         "notes":            "NDVI, EVI, ΔNDVI change detection from Sentinel-2 Level-2A. "
-                            "NDVI > 0.15 to include cell as vegetated. Cloud filter: 30%. "
-                            "Change categories: significant_loss, moderate_loss, stable, gain.",
+                            "Process API returns cloud-filtered GeoTIFF (leastCC mosaic) "
+                            "with indices pre-computed via evalscript. "
+                            "NDVI > 0.15 to include cell as vegetated. Cloud filter: 30%.",
     },
     "noise": {
         "provider":         "OpenStreetMap + computed",

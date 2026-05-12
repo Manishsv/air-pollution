@@ -97,11 +97,11 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "pc_green_cover",
+        "builder_id": "cdse_green_cover",
         "description": (
-            "Microsoft Planetary Computer connector. Measures vegetation cover change "
-            "(NDVI, EVI, ΔNDVI) from Sentinel-2 L2A and writes green cover signals "
-            "to h3_signals. No GEE dependency — uses public STAC catalog."
+            "Copernicus Data Space Ecosystem connector. Measures vegetation cover change "
+            "(NDVI, EVI, ΔNDVI) from Sentinel-2 L2A via Sentinel Hub Process API. "
+            "No GEE dependency — requires CDSE_CLIENT_ID and CDSE_CLIENT_SECRET."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],
