@@ -12,9 +12,9 @@ class GreenDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "NDVI", "GREEN_COVER_FRACTION", "GCCI", "DATA_CONFIDENCE",
+        "GREEN_COVER_CHANGE_INDEX", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Sentinel-2 NDVI (GEE)"]
+    data_sources = ["Sentinel-2 NDVI (CDSE Sentinel Hub)"]
     _required_env_vars = []
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
@@ -23,8 +23,8 @@ class GreenDriver(_InTreeDriver):
 
     def conformance_check(self) -> ConformanceResult:
         result = super().conformance_check()
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("CDSE_CLIENT_ID"):
             result.warnings.append(
-                "GOOGLE_APPLICATION_CREDENTIALS not set — satellite NDVI unavailable"
+                "CDSE_CLIENT_ID not set — satellite NDVI unavailable"
             )
         return result

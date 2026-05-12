@@ -16,6 +16,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy rasterio TIFF metadata warnings from float32 CDSE responses.
+logging.getLogger("rasterio._env").setLevel(logging.ERROR)
+
 _TOKEN_URL   = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 _PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 

@@ -46,7 +46,7 @@ _EVALSCRIPT_S5P_NO2 = """
 //VERSION=3
 function setup() {
   return {
-    input:  [{bands: ["NO2"], units: "MOLECULAR_CONCENTRATION"}],
+    input:  [{bands: ["NO2"]}],
     output: {bands: 1, sampleType: "FLOAT32"}
   };
 }

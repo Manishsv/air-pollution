@@ -42,7 +42,7 @@ _EVALSCRIPT_S5P_CH4 = """
 //VERSION=3
 function setup() {
   return {
-    input:  [{bands: ["CH4"], units: "PARTS_PER_BILLION"}],
+    input:  [{bands: ["CH4"]}],
     output: {bands: 1, sampleType: "FLOAT32"}
   };
 }

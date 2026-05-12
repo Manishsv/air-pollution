@@ -12,10 +12,9 @@ class WaterDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "MNDWI", "NDTI", "CI", "FAI",
-        "WATER_QUALITY_INDEX", "DATA_CONFIDENCE",
+        "OPTICAL_WATER_CLARITY_INDEX", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Sentinel-2 (GEE) — MNDWI / NDTI / CI / FAI"]
+    data_sources = ["Sentinel-2 (CDSE Sentinel Hub) — MNDWI / NDTI / CI / FAI"]
     _required_env_vars = []
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
@@ -24,8 +23,8 @@ class WaterDriver(_InTreeDriver):
 
     def conformance_check(self) -> ConformanceResult:
         result = super().conformance_check()
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("CDSE_CLIENT_ID"):
             result.warnings.append(
-                "GOOGLE_APPLICATION_CREDENTIALS not set — satellite water quality unavailable"
+                "CDSE_CLIENT_ID not set — satellite water quality unavailable"
             )
         return result
