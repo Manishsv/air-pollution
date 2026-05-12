@@ -279,11 +279,9 @@ def main():
         unsafe_allow_html=True,
     )
 
-    t_overview, t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
+    t_overview, t_inbox, t_domains, t_ops = st.tabs([
         "🏙️ Overview",
         "📬 Inbox",
-        "🗺️ City Map",
-        "🔬 Raw Data",
         "📊 Domains",
         "🔧 Operations",
     ])
@@ -292,17 +290,17 @@ def main():
     with t_overview:
         render_overview_panel()
 
-    # ── Inbox ─────────────────────────────────────────────────────────────
+    # ── Inbox (list + map views) ──────────────────────────────────────────
     with t_inbox:
-        render_inbox_panel()
-
-    # ── City Map ──────────────────────────────────────────────────────────
-    with t_map:
-        render_map_panel()
-
-    # ── Raw Data (source-centric explorer) ────────────────────────────────
-    with t_raw:
-        render_raw_data_panel()
+        _inbox_view = st.radio(
+            "View", ["📋 List", "🗺️ Map"],
+            horizontal=True, key="inbox_view_toggle", label_visibility="collapsed",
+        )
+        st.divider()
+        if _inbox_view == "📋 List":
+            render_inbox_panel()
+        else:
+            render_map_panel()
 
     # ── Domains (signal maps per risk domain) ────────────────────────────
     with t_domains:
@@ -311,9 +309,8 @@ def main():
             caption=(
                 "Per-domain risk signal maps. Data is pre-computed by the H3 ingestors at "
                 "resolution 8 (~0.74 km² cells). "
-                "For cross-domain risk assessment use the City Map. "
-                "For AI insights use the Inbox. "
-                "For ward-level decisions and planning use Wards & Planning."
+                "For cross-domain risk assessment use the Map view in Inbox. "
+                "For AI insights use the Inbox list view."
             ),
             primary_alert=None,
         )
@@ -345,17 +342,18 @@ def main():
     with t_ops:
         render_domain_header(
             title="Operations",
-            caption="Pipeline health, sensor coverage, runtime trace, and system events.",
+            caption="Pipeline health, sensor coverage, runtime trace, system events, and raw data debugging.",
             primary_alert=None,
         )
 
         # Selectbox navigation: only the selected panel renders — avoids running
         # all sub-panels simultaneously (which is what st.tabs does).
         _OPS_PANELS = {
-            "🔌 Data Sources":   "sources",
+            "🔌 Data Sources":    "sources",
             "📡 Sensor Coverage": "sensors",
             "🖥️ Runtime Trace":   "trace",
             "📋 Events":          "events",
+            "🔬 Raw Data":        "raw",
         }
         ops_choice = st.selectbox(
             "View", list(_OPS_PANELS.keys()), key="ops_panel_selector",
@@ -389,6 +387,8 @@ def main():
                     "total_rows":   0 if events is None or events.empty else int(len(events)),
                 },
             )
+        elif ops_view == "raw":
+            render_raw_data_panel()
 
 
 if __name__ == "__main__":
