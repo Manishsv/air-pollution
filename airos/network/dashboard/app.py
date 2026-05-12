@@ -272,13 +272,6 @@ def main():
     _render_sidebar(audit=audit, metrics=metrics, base_path=base_path)
 
     # ── Primary navigation ────────────────────────────────────────────────
-    st.markdown(
-        '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
-        'color:rgba(0,0,0,0.4);text-transform:uppercase;margin-bottom:4px;">'
-        'AirOS Review Console</div>',
-        unsafe_allow_html=True,
-    )
-
     t_overview, t_inbox, t_domains, t_ops = st.tabs([
         "🏙️ Overview",
         "📬 Inbox",
@@ -296,7 +289,6 @@ def main():
             "View", ["📋 List", "🗺️ Map"],
             horizontal=True, key="inbox_view_toggle", label_visibility="collapsed",
         )
-        st.divider()
         if _inbox_view == "📋 List":
             render_inbox_panel()
         else:
@@ -304,17 +296,6 @@ def main():
 
     # ── Domains (signal maps per risk domain) ────────────────────────────
     with t_domains:
-        render_domain_header(
-            title="Domain Signal Views",
-            caption=(
-                "Per-domain risk signal maps. Data is pre-computed by the H3 ingestors at "
-                "resolution 8 (~0.74 km² cells). "
-                "For cross-domain risk assessment use the Map view in Inbox. "
-                "For AI insights use the Inbox list view."
-            ),
-            primary_alert=None,
-        )
-
         # Selectbox navigation: only the selected domain panel renders.
         # Using st.tabs here would render all 14 panels simultaneously on every rerun.
         _DOMAIN_PANELS = {
@@ -335,17 +316,10 @@ def main():
             "Domain", list(_DOMAIN_PANELS.keys()), key="domain_panel_selector",
             label_visibility="collapsed",
         )
-        st.divider()
         _DOMAIN_PANELS[domain_choice]()
 
     # ── Operations ────────────────────────────────────────────────────────
     with t_ops:
-        render_domain_header(
-            title="Operations",
-            caption="Pipeline health, sensor coverage, runtime trace, system events, and raw data debugging.",
-            primary_alert=None,
-        )
-
         # Selectbox navigation: only the selected panel renders — avoids running
         # all sub-panels simultaneously (which is what st.tabs does).
         _OPS_PANELS = {
@@ -360,7 +334,6 @@ def main():
             label_visibility="collapsed",
         )
         ops_view = _OPS_PANELS[ops_choice]
-        st.divider()
 
         if ops_view == "sources":
             render_data_sources_panel()

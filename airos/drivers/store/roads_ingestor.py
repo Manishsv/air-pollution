@@ -2,7 +2,7 @@
 
 Signals written (domain="roads", source="osm"):
     ROAD_LENGTH_M         metres     Total clipped road length in cell
-    ROAD_DENSITY          m_per_km2  ROAD_LENGTH_M / cell_area_km2 × 1000
+    ROAD_DENSITY          m_per_km2  ROAD_LENGTH_M / cell_area_km2
     MAJOR_ROAD_RATIO      ratio      Length of primary/secondary/trunk roads
                                      as fraction of total road length
     INTERSECTION_COUNT    count      Number of road intersections inside cell
@@ -151,7 +151,7 @@ def ingest_roads(city_id: str, bbox: dict, *, force: bool = False) -> int:
         total_m  = c["total_m"]
         major_m  = c["tagged_m"]
 
-        density       = round((total_m / area_km2) * 1000, 2) if total_m > 0 else 0.0
+        density       = round(total_m / area_km2, 2) if total_m > 0 else 0.0
         major_ratio   = round(major_m / total_m, 4) if total_m > 0 else 0.0
         intersections = float(intersection_by_cell.get(h3_id, 0))
 

@@ -184,11 +184,10 @@ def write_signals(
             driver = _get_active_driver(domain)
             result = validate_and_log(rows, driver=driver, domain=domain)
             if not result.ok:
-                # Record the conformance failure in the ingest log
                 _record_conformance(city_id, domain, ok=False, failures=result.failures)
                 return 0
-            if result.ok and (result.failures or result.warnings):
-                _record_conformance(city_id, domain, ok=True, failures=result.warnings)
+            # Always record a passing result so a previous FAIL is cleared in the log.
+            _record_conformance(city_id, domain, ok=True, failures=result.warnings)
         except Exception as exc:
             logger.debug("Conformance gate raised (non-fatal): %s", exc)
     # ─────────────────────────────────────────────────────────────────────

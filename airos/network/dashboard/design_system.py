@@ -171,6 +171,12 @@ div[data-testid="stDataFrame"] {
   overflow: hidden;
 }
 
+/* Reduce main content top padding */
+.main .block-container {
+  padding-top: 0.75rem !important;
+  padding-bottom: 1rem !important;
+}
+
 /* Tighten top-level tab bar padding */
 div[data-testid="stTabs"] > div:first-child {
   padding-bottom: 0 !important;
@@ -178,12 +184,17 @@ div[data-testid="stTabs"] > div:first-child {
 
 /* Remove excess top padding from tab content */
 div[data-testid="stTabsContent"] {
-  padding-top: 12px !important;
+  padding-top: 8px !important;
 }
 
 /* Compact sidebar */
 section[data-testid="stSidebar"] > div {
   padding-top: 16px !important;
+}
+
+/* Tighter dividers */
+hr {
+  margin: 10px 0 !important;
 }
 
 /* Tighter captions */

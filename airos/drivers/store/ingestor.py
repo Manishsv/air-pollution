@@ -265,15 +265,16 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
         upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=DEFAULT_H3_RES,
                         centroid_lat=clat, centroid_lon=clon)
 
+        import pandas as _pd
         pm25 = cell.get("pm25_ugm3")
         aqi_score = cell.get("aqi_score")
         cat = cell.get("aqi_category", "good")
         risk = _cat_lookup(cat)
 
-        if pm25 is not None:
+        if _pd.notna(pm25):
             signal_rows.append({"h3_id": h3_id, "signal": "PM25",
                                  "value": pm25, "unit": "µg/m³"})
-        if aqi_score is not None:
+        if _pd.notna(aqi_score):
             signal_rows.append({"h3_id": h3_id, "signal": "AQI",
                                  "value": aqi_score, "unit": "index"})
 
@@ -618,37 +619,38 @@ def _ingest_heat(city_id: str, bbox: dict, *, force: bool = False) -> int:
     from airos.drivers.store.writer import write_signals, write_assessment, upsert_metadata
     import pandas as pd
 
-    # Fetch a current temperature reading from Open-Meteo at the city centroid.
-    # The heat pipeline does IDW from observation points; with a single centroid
-    # point every cell gets the same temperature (UHI = 0), but the pipeline still
-    # produces a valid heat_risk_score driven by the green-deficit component.
-    centroid_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
-    centroid_lon = (bbox["lon_min"] + bbox["lon_max"]) / 2.0
+    # Fetch a 3×3 grid of temperature observations across the bbox so that IDW
+    # produces spatially-varying per-cell temperatures — enabling real UHI calculation.
     try:
-        from airos.drivers.connectors.weather.openmeteo_current import fetch_current_weather
-        wx = fetch_current_weather(centroid_lat, centroid_lon)
-        if wx.get("error") or wx.get("temperature_c") is None:
-            temperature_df = pd.DataFrame()
-        else:
-            temperature_df = pd.DataFrame([{
-                "station_id":    f"openmeteo_{city_id}",
-                "timestamp":     pd.Timestamp.utcnow(),
-                "temperature_c": float(wx["temperature_c"]),
-                "latitude":      centroid_lat,
-                "longitude":     centroid_lon,
-                "quality_flag":  "real",
-            }])
+        from airos.drivers.connectors.heat.openmeteo import fetch_temperature_observations
+        temperature_df = fetch_temperature_observations(
+            city_name=city_id,
+            lat_min=bbox["lat_min"], lon_min=bbox["lon_min"],
+            lat_max=bbox["lat_max"], lon_max=bbox["lon_max"],
+            lookback_days=1,
+        )
     except Exception as _wx_exc:
-        logger.debug("[%s/heat] weather fetch skipped: %s", city_id, _wx_exc)
+        logger.debug("[%s/heat] temperature grid fetch skipped: %s", city_id, _wx_exc)
         temperature_df = pd.DataFrame()
+
+    # Fetch per-cell green cover from OSM so green_deficit reflects real vegetation.
+    try:
+        from shapely.geometry import box as _shapely_box
+        from airos.drivers.connectors.heat.osm_green_cover import compute_green_cover
+        city_poly = _shapely_box(bbox["lon_min"], bbox["lat_min"],
+                                 bbox["lon_max"], bbox["lat_max"])
+        green_cover_df = compute_green_cover(city_poly, h3_resolution=DEFAULT_H3_RES)
+    except Exception as _gc_exc:
+        logger.debug("[%s/heat] green cover fetch skipped: %s", city_id, _gc_exc)
+        green_cover_df = pd.DataFrame()
 
     try:
         dashboard  = build_heat_risk_dashboard(temperature_df=temperature_df,
-                                               green_cover_df=pd.DataFrame(),
+                                               green_cover_df=green_cover_df,
                                                h3_resolution=DEFAULT_H3_RES,
                                                city_id=city_id, **bbox)
         candidates = build_intervention_candidates(temperature_df=temperature_df,
-                                                   green_cover_df=pd.DataFrame(),
+                                                   green_cover_df=green_cover_df,
                                                    h3_resolution=DEFAULT_H3_RES,
                                                    city_id=city_id, **bbox)
     except Exception as exc:
@@ -669,7 +671,7 @@ def _ingest_heat(city_id: str, bbox: dict, *, force: bool = False) -> int:
         uhi   = cell.get("uhi_intensity")
         for sig, val, unit in [("HEAT_RISK_SCORE", score, "index"),
                                 ("LST", lst, "degC"), ("UHI", uhi, "degC")]:
-            if val is not None:
+            if pd.notna(val):
                 signal_rows.append({"h3_id": h3_id, "signal": sig,
                                      "value": val, "unit": unit})
         # Coverage: heat is a city-centroid broadcast — default confidence

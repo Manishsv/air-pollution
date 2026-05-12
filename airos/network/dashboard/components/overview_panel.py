@@ -199,7 +199,10 @@ def _city_selector(key: str) -> str:
     from airos.os.sdk import store
     cities = store.list_cities()
     default = cities.index("bangalore") if "bangalore" in cities else 0
-    return st.selectbox("City", cities, index=default, key=f"overview_city_{key}")
+    return st.selectbox(
+        "City", cities, index=default, key=f"overview_city_{key}",
+        label_visibility="collapsed",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -241,18 +244,16 @@ def _render_commissioner(city_id: str) -> None:
 
     st.markdown(_html(f"""
         <div style="background:linear-gradient(135deg,{risk_color}18 0%,{risk_color}08 100%);
-            border:0.5px solid {risk_color}55;border-radius:12px;
-            padding:24px 28px 18px;margin-bottom:16px;">
-        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-            color:rgba(0,0,0,.4);text-transform:uppercase;">City health — {city_id.title()}</div>
-        <div style="display:flex;align-items:baseline;gap:12px;margin-top:4px;">
-        <span style="font-size:42px;font-weight:700;color:{risk_color};line-height:1.1;">
+            border:0.5px solid {risk_color}55;border-radius:10px;
+            padding:14px 20px 12px;margin-bottom:12px;">
+        <div style="display:flex;align-items:baseline;gap:10px;">
+        <span style="font-size:32px;font-weight:700;color:{risk_color};line-height:1.1;">
         {risk_emoji} {worst_risk.upper()}</span>
-        <span style="font-size:14px;color:rgba(0,0,0,.55);">
+        <span style="font-size:13px;color:rgba(0,0,0,.55);">
         worst risk · {_DOMAIN_LABEL.get(worst_domain, worst_domain)}</span>
+        <span style="font-size:11px;color:rgba(0,0,0,.38);margin-left:auto;">
+        {_time_ago(health.get("latest_pattern_at"))}</span>
         </div>
-        <div style="font-size:12px;color:rgba(0,0,0,.45);margin-top:6px;">
-        Updated {_time_ago(health.get("latest_pattern_at"))}</div>
         </div>
     """), unsafe_allow_html=True)
 
@@ -269,10 +270,8 @@ def _render_commissioner(city_id: str) -> None:
     )
     c5.metric("Field tasks", f"{health.get('field_tasks_pending', 0):,}")
 
-    st.divider()
-
-    # ── Domain risk heatmap ────────────────────────────────────────────────
-    st.markdown("#### Domain status")
+    # ── Domain status + breakdown ──────────────────────────────────────────
+    st.markdown("#### Domains")
     domain_risk = health.get("domain_risk", {})
     if domain_risk:
         # Display as a compact grid of colored chips
@@ -315,10 +314,6 @@ def _render_commissioner(city_id: str) -> None:
     else:
         st.caption("No domain assessments yet. Run `python main.py --step ingest-h3` then start the scheduler.")
 
-    # ── Domain driver breakdown ────────────────────────────────────────────
-    st.markdown("#### Why these ratings?")
-    st.caption("Rule-based assessment from satellite + sensor data. Explains each domain's current risk tier.")
-
     drivers = _load_domain_drivers(city_id)
     # Only show domains with high/severe risk
     bad_drivers = [d for d in drivers if d["worst_risk"] in ("severe", "high")]
@@ -348,7 +343,7 @@ def _render_commissioner(city_id: str) -> None:
 
             with st.expander(
                 f"{emoji} **{label}** — {cells_txt}{val_txt}",
-                expanded=True,
+                expanded=False,
             ):
                 if issue_txt:
                     st.markdown(f"**Primary driver:** {issue_txt}")
@@ -367,12 +362,7 @@ def _render_commissioner(city_id: str) -> None:
     st.divider()
 
     # ── City AI pattern feed ───────────────────────────────────────────────
-    st.markdown("#### AI pattern briefing")
-    st.caption(
-        "LLM synthesis from H3 Expert Agent findings. "
-        "Covers domains where cell-level AI analysis has run. "
-        "Data-only domains above (green/water/waste) are explained by rule-based assessment."
-    )
+    st.markdown("#### AI patterns")
 
     if not patterns:
         st.info(
@@ -392,14 +382,14 @@ def _render_commissioner(city_id: str) -> None:
 
             with st.expander(
                 f"📋 {headline}  ·  {created}  ·  {n_insights} insights · {theme_count} themes",
-                expanded=(pat is patterns[0]),
+                expanded=False,
             ):
                 if themes:
                     st.markdown("**Themes identified**")
                     for t in themes:
                         if isinstance(t, dict):
                             st.markdown(
-                                f"- **{t.get('theme', t.get('name', '?'))}** — "
+                                f"- **{t.get('title', t.get('theme', t.get('name', '?')))}** — "
                                 f"{t.get('description', t.get('detail', ''))}"
                             )
                         else:
@@ -426,13 +416,10 @@ def _render_commissioner(city_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _render_dept_head(city_id: str) -> None:
-    # Domain selector
     all_domains = list(_DOMAIN_LABEL.keys())
     domain_labels = [_DOMAIN_LABEL[d] for d in all_domains]
     chosen_label = st.selectbox(
-        "Focus domain",
-        domain_labels,
-        key="dh_domain",
+        "Domain", domain_labels, key="dh_domain", label_visibility="collapsed",
     )
     chosen_domain = all_domains[domain_labels.index(chosen_label)]
 
@@ -453,15 +440,14 @@ def _render_dept_head(city_id: str) -> None:
     _issue = str(worst.get("dominant_issue", "")) if not df.empty and worst.get("dominant_issue") else ""
     _issue_html = f"  &middot;  {_issue}" if _issue else ""
     st.markdown(_html(f"""
-        <div style="border:0.5px solid {risk_color}66;border-radius:10px;
-            padding:18px 22px 14px;margin-bottom:16px;background:{risk_color}0d;">
-        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-            color:rgba(0,0,0,.4);text-transform:uppercase;">
-        {chosen_label} · Highest Risk Area</div>
-        <div style="font-size:30px;font-weight:700;color:{risk_color};
-            margin-top:4px;line-height:1.2;">{risk_emoji} {worst_area}</div>
-        <div style="font-size:12px;color:rgba(0,0,0,.5);margin-top:4px;">
-        Risk: <strong>{worst_risk.upper()}</strong>{_issue_html}</div>
+        <div style="border:0.5px solid {risk_color}66;border-radius:8px;
+            padding:10px 16px 8px;margin-bottom:10px;background:{risk_color}0d;">
+        <div style="display:flex;align-items:baseline;gap:10px;">
+        <span style="font-size:24px;font-weight:700;color:{risk_color};line-height:1.2;">
+        {risk_emoji} {worst_area}</span>
+        <span style="font-size:12px;color:rgba(0,0,0,.5);">
+        {worst_risk.upper()}{_issue_html} · {chosen_label}</span>
+        </div>
         </div>
     """), unsafe_allow_html=True)
 
@@ -471,10 +457,10 @@ def _render_dept_head(city_id: str) -> None:
         n_unknown = int(by_risk.get("unknown", 0))
         all_unknown = (n_unknown == len(df))
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Severe cells",   int(by_risk.get("severe", 0)))
-        c2.metric("High risk cells", int(by_risk.get("high", 0)))
-        c3.metric("Moderate cells", int(by_risk.get("moderate", 0)))
-        c4.metric("Total assessed",  len(df))
+        c1.metric("Severe",   int(by_risk.get("severe", 0)))
+        c2.metric("High",     int(by_risk.get("high", 0)))
+        c3.metric("Moderate", int(by_risk.get("moderate", 0)))
+        c4.metric("Total",    len(df))
         if all_unknown:
             st.info(
                 f"All {len(df)} {chosen_domain} cells have raw index data but no risk tier yet. "
@@ -482,8 +468,6 @@ def _render_dept_head(city_id: str) -> None:
                 + chosen_domain + " --force` to apply updated thresholds.",
                 icon="📊",
             )
-
-    st.divider()
 
     # ── Ward ranking table ─────────────────────────────────────────────────
     st.markdown(f"#### Worst areas — {chosen_label}")
@@ -566,12 +550,10 @@ def _render_ward_officer(city_id: str) -> None:
 
     _hero_icon = "🚨" if n_severe > 0 else ("📋" if n_tasks > 0 else "✅")
     st.markdown(_html(f"""
-        <div style="border:0.5px solid {hero_color}66;border-radius:10px;
-            padding:18px 22px 14px;margin-bottom:16px;background:{hero_color}0d;">
-        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-            color:rgba(0,0,0,.4);text-transform:uppercase;">Field tasks — {city_id.title()}</div>
-        <div style="font-size:28px;font-weight:700;color:{hero_color};
-            margin-top:4px;line-height:1.2;">{_hero_icon} {hero_msg}</div>
+        <div style="border:0.5px solid {hero_color}66;border-radius:8px;
+            padding:10px 16px 8px;margin-bottom:10px;background:{hero_color}0d;">
+        <div style="font-size:22px;font-weight:700;color:{hero_color};line-height:1.3;">
+        {_hero_icon} {hero_msg}</div>
         </div>
     """), unsafe_allow_html=True)
 
@@ -587,11 +569,8 @@ def _render_ward_officer(city_id: str) -> None:
     c3.metric("High risk", int((df["risk_level"] == "high").sum()))
     c4.metric("Domains affected", len(by_domain))
 
-    st.divider()
-
-    # ── Task list (mobile-friendly cards) ─────────────────────────────────
-    st.markdown("#### Your task list")
-    st.caption("Ordered by severity. Tap a task for location details.")
+    # ── Task list ──────────────────────────────────────────────────────────
+    st.markdown("#### Tasks")
 
     for _, row in df.iterrows():
         risk   = str(row.get("risk_level", "unknown"))
@@ -686,15 +665,12 @@ def _render_citizen(city_id: str) -> None:
 
     # ── Hero ───────────────────────────────────────────────────────────────
     st.markdown(_html(f"""
-        <div style="text-align:center;padding:32px 24px 24px;
+        <div style="text-align:center;padding:18px 24px 16px;
             background:linear-gradient(160deg,{color}18,{color}06);
-            border:0.5px solid {color}55;border-radius:16px;margin-bottom:20px;">
-        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;
-            color:rgba(0,0,0,.4);text-transform:uppercase;margin-bottom:8px;">
-        Air Quality · {city_id.title()}</div>
-        <div style="font-size:72px;line-height:1;margin-bottom:6px;">{emoji}</div>
-        <div style="font-size:28px;font-weight:700;color:{color};margin-bottom:10px;">{label}</div>
-        <div style="font-size:14px;color:rgba(0,0,0,.62);max-width:380px;margin:0 auto;">{advice}</div>
+            border:0.5px solid {color}55;border-radius:12px;margin-bottom:14px;">
+        <div style="font-size:48px;line-height:1;margin-bottom:4px;">{emoji}</div>
+        <div style="font-size:24px;font-weight:700;color:{color};margin-bottom:6px;">{label}</div>
+        <div style="font-size:13px;color:rgba(0,0,0,.62);max-width:360px;margin:0 auto;">{advice}</div>
         </div>
     """), unsafe_allow_html=True)
 
@@ -746,10 +722,6 @@ def _render_citizen(city_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _render_planner(city_id: str) -> None:
-    """Planner view — time series explorer, domain coverage, export."""
-    st.markdown(
-        "#### Urban Planner / Researcher view",
-    )
     st.info(
         "The full signal history and time-series explorer is available in the "
         "**🔬 Raw Data** tab. The H3 map, domain overlays, and ward comparisons "
@@ -765,7 +737,6 @@ def _render_planner(city_id: str) -> None:
     c2.metric("Domains with data", len(health.get("domain_risk", {})))
     c3.metric("Open research insights", f"{health.get('open_insights', 0):,}")
 
-    st.divider()
     st.markdown("#### Domain data availability")
     domain_risk = health.get("domain_risk", {})
     if domain_risk:
@@ -807,29 +778,18 @@ _ROLES = {
 
 
 def render_overview_panel() -> None:
-    """Render the stakeholder overview panel.
-
-    Entry point called from app.py.
-    """
-    st.markdown(
-        '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;'
-        'color:rgba(0,0,0,.4);text-transform:uppercase;margin-bottom:2px;">'
-        'Stakeholder views</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "## City Overview",
-    )
-    st.caption(
-        "Choose your role to see the most relevant information at a glance. "
-        "All views are live — data refreshes every 60 seconds."
-    )
-
-    # Role selector + city selector in one row
-    col_role, col_city = st.columns([3, 1])
+    """Render the stakeholder overview panel."""
+    # Single compact header row: title | role selector | city selector
+    col_title, col_role, col_city = st.columns([1, 5, 1])
+    with col_title:
+        st.markdown(
+            '<div style="padding-top:7px;font-size:13px;font-weight:600;">'
+            'City Overview</div>',
+            unsafe_allow_html=True,
+        )
     with col_role:
         role_label = st.radio(
-            "View as",
+            "View",
             list(_ROLES.keys()),
             horizontal=True,
             key="overview_role",

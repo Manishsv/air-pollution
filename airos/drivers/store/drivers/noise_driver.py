@@ -12,7 +12,7 @@ class NoiseDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "LAeq_DB", "NOISE_RISK_INDEX", "RECEPTOR_PROXIMITY", "DATA_CONFIDENCE",
+        "NOISE_RISK_INDEX", "DATA_CONFIDENCE",
     ]
     data_sources = ["Noise sensor API (NOISE_API_URL)"]
     _required_env_vars = []     # NOISE_API_URL falls back to simulated data
