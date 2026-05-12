@@ -47,8 +47,6 @@ from airos.network.dashboard.components.noise_panel import render_noise_panel
 from airos.network.dashboard.components.terrain_panel import render_terrain_panel
 from airos.network.dashboard.components.nightlights_panel import render_nightlights_panel
 from airos.network.dashboard.components.infrastructure_panel import render_infrastructure_panel
-from airos.network.dashboard.components.ward_panel import render_ward_panel
-from airos.network.dashboard.components.ward_decisions_panel import render_ward_decisions_panel
 from airos.network.dashboard.components.property_buildings_panel import render_property_buildings_panel
 from airos.network.dashboard.components.program_reporting_panel import render_program_reporting_panel
 
@@ -358,8 +356,6 @@ def main():
         )
 
         _WARD_PANELS = {
-            "🏘️ Ward QoL":          render_ward_panel,
-            "📋 Ward Decisions":    render_ward_decisions_panel,
             "🏢 Property":          render_property_buildings_panel,
             "📁 Program Reporting": render_program_reporting_panel,
         }
