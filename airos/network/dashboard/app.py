@@ -47,7 +47,7 @@ from airos.network.dashboard.components.noise_panel import render_noise_panel
 from airos.network.dashboard.components.terrain_panel import render_terrain_panel
 from airos.network.dashboard.components.nightlights_panel import render_nightlights_panel
 from airos.network.dashboard.components.infrastructure_panel import render_infrastructure_panel
-from airos.network.dashboard.components.program_reporting_panel import render_program_reporting_panel
+
 
 # ── Operations panels ─────────────────────────────────────────────────────
 from airos.network.dashboard.components.audit_panel import render_audit_panel
@@ -279,13 +279,12 @@ def main():
         unsafe_allow_html=True,
     )
 
-    t_overview, t_inbox, t_map, t_raw, t_domains, t_program, t_ops = st.tabs([
+    t_overview, t_inbox, t_map, t_raw, t_domains, t_ops = st.tabs([
         "🏙️ Overview",
         "📬 Inbox",
         "🗺️ City Map",
         "🔬 Raw Data",
         "📊 Domains",
-        "📁 Program Reporting",
         "🔧 Operations",
     ])
 
@@ -341,10 +340,6 @@ def main():
         )
         st.divider()
         _DOMAIN_PANELS[domain_choice]()
-
-    # ── Program Reporting ─────────────────────────────────────────────────
-    with t_program:
-        render_program_reporting_panel()
 
     # ── Operations ────────────────────────────────────────────────────────
     with t_ops:
