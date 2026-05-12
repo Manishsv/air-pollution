@@ -12,11 +12,10 @@ class HeatDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "LST_CELSIUS", "UHI_NORM", "GREEN_DEFICIT",
-        "HEAT_RISK_SCORE", "DATA_CONFIDENCE",
+        "HEAT_RISK_SCORE", "LST", "UHI", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Sentinel-2 LST (GEE)", "OpenMeteo API"]
-    _required_env_vars = []       # GEE credentials optional — falls back to OpenMeteo
+    data_sources = ["NASA Earthdata MODIS LST", "OpenMeteo API"]
+    _required_env_vars = []       # EARTHDATA_TOKEN optional — falls back to OpenMeteo
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
         from airos.drivers.store.ingestor import _ingest_heat
@@ -24,9 +23,9 @@ class HeatDriver(_InTreeDriver):
 
     def conformance_check(self) -> ConformanceResult:
         result = super().conformance_check()
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("EARTHDATA_TOKEN"):
             result.warnings.append(
-                "GOOGLE_APPLICATION_CREDENTIALS not set — satellite LST unavailable, "
+                "EARTHDATA_TOKEN not set — satellite LST unavailable, "
                 "falling back to OpenMeteo air temperature estimates"
             )
         return result
