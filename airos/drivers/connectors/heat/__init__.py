@@ -2,8 +2,8 @@
 Heat connector router.
 
 Selects the data source based on environment variables:
-  GEE_PROJECT set  →  GEE (MODIS LST + Sentinel-2 NDVI) — 1 km, daily
-  fallback         →  OpenMeteo — air temperature proxy, free, no key
+  EARTHDATA_TOKEN set  →  NASA Earthdata MODIS MOD11A1 LST (1 km, daily)
+  fallback             →  OpenMeteo — air temperature proxy, free, no key
 """
 from __future__ import annotations
 
@@ -27,24 +27,22 @@ def fetch_temperature_observations(
     city_id: str | None = None,
 ) -> "pd.DataFrame":
 
-    gee_project = os.environ.get("GEE_PROJECT", "").strip()
+    earthdata_token = os.environ.get("EARTHDATA_TOKEN", "").strip()
 
-    if gee_project:
-        from .gee_lst import fetch_lst_observations as _fetch
-        logger.debug("Heat source: GEE MODIS LST (project=%s)", gee_project)
+    if earthdata_token:
+        from .earthdata_lst import fetch_lst_observations as _fetch
+        logger.debug("Heat source: NASA Earthdata MODIS LST")
         df = _fetch(
             city_name, lat_min, lon_min, lat_max, lon_max,
             lookback_days=max(lookback_days, 8),   # MODIS needs wider window
-            project=gee_project,
         )
-        # Fall back to OpenMeteo if GEE returned nothing
         if df.empty:
-            logger.warning("GEE LST returned empty — falling back to OpenMeteo")
-            gee_project = ""
+            logger.warning("MODIS LST returned empty — falling back to OpenMeteo")
+            earthdata_token = ""
     else:
-        logger.debug("Heat source: OpenMeteo (set GEE_PROJECT for real LST data)")
+        logger.debug("Heat source: OpenMeteo (set EARTHDATA_TOKEN for real LST data)")
 
-    if not gee_project:
+    if not earthdata_token:
         from .openmeteo import fetch_temperature_observations as _fetch_om
         df = _fetch_om(
             city_name, lat_min, lon_min, lat_max, lon_max,

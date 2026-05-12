@@ -52,25 +52,25 @@ _SOURCES = {
                             "0.5° airshed buffer applied around city bbox.",
     },
     "heat": {
-        "provider":         "Google Earth Engine (MODIS LST + Sentinel-2)",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
-        "fallback":         "Open-Meteo temperature (no GEE key)",
+        "provider":         "NASA Earthdata (MODIS MOD11A1 LST + CDSE NDVI)",
+        "url":              "https://urs.earthdata.nasa.gov/",
+        "api_key_env":      "EARTHDATA_TOKEN",
+        "fallback":         "Open-Meteo temperature (no EARTHDATA_TOKEN)",
         "acquisition_mode": "query_driven",
-        "notes":            "MODIS MOD11A1 Land Surface Temperature (1 km, daily) + "
-                            "Sentinel-2 NDVI for urban heat island index. "
-                            "Falls back to Open-Meteo air temperature if GEE_PROJECT unset.",
+        "notes":            "MODIS MOD11A1 Land Surface Temperature (1 km, daily) via earthaccess. "
+                            "Sentinel-2 NDVI from CDSE for urban heat island index (optional). "
+                            "Falls back to Open-Meteo air temperature if EARTHDATA_TOKEN unset.",
     },
     "flood": {
-        "provider":         "GEE (NASA GPM IMERG) + OSM (drains)",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
+        "provider":         "NASA Earthdata (GPM IMERG) + Open-Elevation (SRTM)",
+        "url":              "https://urs.earthdata.nasa.gov/",
+        "api_key_env":      "EARTHDATA_TOKEN",
         "fallback":         "Open-Meteo rainfall + synthetic drain capacity",
         "acquisition_mode": "query_driven",
-        "notes":            "NASA GPM IMERG V07 precipitation (0.1°, 30-min) via GEE. "
-                            "SRTM DEM + JRC Global Surface Water for terrain/flood-extent context. "
+        "notes":            "NASA GPM IMERG V07 precipitation (0.1°, half-hourly) via earthaccess. "
+                            "Open-Elevation API (SRTM 90m) for terrain context. "
                             "Drain capacity from OSM waterway geometry — quarterly ingest. "
-                            "Falls back to Open-Meteo rainfall if GEE_PROJECT unset.",
+                            "Falls back to Open-Meteo rainfall if EARTHDATA_TOKEN unset.",
     },
     "water": {
         "provider":         "CDSE Sentinel Hub (Sentinel-2 L2A)",

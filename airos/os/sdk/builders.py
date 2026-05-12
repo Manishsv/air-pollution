@@ -84,10 +84,10 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "gee_urban_heat",
+        "builder_id": "earthdata_heat",
         "description": (
-            "Google Earth Engine connector. Fetches land surface temperature (LST) "
-            "and NDVI and writes urban heat signals to h3_signals."
+            "NASA Earthdata connector. Fetches MODIS MOD11A1 land surface temperature "
+            "and optional CDSE NDVI to write urban heat signals to h3_signals."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],
@@ -139,10 +139,10 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "gee_flood",
+        "builder_id": "earthdata_flood",
         "description": (
-            "Google Earth Engine connector. Identifies flood-prone and currently "
-            "inundated cells using SAR and writes flood signals to h3_signals."
+            "NASA Earthdata connector. Fetches GPM IMERG half-hourly precipitation "
+            "and Open-Elevation SRTM terrain to compute flood risk signals."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],

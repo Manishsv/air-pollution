@@ -41,7 +41,7 @@ def _city_selector() -> tuple[str, dict, bool]:
         city_label = st.selectbox("City", list(city_options.keys()), key="heat_city_selector")
     with c2:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="heat_live_toggle",
-                         help="Uses GEE MODIS LST if GEE_PROJECT is set, otherwise OpenMeteo")
+                         help="Uses NASA Earthdata MODIS LST if EARTHDATA_TOKEN is set, otherwise OpenMeteo")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
     return city_id, bbox, live

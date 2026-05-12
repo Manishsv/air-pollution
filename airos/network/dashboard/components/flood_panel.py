@@ -45,7 +45,7 @@ def _city_selector() -> tuple[str, dict, bool]:
         city_label = st.selectbox("City", list(city_options.keys()), key="flood_city_selector")
     with c2:
         live = st.toggle("Live data (cached ≤1h)", value=True, key="flood_live_toggle",
-                         help="Uses GEE GPM IMERG if GEE_PROJECT is set, otherwise OpenMeteo")
+                         help="Uses NASA Earthdata GPM IMERG if EARTHDATA_TOKEN is set, otherwise OpenMeteo")
     city_id = city_options[city_label]
     bbox    = get_bbox(city_id)
     return city_id, bbox, live

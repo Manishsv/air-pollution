@@ -6,7 +6,7 @@ CPCB city name aliases used by the CPCB connector.
 
 Connector selection is driven by environment variables (not per-city config):
   CPCB_API_KEY   — if set, CPCB is used for air quality
-  GEE_PROJECT    — if set, GEE (MODIS LST + GPM) is used for heat and flood
+  EARTHDATA_TOKEN — if set, NASA Earthdata (MODIS LST + GPM IMERG) is used for heat and flood
   Fallback: OpenMeteo for any domain whose env var is absent
 """
 from __future__ import annotations
