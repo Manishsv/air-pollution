@@ -60,7 +60,7 @@ jobs:
         run: python main.py --step conformance
 
       - name: AI dev supervisor (conformance)
-        run: python tools/ai_dev_supervisor/run_review.py --run-conformance
+        run: python airos/network/cli/ai_dev_supervisor/run_review.py --run-conformance
 
       - name: Agentic schema lint
         run: python agentic/core/validate.py
