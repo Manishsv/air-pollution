@@ -53,3 +53,4 @@ node_modules/
 .agent-loop/state/reviews.yaml
 .agent-loop/state/escalations.yaml
 .agent-loop/state/decisions.yaml
+logs/

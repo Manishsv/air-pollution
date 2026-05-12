@@ -52,11 +52,17 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.step == "scheduler":
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-            datefmt="%H:%M:%S",
-        )
+        log_dir = Path(__file__).parent / "logs"
+        log_dir.mkdir(exist_ok=True)
+        log_file = log_dir / "scheduler.log"
+        _fmt = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        _handlers: list[logging.Handler] = [
+            logging.StreamHandler(),
+            logging.FileHandler(log_file, encoding="utf-8"),
+        ]
+        logging.basicConfig(level=logging.INFO, format=_fmt,
+                            datefmt="%H:%M:%S", handlers=_handlers)
+        logging.getLogger(__name__).info("Scheduler log → %s", log_file)
         from airos.os.scheduler import run_forever
         run_forever()
         return
