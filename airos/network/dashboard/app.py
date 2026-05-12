@@ -43,11 +43,10 @@ from airos.network.dashboard.components.construction_panel import render_constru
 from airos.network.dashboard.components.green_panel import render_green_panel
 from airos.network.dashboard.components.noise_panel import render_noise_panel
 
-# ── Infrastructure, ward, programme panels ────────────────────────────────
+# ── Infrastructure & programme panels ────────────────────────────────────
 from airos.network.dashboard.components.terrain_panel import render_terrain_panel
 from airos.network.dashboard.components.nightlights_panel import render_nightlights_panel
 from airos.network.dashboard.components.infrastructure_panel import render_infrastructure_panel
-from airos.network.dashboard.components.property_buildings_panel import render_property_buildings_panel
 from airos.network.dashboard.components.program_reporting_panel import render_program_reporting_panel
 
 # ── Operations panels ─────────────────────────────────────────────────────
@@ -280,13 +279,13 @@ def main():
         unsafe_allow_html=True,
     )
 
-    t_overview, t_inbox, t_map, t_raw, t_domains, t_wards, t_ops = st.tabs([
+    t_overview, t_inbox, t_map, t_raw, t_domains, t_program, t_ops = st.tabs([
         "🏙️ Overview",
         "📬 Inbox",
         "🗺️ City Map",
         "🔬 Raw Data",
         "📊 Domains",
-        "🏘️ Wards & Planning",
+        "📁 Program Reporting",
         "🔧 Operations",
     ])
 
@@ -343,28 +342,9 @@ def main():
         st.divider()
         _DOMAIN_PANELS[domain_choice]()
 
-    # ── Wards & Planning ─────────────────────────────────────────────────
-    with t_wards:
-        render_domain_header(
-            title="Wards & Planning",
-            caption=(
-                "Ward-level quality-of-life analysis, decision packets, property intelligence, "
-                "and programme reporting. These views aggregate across domains to support "
-                "planning and governance decisions."
-            ),
-            primary_alert=None,
-        )
-
-        _WARD_PANELS = {
-            "🏢 Property":          render_property_buildings_panel,
-            "📁 Program Reporting": render_program_reporting_panel,
-        }
-        ward_choice = st.selectbox(
-            "View", list(_WARD_PANELS.keys()), key="ward_panel_selector",
-            label_visibility="collapsed",
-        )
-        st.divider()
-        _WARD_PANELS[ward_choice]()
+    # ── Program Reporting ─────────────────────────────────────────────────
+    with t_program:
+        render_program_reporting_panel()
 
     # ── Operations ────────────────────────────────────────────────────────
     with t_ops:
