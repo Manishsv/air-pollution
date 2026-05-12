@@ -12,10 +12,9 @@ class ConstructionDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "ACTIVE_PERMIT_COUNT", "SURFACE_CHANGE",
-        "BSI", "CONSTRUCTION_RISK_INDEX", "DATA_CONFIDENCE",
+        "CONSTRUCTION_RISK_INDEX", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Municipal construction permit API", "Sentinel-2 SAR (GEE)"]
+    data_sources = ["Sentinel-2 BSI + Sentinel-5P NO2 (CDSE Sentinel Hub)"]
     _required_env_vars = []
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
@@ -24,9 +23,8 @@ class ConstructionDriver(_InTreeDriver):
 
     def conformance_check(self) -> ConformanceResult:
         result = super().conformance_check()
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("CDSE_CLIENT_ID"):
             result.warnings.append(
-                "GOOGLE_APPLICATION_CREDENTIALS not set — Sentinel-2 SAR change detection "
-                "unavailable; construction risk will rely on permit data only"
+                "CDSE_CLIENT_ID not set — construction risk signals unavailable"
             )
         return result

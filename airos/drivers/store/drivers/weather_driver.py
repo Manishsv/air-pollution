@@ -10,8 +10,8 @@ class WeatherDriver(_InTreeDriver):
     produces_assessments = False  # structural context only
 
     signal_names = [
-        "TEMP_C", "HUMIDITY_PCT", "WIND_SPEED_MS",
-        "WIND_DIR_DEG", "RAINFALL_MM", "DATA_CONFIDENCE",
+        "TEMPERATURE_C", "HUMIDITY_PCT", "WIND_SPEED_KMH",
+        "WIND_DIR_DEG", "PRECIP_MM", "DATA_CONFIDENCE",
     ]
     data_sources = ["OpenMeteo API (open-access, no key required)"]
     _required_env_vars = []

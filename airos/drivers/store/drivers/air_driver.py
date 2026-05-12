@@ -12,8 +12,7 @@ class AirDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "PM25", "PM10", "NO2", "O3", "SO2", "CO",
-        "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
+        "PM25", "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
     ]
     data_sources = ["AQICN API", "CPCB sensor network"]
     _required_env_vars = []       # AQICN_API_KEY is optional (degrades to mock)

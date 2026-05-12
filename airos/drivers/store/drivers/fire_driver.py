@@ -10,7 +10,7 @@ class FireDriver(_InTreeDriver):
     cadence_hours = 0.25          # 15 minutes
     produces_assessments = True
 
-    signal_names = ["FRP_MW", "FIRE_SCORE", "FIRE_TYPE", "DATA_CONFIDENCE"]
+    signal_names = ["FRP", "DATA_CONFIDENCE"]
     data_sources = ["NASA MODIS active fire (FIRMS)", "VIIRS 375m active fire"]
     _required_env_vars = []       # NASA FIRMS is open-access
 
