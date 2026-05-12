@@ -111,10 +111,11 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "gee_water",
+        "builder_id": "cdse_water",
         "description": (
-            "Google Earth Engine connector. Assesses optical water clarity (NDWI "
-            "proxy) and writes water quality signals to h3_signals."
+            "CDSE Sentinel Hub connector. Computes MNDWI, NDTI, CI, FAI from "
+            "Sentinel-2 L2A and writes water quality signals to h3_signals. "
+            "Requires CDSE_CLIENT_ID and CDSE_CLIENT_SECRET."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],
@@ -124,10 +125,11 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "gee_construction",
+        "builder_id": "cdse_construction",
         "description": (
-            "Google Earth Engine connector. Detects active construction via SAR "
-            "backscatter change and writes construction signals to h3_signals."
+            "CDSE Sentinel Hub connector. Detects active construction via Sentinel-2 "
+            "BSI + Sentinel-5P NO2 and writes construction signals to h3_signals. "
+            "Requires CDSE_CLIENT_ID and CDSE_CLIENT_SECRET."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],

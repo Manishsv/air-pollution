@@ -313,7 +313,7 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
 
 def _ingest_water(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("water", city_id, force)
-    from airos.drivers.connectors.satellite.gee_water import fetch_water_quality
+    from airos.drivers.connectors.satellite.cdse_water import fetch_water_quality
     from airos.apps.water.water_pipeline import (
         build_water_dashboard, build_water_decision_packets,
     )
@@ -355,7 +355,7 @@ def _ingest_water(city_id: str, bbox: dict, *, force: bool = False) -> int:
 
 def _ingest_construction(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("construction", city_id, force)
-    from airos.drivers.connectors.satellite.gee_construction import fetch_construction_signals
+    from airos.drivers.connectors.satellite.cdse_construction import fetch_construction_signals
     from airos.apps.construction.construction_pipeline import (
         build_construction_decision_packets,
     )
@@ -431,7 +431,7 @@ def _ingest_green(city_id: str, bbox: dict, *, force: bool = False) -> int:
 
 def _ingest_noise(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("noise", city_id, force)
-    from airos.drivers.connectors.satellite.gee_construction import fetch_construction_signals
+    from airos.drivers.connectors.satellite.cdse_construction import fetch_construction_signals
     from airos.apps.noise.noise_pipeline import (
         build_noise_risk, build_noise_decision_packets,
     )

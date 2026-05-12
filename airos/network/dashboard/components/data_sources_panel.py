@@ -73,19 +73,19 @@ _SOURCES = {
                             "Falls back to Open-Meteo rainfall if GEE_PROJECT unset.",
     },
     "water": {
-        "provider":         "Google Earth Engine (Sentinel-2)",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
-        "fallback":         "none — skipped if no key",
+        "provider":         "CDSE Sentinel Hub (Sentinel-2 L2A)",
+        "url":              "https://dataspace.copernicus.eu/",
+        "api_key_env":      "CDSE_CLIENT_ID",
+        "fallback":         "none — skipped if no credentials",
         "acquisition_mode": "query_driven",
         "notes":            "Sentinel-2 optical bands: MNDWI (water body), NDTI (turbidity), "
                             "CI (chlorophyll index), FAI (floating algae index). "
                             "Water threshold: MNDWI > 0. Cloud filter: 30%.",
     },
     "waste": {
-        "provider":         "GEE (Sentinel-2 + Sentinel-5P) + NASA FIRMS",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
+        "provider":         "CDSE Sentinel Hub (Sentinel-2 + Sentinel-5P) + NASA FIRMS",
+        "url":              "https://dataspace.copernicus.eu/",
+        "api_key_env":      "CDSE_CLIENT_ID",
         "fallback":         "FIRMS thermal proxy only (if FIRMS_API_KEY set)",
         "acquisition_mode": "query_driven",
         "notes":            "Sentinel-2 NDVI for dump site detection (NDVI < 0.15 = exposed waste). "
@@ -93,10 +93,10 @@ _SOURCES = {
                             "NASA FIRMS thermal detections as proxy for open waste burning.",
     },
     "construction": {
-        "provider":         "Google Earth Engine (Sentinel-2 + Sentinel-5P)",
-        "url":              "https://earthengine.google.com/",
-        "api_key_env":      "GEE_PROJECT",
-        "fallback":         "none — skipped if no key",
+        "provider":         "CDSE Sentinel Hub (Sentinel-2 + Sentinel-5P)",
+        "url":              "https://dataspace.copernicus.eu/",
+        "api_key_env":      "CDSE_CLIENT_ID",
+        "fallback":         "none — skipped if no credentials",
         "acquisition_mode": "query_driven",
         "notes":            "Bare Soil Index (BSI) from Sentinel-2 for disturbed-ground detection. "
                             "Sentinel-5P tropospheric NO₂ as construction activity proxy. "

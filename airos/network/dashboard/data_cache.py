@@ -61,7 +61,7 @@ def load_aod(h3_ids: tuple, lat_min: float, lon_min: float,
 def load_ndvi(h3_ids: tuple, lat_min: float, lon_min: float,
               lat_max: float, lon_max: float) -> dict:
     try:
-        from airos.drivers.connectors.satellite.gee_waste import fetch_ndvi_for_cells
+        from airos.drivers.connectors.satellite.cdse_waste import fetch_ndvi_for_cells
         return fetch_ndvi_for_cells(list(h3_ids), lat_min, lon_min, lat_max, lon_max)
     except Exception as exc:
         logger.warning("load_ndvi failed (%s): %s", type(exc).__name__, exc)
@@ -72,7 +72,7 @@ def load_ndvi(h3_ids: tuple, lat_min: float, lon_min: float,
 def load_ch4(h3_ids: tuple, lat_min: float, lon_min: float,
              lat_max: float, lon_max: float) -> dict:
     try:
-        from airos.drivers.connectors.satellite.gee_waste import fetch_ch4_for_cells
+        from airos.drivers.connectors.satellite.cdse_waste import fetch_ch4_for_cells
         return fetch_ch4_for_cells(list(h3_ids), lat_min, lon_min, lat_max, lon_max)
     except Exception as exc:
         logger.warning("load_ch4 failed (%s): %s", type(exc).__name__, exc)
@@ -152,7 +152,7 @@ def load_water_quality(lat_min: float, lon_min: float, lat_max: float, lon_max: 
     if not h3_ids:
         return {}
     try:
-        from airos.drivers.connectors.satellite.gee_water import fetch_water_quality
+        from airos.drivers.connectors.satellite.cdse_water import fetch_water_quality
         return fetch_water_quality(list(h3_ids), lat_min, lon_min, lat_max, lon_max,
                                    lookback_days=lookback_days)
     except Exception as exc:
@@ -185,7 +185,7 @@ def load_construction_signals(lat_min: float, lon_min: float, lat_max: float, lo
     if not h3_ids:
         return {}
     try:
-        from airos.drivers.connectors.satellite.gee_construction import fetch_construction_signals
+        from airos.drivers.connectors.satellite.cdse_construction import fetch_construction_signals
         return fetch_construction_signals(
             list(h3_ids), lat_min, lon_min, lat_max, lon_max,
             lookback_days=lookback_days,
