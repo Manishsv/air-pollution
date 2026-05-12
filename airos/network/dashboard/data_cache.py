@@ -169,7 +169,7 @@ def load_green_cover(lat_min: float, lon_min: float, lat_max: float, lon_max: fl
     if not h3_ids:
         return {}
     try:
-        from airos.drivers.connectors.satellite.gee_green import fetch_green_cover
+        from airos.drivers.connectors.satellite.pc_green import fetch_green_cover
         return fetch_green_cover(list(h3_ids), lat_min, lon_min, lat_max, lon_max,
                                  recent_days=recent_days, baseline_days=baseline_days)
     except Exception as exc:

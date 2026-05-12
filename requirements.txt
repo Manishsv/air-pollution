@@ -6,6 +6,12 @@ h3
 pandas
 numpy
 requests
+# Satellite data — Microsoft Planetary Computer (replaces GEE for green cover)
+planetary-computer
+pystac-client
+stackstac
+rioxarray
+# GEE kept for remaining domains until fully migrated
 earthengine-api==1.5.24
 scikit-learn
 xgboost

@@ -97,10 +97,11 @@ _BUILDER_REGISTRY: list[dict[str, Any]] = [
         "latency_class": "slow",
     },
     {
-        "builder_id": "gee_green_cover",
+        "builder_id": "pc_green_cover",
         "description": (
-            "Google Earth Engine connector. Measures vegetation cover change "
-            "(NDVI delta) and writes green cover signals to h3_signals."
+            "Microsoft Planetary Computer connector. Measures vegetation cover change "
+            "(NDVI, EVI, ΔNDVI) from Sentinel-2 L2A and writes green cover signals "
+            "to h3_signals. No GEE dependency — uses public STAC catalog."
         ),
         "input_contracts": [],
         "output_contracts": ["h3_signals"],
