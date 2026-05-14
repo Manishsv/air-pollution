@@ -80,6 +80,42 @@ def _db_path() -> str:
     return str(DB_PATH)
 
 
+def _filter_by_city_bbox(df: pd.DataFrame, city_id: str, *, label: str) -> pd.DataFrame:
+    """Drop rows whose H3 cell centroid falls outside the city's bbox.
+
+    Defensive guard: some ingestors (notably FIRMS fire) over-attribute
+    rows to a city by tagging city_id="kanpur" on hotspots that are
+    geographically 30-80 km outside the Kanpur urban bbox. The proper
+    fix is upstream in the ingestor, but until that lands the citymap
+    must not render stray hexes / icons in neighbouring districts.
+
+    Expects a 'h3_id' column. Logs how many rows were dropped.
+    """
+    if df.empty or "h3_id" not in df.columns:
+        return df
+    try:
+        from airos.os.city_config import get_bbox
+        bbox = get_bbox(city_id)
+    except (ImportError, KeyError):
+        return df
+    lat_min, lat_max = bbox["lat_min"], bbox["lat_max"]
+    lon_min, lon_max = bbox["lon_min"], bbox["lon_max"]
+
+    def _inside(cell: str) -> bool:
+        lat, lon = h3.cell_to_latlng(cell)
+        return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
+
+    mask = df["h3_id"].apply(_inside)
+    dropped = int((~mask).sum())
+    if dropped:
+        logger.info(
+            "[citymap/%s] %s: dropped %d cell(s) outside bbox "
+            "(upstream city_id mis-attribution).",
+            city_id, label, dropped,
+        )
+    return df[mask].copy()
+
+
 # ── Data loaders (cached) ────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -123,6 +159,7 @@ def _load_worst_risk_per_cell(city_id: str) -> pd.DataFrame:
     # Keep the highest-severity domain per cell.
     df = df.sort_values("risk_rank", ascending=False).drop_duplicates("h3_id")
     df = df.rename(columns={"domain": "dominant_domain"})
+    df = _filter_by_city_bbox(df, city_id, label="risk_shade")
     return df.drop(columns=["risk_rank"]).reset_index(drop=True)
 
 
@@ -160,7 +197,9 @@ def _load_open_insights_by_cell(city_id: str) -> pd.DataFrame:
                      "confidence", "created_at"]
         )
     df = pd.DataFrame([dict(r) for r in rows])
-    return df.drop_duplicates("h3_id").reset_index(drop=True)
+    df = df.drop_duplicates("h3_id")
+    df = _filter_by_city_bbox(df, city_id, label="insight_border")
+    return df.reset_index(drop=True)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -168,8 +207,27 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
     """Active point-event signals — fire FRP > 0, waste SITE = 1,
     crowd GATHERING_ALERT = 1, flood risk_level in (high, severe).
 
+    Filters to cells whose centroid falls inside the city's bbox. Some
+    upstream ingestors (notably FIRMS fire) tag a wide regional area
+    with city_id="kanpur" even for hotspots 50+ km outside — we don't
+    want those rendered on the city map. See follow-up task for the
+    proper upstream fix.
+
     Returns (h3_id, domain, lat, lon, magnitude_label) for IconLayer.
     """
+    from airos.os.city_config import get_bbox
+    try:
+        bbox = get_bbox(city_id)
+        lat_min, lat_max = bbox["lat_min"], bbox["lat_max"]
+        lon_min, lon_max = bbox["lon_min"], bbox["lon_max"]
+    except KeyError:
+        lat_min = lat_max = lon_min = lon_max = None
+
+    def _in_bbox(lat: float, lon: float) -> bool:
+        if lat_min is None:
+            return True
+        return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
+
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
@@ -215,12 +273,16 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
         conn.close()
 
     out: list[dict] = []
+    dropped = 0
     sig_to_domain = {"FRP": "fire", "SITE": "waste", "GATHERING_ALERT": "crowd"}
     for r in rows:
         d = dict(r)
         lat, lon = d.get("centroid_lat"), d.get("centroid_lon")
         if lat is None or lon is None:
             lat, lon = h3.cell_to_latlng(d["h3_id"])
+        if not _in_bbox(float(lat), float(lon)):
+            dropped += 1
+            continue
         out.append({
             "h3_id":    d["h3_id"],
             "domain":   sig_to_domain.get(d["signal"], d["signal"].lower()),
@@ -233,6 +295,9 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
         lat, lon = d.get("centroid_lat"), d.get("centroid_lon")
         if lat is None or lon is None:
             lat, lon = h3.cell_to_latlng(d["h3_id"])
+        if not _in_bbox(float(lat), float(lon)):
+            dropped += 1
+            continue
         out.append({
             "h3_id":    d["h3_id"],
             "domain":   "flood",
@@ -240,6 +305,12 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
             "lon":      float(lon),
             "magnitude": "high flood risk",
         })
+    if dropped:
+        logger.info(
+            "[citymap/%s] event-points: filtered %d row(s) outside bbox "
+            "(upstream city_id mis-attribution; see follow-up task).",
+            city_id, dropped,
+        )
     return pd.DataFrame(out)
 
 
