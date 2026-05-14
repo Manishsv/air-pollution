@@ -27,8 +27,8 @@ def main() -> None:
     ap.add_argument("--force-refresh", choices=["none", "aq", "all"], default="none", help="Bypass caches for scope")
     ap.add_argument(
         "--step",
-        choices=["all", "audit", "model", "visualize", "sensor-siting", "conformance",
-                 "ingest-h3", "geocode-h3", "scheduler"],
+        choices=["all", "audit", "packets", "model", "visualize", "sensor-siting",
+                 "conformance", "ingest-h3", "geocode-h3", "scheduler"],
         default="all",
         help="Stop after a step (sensor-siting reads existing outputs)",
     )
@@ -65,6 +65,38 @@ def main() -> None:
         logging.getLogger(__name__).info("Scheduler log → %s", log_file)
         from airos.os.scheduler import run_forever
         run_forever()
+        return
+
+    if args.step == "packets":
+        import logging as _logging
+        _logging.basicConfig(level=_logging.INFO,
+                             format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                             datefmt="%H:%M:%S")
+        from airos.os.insight_packets import InsightPacketGenerator
+        from airos.drivers.store.ingestor import ALL_CITIES
+        city_ids = getattr(args, "cities", None) or ALL_CITIES
+        n = InsightPacketGenerator().generate(city_ids=city_ids)
+        print(f"\n{n} new decision packet(s) promoted from insights.")
+        return
+
+    if args.step == "audit":
+        import logging as _logging
+        _logging.basicConfig(level=_logging.INFO,
+                             format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+                             datefmt="%H:%M:%S")
+        from airos.os.auditor.h3_auditor import H3DataAuditor
+        from airos.drivers.store.ingestor import ALL_CITIES
+        city_ids = getattr(args, "cities", None) or ALL_CITIES
+        issues = H3DataAuditor().run(city_ids)
+        errors   = [i for i in issues if i.severity == "error"]
+        warnings = [i for i in issues if i.severity == "warning"]
+        print(f"\nAudit complete — {len(issues)} issue(s): "
+              f"{len(errors)} error(s), {len(warnings)} warning(s)")
+        for sev in ("error", "warning", "info"):
+            for i in issues:
+                if i.severity == sev:
+                    tag = {"error": "❌", "warning": "⚠️", "info": "ℹ️"}[sev]
+                    print(f"  {tag} [{i.domain or '—'}] {i.message}")
         return
 
     if args.step == "ingest-h3":

@@ -11,10 +11,53 @@ def render_domain_header(
     caption: str,
     primary_alert: str | None = None,
     primary_alert_kind: str = "error",
+    domain: str | None = None,
 ) -> None:
-    """H2-style domain title, caption, and optional prominent alert (error | warning | info)."""
-    st.markdown(f"## {title}")
+    """H2-style domain title, caption, optional prominent alert, and an
+    optional maturity badge sourced from `airos.os.domain_maturity`.
+
+    When `domain` is supplied, the badge appears next to the title with a
+    colour-coded tier (production / pilot / synthetic) and, for non-prod
+    tiers, the caveat is surfaced below the caption as an info strip so
+    the user sees it without having to dig into the methodology doc.
+    """
+    if domain:
+        try:
+            from airos.os.domain_maturity import get_domain_maturity
+            mat = get_domain_maturity(domain)
+        except Exception:
+            mat = None
+    else:
+        mat = None
+
+    if mat:
+        badge_html = (
+            f'<span style="display:inline-block;padding:2px 10px;'
+            f'border-radius:12px;font-size:11px;font-weight:600;'
+            f'background:{mat["color"]}22;color:{mat["color"]};'
+            f'border:1px solid {mat["color"]}44;'
+            f'margin-left:10px;vertical-align:middle;">'
+            f'{mat["label"]}</span>'
+        )
+        st.markdown(
+            f'## {title}{badge_html}',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(f"## {title}")
+
     st.caption(caption)
+
+    # Surface non-production caveats prominently below the caption so the
+    # user sees them without having to read the methodology doc.
+    if mat and mat.get("caveat") and not mat["tier"].startswith("prod_") or (
+        mat and mat["tier"] == "prod_proxy" and mat.get("caveat")
+    ):
+        if mat["tier"] in ("pilot_proxy", "deployment_dependent", "synthetic_demo"):
+            st.warning(f"⚠ {mat['caveat']}", icon="⚠️")
+        elif mat["tier"] == "prod_proxy":
+            st.caption(f"ℹ {mat['caveat']}")
+
     if primary_alert:
         if primary_alert_kind == "warning":
             st.warning(primary_alert)

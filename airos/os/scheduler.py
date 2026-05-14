@@ -291,6 +291,16 @@ class Scheduler:
             except ImportError:
                 pass  # city_pattern_agent module not available — skip
 
+        # 2d — Promote high-priority insights → decision packets
+        try:
+            from airos.os.insight_packets import InsightPacketGenerator
+            new_packets = InsightPacketGenerator().generate(city_ids=self.cities)
+            if new_packets:
+                logger.info("Sweep #%d packets: %d new decision packet(s) promoted from insights",
+                            self._sweep_count, new_packets)
+        except Exception as exc:
+            logger.warning("Insight packet promotion error: %s", exc)
+
         # 3 — Sensor siting batch (monthly cadence, self-gating via siting_log watermark)
         siting_results: dict = {}
         try:

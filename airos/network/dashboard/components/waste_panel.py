@@ -288,6 +288,7 @@ def render_waste_panel() -> None:
             "any enforcement or site classification action."
         ),
         primary_alert_kind="warning",
+        domain="waste",
     )
 
     # ── Signal availability legend ─────────────────────────────────────────

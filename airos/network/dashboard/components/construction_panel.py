@@ -379,6 +379,7 @@ def render_construction_panel() -> None:
             "Sentinel-2 Bare Soil Index + Sentinel-5P NO₂ aggregated to H3 cells — "
             "detects active earthworks, construction sites, and machinery dust emissions."
         ),
+        domain="construction",
     )
 
     city_id, bbox, live, lookback = _city_selector()

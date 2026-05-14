@@ -12,7 +12,9 @@ class NoiseDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "NOISE_RISK_INDEX", "DATA_CONFIDENCE",
+        "NOISE_RISK_INDEX",           # back-compat; mirrors EST_NOISE_RISK_INDEX in synthetic mode
+        "EST_NOISE_RISK_INDEX",       # emitted ONLY when NOISE_API_URL is unset (synthetic estimate)
+        "DATA_CONFIDENCE",
     ]
     data_sources = ["Noise sensor API (NOISE_API_URL)"]
     _required_env_vars = []     # NOISE_API_URL falls back to simulated data

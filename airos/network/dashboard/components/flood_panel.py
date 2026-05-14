@@ -388,6 +388,7 @@ def render_flood_panel() -> None:
             "waterlogging incidents, and drainage asset coverage. Review-support only."
         ),
         primary_alert=None,
+        domain="flood",
     )
 
     # ── Load data ──────────────────────────────────────────────────────────

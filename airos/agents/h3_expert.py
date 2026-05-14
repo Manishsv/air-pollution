@@ -227,13 +227,17 @@ AGENT_TOOLS = [
                 "recommended_actions": {
                     "type": "array",
                     "description": (
-                        "Specific, actionable recommendations. Each item is a RecommendedAction: "
+                        "Specific, actionable recommendations. MUST contain at least one item "
+                        "— even for low-severity or 'no compound risk' findings, recommend a "
+                        "monitoring or no-op action so the dashboard can route the insight. "
+                        "Each item is a RecommendedAction: "
                         "'action' (what to do, ≤120 chars), "
                         "'actor' (role: ward_engineer / zonal_officer / department), "
                         "'urgency' (immediate / within_4h / within_24h / this_week / plan), "
                         "'condition' (when this action applies), "
                         "'blocked_if' (optional — circumstance that would prevent this action)."
                     ),
+                    "minItems": 1,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -280,10 +284,18 @@ AGENT_TOOLS = [
                     ),
                 },
             },
-            required=["finding", "confidence", "domains_involved", "hypothesis_chain", "uncertainty_notes"],
+            required=["finding", "confidence", "domains_involved", "hypothesis_chain", "recommended_actions", "uncertainty_notes"],
         ),
     ),
 ]
+
+# ---------------------------------------------------------------------------
+# Versioning — bump when the system prompt or tool inventory changes in a way
+# that affects agent reasoning. Written to every insight as `agent_prompt_version`
+# so historical insights can be reproduced or stratified by prompt version.
+# ---------------------------------------------------------------------------
+
+AGENT_PROMPT_VERSION = "h3-expert-v0.7-hard-constraint-first"
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -304,15 +316,76 @@ determine the actual geographic location. When the cell falls outside the named
 city's administrative boundary, note this in your analysis — it affects which
 government body has jurisdiction over recommended actions.
 
+═══════════════════════════════════════════════════════════════════════════════
+HARD CONSTRAINT — city-broadcast signals (READ FIRST)
+═══════════════════════════════════════════════════════════════════════════════
+The following signals come from a SINGLE city-centroid API call per sweep and
+are IDENTICAL across every cell in this city at the same hour. They are marked
+"(city-wide)" in the dossier signal list:
+
+  domain='weather'  → WIND_SPEED_KMH, WIND_DIR_DEG, HUMIDITY_PCT, PRESSURE_HPA,
+                      TEMPERATURE_C, PRECIP_MM
+  domain='heat'     → HEAT_INDEX_C, UHI
+                      (Some heat signals like LST are cell-resolved when from
+                      satellite — only the city-centroid OpenMeteo broadcasts
+                      are forbidden as compound legs.)
+
+You MUST NOT use city-broadcast signals as a per-cell differentiator:
+  ✘ Do NOT write findings like "air-heat compound stress" / "air-wind compound
+    risk" / "air-heat-noise compound stress". Every cell has the same heat and
+    wind — these labels are structurally meaningless and produced 4–5 near-
+    identical findings across Haveli Subdistrict cells (methodology §4.4).
+  ✘ Do NOT include 'weather' or 'heat' (when only HEAT_INDEX_C / UHI are
+    elevated) in `domains_involved`.
+  ✘ Do NOT count city-broadcast signals when applying the "≥2 domains at
+    high/severe" rule for priority_tier=high.
+
+You SHOULD use city-broadcast signals to:
+  ✓ Explain dispersion / mixing behaviour ("low wind → poor dispersion")
+  ✓ Assess persistence ("persistent calm → multi-day accumulation likely")
+  ✓ Reason about advection direction ("wind from NE → upwind sources matter")
+  ✓ Provide ambient context in the finding's narrative paragraph
+
+Compound risk requires at least TWO CELL-RESOLVED domains to be elevated.
+Cell-resolved signals (PM2.5 from IDW, ROAD_DENSITY, POI counts, BUILT_VOLUME,
+NDVI, FRP, FLOOD_DRAIN_CAPACITY, etc.) are the legitimate compound legs.
+
+═══════════════════════════════════════════════════════════════════════════════
+CITY-RELATIVE ANOMALY
+═══════════════════════════════════════════════════════════════════════════════
+The dossier annotates per-cell trends with a city-median comparison, e.g.
+  PM25=55.6 µg/m³ [↑370% vs 7d avg=12, city-median +17% (this cell +353pp vs city)]
+
+Use the parenthetical pp-vs-city figure to assess whether the cell is
+DISTINCTIVE or just riding a city-wide event:
+  • ≥ +100pp vs city  → cell is a genuine local hotspot; foreground it
+  • +20 to +100pp     → modestly above city; mention but don't headline
+  • within ±20pp      → not distinctive; do NOT issue a high-priority finding
+                        unless absolute level is dangerous. Demote to medium /
+                        low or describe as "consistent with city-wide event".
+  • below city median → cell is BETTER than typical right now; do not alarm
+
+Never use "↑X% vs 7d avg" alone as the basis for a finding when the city
+median is similarly elevated. Always reach for cell-resolved differentiators
+(local POIs, traffic, construction, terrain enclosure) to explain WHY this
+cell stands out from its neighbours.
+
+═══════════════════════════════════════════════════════════════════════════════
+
 Your analysis role
 ------------------
 Domain-specific rule pipelines already flag individual risks (high AQI, flooding, etc.).
 Your job is to go BEYOND single-domain rules and find:
 
-1. COMPOUND RISKS — when two or more domains interact to make each other worse.
-   Example: active construction (high CRI + BSI) + low wind (WIND_SPEED_KMH < 5) + high AQI
-   → dust is re-suspended rather than dispersed, amplifying PM2.5 beyond what
-   either domain would flag alone.
+1. COMPOUND RISKS — when two or more CELL-RESOLVED domains interact to make
+   each other worse.
+   GOOD example: active construction (high CRI + BSI) co-located with a busy
+   arterial (ROAD_DENSITY > city p75, MAJOR_ROAD_RATIO > 0.3) → traffic
+   re-suspends construction dust faster than dispersion can clear it.
+   GOOD example: low FLOOD_DRAIN_CAPACITY + waste site (SITE=1) → standing
+   water + waste leachate → cholera vector.
+   BAD example: high AQI + low WIND_SPEED_KMH — wind is city-wide, this isn't
+   a compound finding, it's just bad air with a weather context note.
 
 2. TESTABLE HYPOTHESES — the mechanism linking signals across domains, stated as a
    falsifiable hypothesis, not a causal claim.
@@ -343,10 +416,9 @@ Every cell always has weather signals in domain='weather':
   TEMPERATURE_C   — ambient temperature at 2 m
   PRECIP_MM       — precipitation in the last hour
 
-Always consider weather context when reasoning about air quality, heat, fire, flood, or
-construction dust. Low wind speed suppresses pollution dispersion. Wind direction tells
-you whether elevated AQI is locally generated or advected from an upwind source.
-High humidity combined with heat produces extreme apparent-temperature stress.
+Use weather context for reasoning about dispersion, advection, and persistence
+(as detailed in the HARD CONSTRAINT block at the top). Do not use it as a
+compound leg.
 
 Urban infrastructure context (OSM-derived structural signals)
 -------------------------------------------------------------
@@ -457,6 +529,120 @@ Output quality bar
 
 
 # ---------------------------------------------------------------------------
+# Context-compression helpers (methodology §4.1)
+# ---------------------------------------------------------------------------
+
+# Soft budget for the assembled cell context. Roughly 1 char ≈ 0.25 tokens for
+# English, so 60_000 chars ≈ 15K tokens — well under any modern LLM's input
+# window (100K+ for the Anthropic Claude family) but enough headroom that the
+# agent's own outputs + multi-turn history can grow without exhausting the
+# window. If the cell context itself exceeds this, the assembler drops the
+# lowest-priority domains (low/unknown risk + stale signals) and stamps
+# `context_truncated=True` on the resulting insight.
+_CONTEXT_SOFT_BUDGET_CHARS = 60_000
+
+
+def _truncate_context(text: str) -> tuple[str, bool]:
+    """Apply the soft-budget cap to an assembled cell-context string.
+
+    Returns:
+        (possibly-truncated text, was_truncated bool)
+
+    Truncation strategy: split on the section headings (`### ...`) used by
+    `_build_context_message`, drop sections from the **tail** (which are the
+    lower-priority sections by the assembler's ordering: prior insights,
+    neighbour context, forecast) until under budget. The cell metadata,
+    signal snapshot, and current assessments are always preserved.
+    """
+    if len(text) <= _CONTEXT_SOFT_BUDGET_CHARS:
+        return text, False
+
+    # Split on heading boundaries while preserving order.
+    sections = []
+    buf: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if line.startswith("### ") and buf:
+            sections.append("".join(buf))
+            buf = [line]
+        else:
+            buf.append(line)
+    if buf:
+        sections.append("".join(buf))
+
+    # Always keep the first 3 sections (header + signals + assessments).
+    keep = sections[:3]
+    optional = sections[3:]
+    truncated_text = "".join(keep)
+    for sect in optional:
+        if len(truncated_text) + len(sect) > _CONTEXT_SOFT_BUDGET_CHARS:
+            break
+        truncated_text += sect
+
+    truncated_text += (
+        "\n\n"
+        "_⚠ Context truncated to fit the soft budget — the lowest-priority "
+        "sections were dropped. `context_truncated=true` on this insight._\n"
+    )
+    return truncated_text, True
+
+
+# ---------------------------------------------------------------------------
+# Tool-trace helpers (methodology §4.1 + §14.3)
+# ---------------------------------------------------------------------------
+
+def _summarise_tool_result(result: Any) -> str:
+    """Compress a tool result into a one-line summary for the trace log."""
+    if result is None:
+        return "null"
+    if isinstance(result, (str, int, float, bool)):
+        return str(result)[:200]
+    if isinstance(result, dict):
+        keys = list(result.keys())[:5]
+        if "error" in result:
+            return f"error: {result['error']}"[:200]
+        # Pick a couple of compact summary values when available
+        bits = []
+        for k in ("n", "count", "rows", "lift", "n_AB", "value", "min", "max"):
+            if k in result:
+                bits.append(f"{k}={result[k]}")
+        if bits:
+            return ", ".join(bits[:4])
+        return f"keys: {keys}"
+    if isinstance(result, list):
+        return f"list of {len(result)}"
+    return str(result)[:200]
+
+
+def _check_tool_policy_compliance(
+    tool_calls_log: list[dict],
+    insight_payload: dict | None,
+) -> str:
+    """Post-hoc tool-call policy check (methodology §4.1).
+
+    Returns:
+        "ok"        — all required tools were called (or none required)
+        "violated"  — the insight asserts a cross-domain mechanism but the
+                      trace contains no get_domain_cross_correlation call
+        "unknown"   — could not evaluate (no insight payload)
+    """
+    if not insight_payload:
+        return "unknown"
+
+    domains = insight_payload.get("domains_involved") or []
+    if not isinstance(domains, list):
+        domains = []
+
+    # Only check the cross-domain rule when the agent declared > 1 domain
+    if len(domains) <= 1:
+        return "ok"
+
+    called_tools = {entry.get("tool") for entry in tool_calls_log if entry.get("ok")}
+    if "get_domain_cross_correlation" in called_tools:
+        return "ok"
+    return "violated"
+
+
+# ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
 
@@ -503,6 +689,11 @@ class H3ExpertAgent:
 
         self._client = LLMClient(cfg)
 
+        # City-relative anomaly baseline cache — keyed by signal name, computed
+        # lazily on first access in _city_pct_median.  Re-used across signals
+        # within a single agent run for free; not shared across cells today.
+        self._city_pct_cache: dict[str, float | None] = {}
+
         # Web search — load config once at init; omit tool if disabled
         self._web_cfg = web_search_config or load_web_search_config()
         self._tools   = list(AGENT_TOOLS)   # copy so we don't mutate the module-level list
@@ -518,6 +709,58 @@ class H3ExpertAgent:
     # ------------------------------------------------------------------
     # Tool implementations
     # ------------------------------------------------------------------
+
+    def _city_pct_median(self, signal: str) -> float | None:
+        """Median % change of `signal` across all cells in this city for the
+        same lookback window.  Used to surface *city-relative* anomalies: a
+        cell that is 320% above its 7d avg in a city whose median is +350%
+        is part of an event, not the headline (methodology §4.4).
+
+        Returns None if there is not enough data or any error.  Result is
+        memoised per agent instance.
+        """
+        if signal in self._city_pct_cache:
+            return self._city_pct_cache[signal]
+        try:
+            import sqlite3
+            from airos.drivers.store.schema import DB_PATH
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT h3_id, value
+                FROM h3_signals
+                WHERE city_id = ? AND signal = ? AND value IS NOT NULL
+                  AND hour_bucket >= datetime('now', ? )
+                ORDER BY h3_id, hour_bucket DESC
+                """,
+                (self.city_id, signal, f"-{self.signals_lookback_days} days"),
+            ).fetchall()
+            conn.close()
+        except Exception:
+            self._city_pct_cache[signal] = None
+            return None
+
+        # Per-cell: pct = (latest - period_mean) / period_mean × 100
+        by_cell: dict[str, list[float]] = {}
+        for r in rows:
+            by_cell.setdefault(r["h3_id"], []).append(float(r["value"]))
+        cell_pcts: list[float] = []
+        for vs in by_cell.values():
+            if len(vs) < 3:
+                continue
+            mean = sum(vs) / len(vs)
+            if mean <= 0:
+                continue
+            latest = vs[0]
+            cell_pcts.append(100 * (latest - mean) / mean)
+        if len(cell_pcts) < 5:
+            self._city_pct_cache[signal] = None
+            return None
+        s = sorted(cell_pcts); n = len(s)
+        med = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+        self._city_pct_cache[signal] = med
+        return med
 
     def _tool_get_signal_history(self, domain: str, signal: str, lookback_days: int = 30, **_) -> dict:
         """Fetch signal history. Extra kwargs are silently ignored (model hallucination guard)."""
@@ -634,7 +877,9 @@ class H3ExpertAgent:
     def run(self) -> dict[str, Any]:
         """Run the agent and return the structured insight dict."""
         from airos.drivers.store.reader import get_h3_context
-        from airos.drivers.store.writer import write_insight
+        from airos.drivers.store.writer import write_insight, write_tool_trace
+        import hashlib as _hashlib
+        import uuid as _uuid
 
         ctx      = get_h3_context(
             self.h3_id, self.city_id,
@@ -642,8 +887,29 @@ class H3ExpertAgent:
             include_neighbors=False,
             prefetched_forecast=self._forecast,
         )
-        system   = _SYSTEM_PROMPT.format(h3_id=self.h3_id, city_id=self.city_id)
-        messages = [user_msg(self._build_context_message(ctx))]
+        system           = _SYSTEM_PROMPT.format(h3_id=self.h3_id, city_id=self.city_id)
+        full_context     = self._build_context_message(ctx)
+        # ── Context compression / truncation guard (methodology §4.1) ─────
+        # If the assembled cell context exceeds the soft budget, drop the
+        # lowest-priority sections and stamp `context_truncated=True` on the
+        # resulting insight so evaluators can stratify by truncation status.
+        context_message, context_truncated = _truncate_context(full_context)
+        if context_truncated:
+            logger.info(
+                "Cell context truncated: %d → %d chars",
+                len(full_context), len(context_message),
+            )
+        messages         = [user_msg(context_message)]
+
+        # ── Reproducibility metadata (methodology §4.1, §14) ──────────────
+        # context_hash = sha256 of (system prompt + the assembled context block)
+        # — the exact bytes that bound the agent's reasoning for this cell.
+        _context_bytes = (system + "\n\n" + context_message).encode("utf-8")
+        context_hash   = _hashlib.sha256(_context_bytes).hexdigest()
+        tool_trace_id  = f"tt_{_uuid.uuid4().hex[:12]}"
+        # In Tranche A we record a minimal trace (call count only). The full
+        # per-call log is wired up in Tranche B (§4.1 tool-call policy).
+        tool_calls_log: list[dict] = []
 
         insight_payload: dict | None = None
         tool_call_count = 0
@@ -709,15 +975,46 @@ class H3ExpertAgent:
                     tc.name, list(tc.arguments.keys()),
                 )
 
+                # ── Per-call trace entry (methodology §4.1, §14.3) ────────
+                import time as _time
+                _t0 = _time.perf_counter()
+                _trace_entry: dict[str, Any] = {
+                    "seq":  tool_call_count,
+                    "tool": tc.name,
+                    "args": {k: tc.arguments.get(k) for k in list(tc.arguments.keys())[:6]},
+                }
+
                 if tc.name == "submit_insight":
                     insight_payload = tc.arguments
                     result_msgs.append(
                         tool_result_msg(tc.id, {"status": "insight_received"})
                     )
+                    _trace_entry.update({
+                        "result_summary": "insight received",
+                        "ok": True,
+                        "latency_ms": round((_time.perf_counter() - _t0) * 1000, 1),
+                    })
+                    tool_calls_log.append(_trace_entry)
                     break   # done
                 else:
-                    result = self._dispatch_tool(tc)
-                    result_msgs.append(tool_result_msg(tc.id, result))
+                    try:
+                        result = self._dispatch_tool(tc)
+                        result_msgs.append(tool_result_msg(tc.id, result))
+                        _trace_entry.update({
+                            "result_summary": _summarise_tool_result(result),
+                            "ok": True,
+                            "latency_ms": round((_time.perf_counter() - _t0) * 1000, 1),
+                        })
+                    except Exception as _exc:
+                        # Failed calls count against the budget but are
+                        # explicitly logged so post-hoc auditors can see them.
+                        result_msgs.append(tool_result_msg(tc.id, {"error": str(_exc)}))
+                        _trace_entry.update({
+                            "result_summary": f"ERROR: {type(_exc).__name__}: {_exc}",
+                            "ok": False,
+                            "latency_ms": round((_time.perf_counter() - _t0) * 1000, 1),
+                        })
+                    tool_calls_log.append(_trace_entry)
 
             messages.extend(result_msgs)
 
@@ -757,7 +1054,42 @@ class H3ExpertAgent:
         if insight_payload is None:
             insight_payload = self._extract_text_insight(messages)
 
-        # Persist — include all structured fields the agent generated
+        # Post-generation validator (methodology §4.4) — strips city-broadcast
+        # tokens from compound labels and demotes tier when compound legitimacy
+        # collapses. Deterministic guard for the residual ~25% of cells where
+        # v0.7 prompt compliance slips.  Loads dossier signals lazily so we can
+        # detect cell-resolved heat (LST) vs city-broadcast heat (HEAT_INDEX_C).
+        try:
+            from airos.agents.validators import validate_post_generation
+            from airos.os.cell_dossier import build_cell_dossier
+            _dossier = build_cell_dossier(self.city_id, self.h3_id)
+            _signals = _dossier.get("signals") if _dossier else None
+            insight_payload = validate_post_generation(
+                insight_payload, dossier_signals=_signals,
+            )
+        except Exception as exc:
+            logger.warning("post_generation validator skipped: %s", exc)
+
+        # Post-hoc tool-call policy compliance (methodology §4.1). Cross-domain
+        # claims must have called get_domain_cross_correlation at least once.
+        policy_compliance = _check_tool_policy_compliance(tool_calls_log, insight_payload)
+
+        # Persist tool trace first so the insight can reference it by id.
+        # Tranche B: full per-call detail with latency + result summary.
+        try:
+            write_tool_trace(
+                trace_id=tool_trace_id,
+                insight_id=None,           # set after insight_id is generated below
+                city_id=self.city_id,
+                h3_id=self.h3_id,
+                calls=tool_calls_log,
+                policy_compliance=policy_compliance,
+            )
+        except Exception as _exc:
+            logger.debug("write_tool_trace skipped: %s", _exc)
+
+        # Persist insight — include all structured fields the agent generated
+        # plus reproducibility provenance (methodology §14).
         insight_id = write_insight(
             h3_id=self.h3_id,
             city_id=self.city_id,
@@ -769,7 +1101,30 @@ class H3ExpertAgent:
             recommended_actions=insight_payload.get("recommended_actions") or [],
             uncertainty_notes=insight_payload.get("uncertainty_notes") or [],
             priority_tier=insight_payload.get("priority_tier"),  # agent-supplied tier takes precedence
+            # Provenance fields (Tranche A + B)
+            tool_policy_compliance=policy_compliance,
+            context_truncated=context_truncated,
+            agent_model=getattr(self._client.config, "model", None),
+            agent_prompt_version=AGENT_PROMPT_VERSION,
+            tool_trace_id=tool_trace_id,
+            context_hash=context_hash,
+            confidence_type="ordinal",
+            # evidence_refs / context_truncated / tool_policy_compliance
+            # are Tranche B — left as defaults (None / False / None).
         )
+
+        # Backfill the trace with its insight_id now that we have it.
+        try:
+            write_tool_trace(
+                trace_id=tool_trace_id,
+                insight_id=insight_id,
+                city_id=self.city_id,
+                h3_id=self.h3_id,
+                calls=tool_calls_log,
+                policy_compliance=policy_compliance,
+            )
+        except Exception:
+            pass
 
         return {
             "insight_id":    insight_id,
@@ -836,6 +1191,18 @@ class H3ExpertAgent:
                             pct = 100 * (latest_val - period_mean) / period_mean
                             arrow = "↑" if pct > 10 else ("↓" if pct < -10 else "→")
                             trend_str = f" [{arrow}{abs(pct):.0f}% vs {self.signals_lookback_days}d avg={period_mean:.3g}]"
+                            # City-relative anomaly (methodology §4.4).  A cell up
+                            # 320% in a city whose median is up 350% is not the
+                            # headline — the city is having an event.  Append the
+                            # city median so the agent sees the *excess*.
+                            sig_name = latest.get("signal", "")
+                            city_med = self._city_pct_median(sig_name)
+                            if city_med is not None and abs(city_med) >= 10:
+                                delta = pct - city_med
+                                trend_str += (
+                                    f" · city-median {city_med:+.0f}% "
+                                    f"(this cell {delta:+.0f}pp vs city)"
+                                )
                     parts.append(
                         f"**{domain}**: {latest['signal']}={latest['value']:.3g}"
                         f" {latest.get('unit','') or ''}"
@@ -945,19 +1312,19 @@ class H3ExpertAgent:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): current={cur}"
                         f" → {int(pct)}th pct vs 30d"
-                        f" (avg={b['mean']}, p90={b['p90']}, max={b['max']}, n={n})"
+                        f" (avg={b.get('mean', 'n/a')}, p90={b.get('p90', 'n/a')}, max={b.get('max', 'n/a')}, n={n})"
                         f"{flag}{prov_note}"
                     )
                 elif cur is not None and not reliable:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): current={cur}"
-                        f" — 30d avg={b['mean']}, max={b['max']}"
+                        f" — 30d avg={b.get('mean', 'n/a')}, max={b.get('max', 'n/a')}"
                         f" ⚠ percentile rank unreliable (n={n} < 30){prov_note}"
                     )
                 else:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): "
-                        f"30d avg={b['mean']}, p90={b['p90']}, max={b['max']} (n={n}){prov_note}"
+                        f"30d avg={b.get('mean', 'n/a')}, p90={b.get('p90', 'n/a')}, max={b.get('max', 'n/a')} (n={n}){prov_note}"
                     )
             parts.append("")
 
@@ -1006,19 +1373,19 @@ class H3ExpertAgent:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): current={cur}"
                         f" → {int(pct)}th pct at this hour"
-                        f" (same-hour avg={b['mean']}, p90={b['p90']}, n={n})"
+                        f" (same-hour avg={b.get('mean', 'n/a')}, p90={b.get('p90', 'n/a')}, n={n})"
                         f"{flag}{tod_note}"
                     )
                 elif cur is not None and not reliable:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): current={cur}"
-                        f" — same-hour avg={b['mean']}, max={b['max']}"
+                        f" — same-hour avg={b.get('mean', 'n/a')}, max={b.get('max', 'n/a')}"
                         f" ⚠ rank unreliable (n={n} < 30)"
                     )
                 else:
                     parts.append(
                         f"- **{domain}** ({b['signal']}): "
-                        f"same-hour avg={b['mean']}, p90={b['p90']}, max={b['max']} (n={n})"
+                        f"same-hour avg={b.get('mean', 'n/a')}, p90={b.get('p90', 'n/a')}, max={b.get('max', 'n/a')} (n={n})"
                     )
             parts.append("")
 

@@ -27,7 +27,6 @@ from airos.network.dashboard.components.overview_panel import render_overview_pa
 
 # ── Primary views ─────────────────────────────────────────────────────────
 from airos.network.dashboard.components.inbox_panel import render_inbox_panel
-from airos.network.dashboard.components.map_panel import render_map_panel
 
 # ── Raw Data Explorer (source-centric) ────────────────────────────────────
 from airos.network.dashboard.components.raw_data_panel import render_raw_data_panel
@@ -51,6 +50,7 @@ from airos.network.dashboard.components.infrastructure_panel import render_infra
 
 # ── Operations panels ─────────────────────────────────────────────────────
 from airos.network.dashboard.components.audit_panel import render_audit_panel
+from airos.network.dashboard.components.data_audit_panel import render_data_audit_panel
 from airos.network.dashboard.components.data_sources_panel import render_data_sources_panel
 from airos.network.dashboard.components.sensor_coverage_panel import render_sensor_coverage_panel
 from airos.network.dashboard.components.runtime_trace_panel import render_runtime_trace_panel
@@ -283,16 +283,10 @@ def main():
     with t_overview:
         render_overview_panel()
 
-    # ── Inbox (list + map views) ──────────────────────────────────────────
+    # ── Inbox (list + map views — view toggle lives inside the panel
+    #          so it can share a single unified filter row with Sort) ───────
     with t_inbox:
-        _inbox_view = st.radio(
-            "View", ["📋 List", "🗺️ Map"],
-            horizontal=True, key="inbox_view_toggle", label_visibility="collapsed",
-        )
-        if _inbox_view == "📋 List":
-            render_inbox_panel()
-        else:
-            render_map_panel()
+        render_inbox_panel()
 
     # ── Domains (signal maps per risk domain) ────────────────────────────
     with t_domains:
@@ -323,6 +317,7 @@ def main():
         # Selectbox navigation: only the selected panel renders — avoids running
         # all sub-panels simultaneously (which is what st.tabs does).
         _OPS_PANELS = {
+            "🔍 Data Audit":      "audit",
             "🔌 Data Sources":    "sources",
             "📡 Sensor Coverage": "sensors",
             "🖥️ Runtime Trace":   "trace",
@@ -335,7 +330,14 @@ def main():
         )
         ops_view = _OPS_PANELS[ops_choice]
 
-        if ops_view == "sources":
+        if ops_view == "audit":
+            from airos.os.city_config import CITIES as _CITIES
+            _audit_city = st.selectbox(
+                "City", list(_CITIES.keys()), key="audit_city_sel",
+                label_visibility="collapsed",
+            ) if len(_CITIES) > 1 else list(_CITIES.keys())[0]
+            render_data_audit_panel(city_id=_audit_city)
+        elif ops_view == "sources":
             render_data_sources_panel()
         elif ops_view == "sensors":
             render_sensor_coverage_panel()

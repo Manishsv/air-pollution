@@ -393,6 +393,7 @@ def render_green_panel() -> None:
             "Sentinel-2 NDVI/EVI change detection vs. historical baseline — "
             "tracks canopy loss from construction/felling and green cover gain from plantation."
         ),
+        domain="green",
     )
 
     city_id, bbox, live, recent_days, baseline_days = _city_selector()

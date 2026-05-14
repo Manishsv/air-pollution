@@ -326,6 +326,7 @@ def render_heat_panel() -> None:
             "from OpenMeteo) and OSM green cover deficit. Review-support only."
         ),
         primary_alert=None,
+        domain="heat",
     )
 
     # ── Load data ──────────────────────────────────────────────────────────

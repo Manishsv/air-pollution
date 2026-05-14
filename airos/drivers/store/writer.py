@@ -111,22 +111,59 @@ def upsert_metadata(
 # Data quality classification — derived from source name automatically.
 # Callers can override per-row via r["data_quality"].
 # ---------------------------------------------------------------------------
+# Current ingest sweep id — set by ingestor.run() at the top of each batch and
+# read by write_signals when no explicit ingest_run_id is supplied. Thread-safe
+# via ContextVar so concurrent sweeps don't cross-contaminate each other's IDs.
+import contextvars as _ctxvars
+_CURRENT_INGEST_RUN_ID: _ctxvars.ContextVar[str | None] = _ctxvars.ContextVar(
+    "ingest_run_id", default=None,
+)
+
+
+def set_current_ingest_run_id(run_id: str | None) -> _ctxvars.Token:
+    """Set the active ingest_run_id. Returns a Token for `reset_ingest_run_id`."""
+    return _CURRENT_INGEST_RUN_ID.set(run_id)
+
+
+def reset_ingest_run_id(token: _ctxvars.Token) -> None:
+    """Restore the previous ingest_run_id (use with `set_current_ingest_run_id`)."""
+    _CURRENT_INGEST_RUN_ID.reset(token)
+
+
+def get_current_ingest_run_id() -> str | None:
+    return _CURRENT_INGEST_RUN_ID.get()
+
+
 _SOURCE_DATA_QUALITY: dict[str, str] = {
     # Real monitoring stations
-    "cpcb":         "real_station",
-    "openaq":       "real_station",
-    "iudx":         "real_station",
-    # Satellite / remote sensing
-    "gee":          "satellite_derived",
-    "firms":        "satellite_derived",
-    "modis":        "satellite_derived",
-    "sentinel":     "satellite_derived",
-    "viirs":        "satellite_derived",
+    "cpcb":              "real_station",
+    "openaq":            "real_station",
+    "iudx":              "real_station",
+    # Satellite / remote sensing (incl. DEM products derived from radar/optical)
+    "gee":               "satellite_derived",
+    "firms":             "satellite_derived",
+    "modis":             "satellite_derived",
+    "sentinel":          "satellite_derived",
+    "viirs":             "satellite_derived",
+    "srtm":              "satellite_derived",     # SRTM is satellite radar-derived elevation
+    "srtm_copernicus":   "satellite_derived",     # Copernicus DEM blended with SRTM
     # Numerical weather / reanalysis models
-    "openmeteo":    "model_estimate",
-    "imd":          "model_estimate",
-    "era5":         "model_estimate",
-    "pipeline":     "model_estimate",
+    "openmeteo":         "model_estimate",
+    "imd":               "model_estimate",
+    "era5":              "model_estimate",
+    "pipeline":          "model_estimate",
+    # OSM and other structural / cadastral data — crowdsourced map features
+    # that change slowly. Not a sensor reading, not a model output, not raw
+    # satellite imagery — treated as its own category.
+    "osm":               "osm_structural",
+    "osmnx":             "osm_structural",
+    # Derived/classified structural signals (e.g. TERRAIN_CLASS computed
+    # from elevation/slope/aspect after satellite ingest)
+    "terrain_classifier": "derived",
+    # Synthetic / fallback estimates (literature-based, not observation)
+    "terrain_synth":      "synthetic_fallback",
+    "synthetic":          "synthetic_fallback",
+    "noise_synth":        "synthetic_fallback",
 }
 
 def _infer_data_quality(source: str) -> str:
@@ -160,6 +197,12 @@ def write_signals(
     level: int = 1,
     source: str = "pipeline",
     skip_conformance: bool = False,
+    # ── Tranche A reproducibility (methodology §14) ────────────────────────
+    # Optional kwargs — populate progressively from ingestor code. Each row
+    # may also override these via r["..."] keys for per-row granularity.
+    ingest_run_id: str | None = None,
+    confidence_method_version: str = "v1",
+    geometry_assignment_method: str | None = None,
 ) -> int:
     """Upsert signal rows.  One row per (h3_id, signal, hour).
 
@@ -192,6 +235,11 @@ def write_signals(
             logger.debug("Conformance gate raised (non-fatal): %s", exc)
     # ─────────────────────────────────────────────────────────────────────
     default_quality = _infer_data_quality(source)
+    # Fall back to the contextvar set by ingestor.run() if no explicit
+    # ingest_run_id was passed. Lets every domain ingestor inherit the
+    # sweep-wide run id without touching its function signature.
+    if ingest_run_id is None:
+        ingest_run_id = _CURRENT_INGEST_RUN_ID.get()
     inserted = 0
     try:
         s = _store()
@@ -203,18 +251,33 @@ def write_signals(
             observed_at = r.get("observed_at", now)
             row_source = r.get("source", source)
             data_quality = r.get("data_quality") or _infer_data_quality(row_source) or default_quality
+            row_run_id  = r.get("ingest_run_id", ingest_run_id)
+            row_raw_id  = r.get("raw_source_id")
+            row_src_obs = r.get("source_observed_at")
+            row_method  = r.get("geometry_assignment_method", geometry_assignment_method)
+            row_spatial = r.get("spatial_support_json")
+            row_conf_m  = r.get("confidence_method_version", confidence_method_version)
             s.execute(
                 """
                 INSERT INTO h3_signals
                     (h3_id, city_id, domain, signal, hour_bucket,
-                     value, unit, source, data_quality, level, observed_at, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     value, unit, source, data_quality, level, observed_at, fetched_at,
+                     ingest_run_id, raw_source_id, source_observed_at, ingested_at,
+                     confidence_method_version, geometry_assignment_method, spatial_support_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (h3_id, city_id, domain, signal, hour_bucket) DO UPDATE SET
-                    value        = excluded.value,
-                    source       = excluded.source,
-                    data_quality = excluded.data_quality,
-                    observed_at  = excluded.observed_at,
-                    fetched_at   = excluded.fetched_at
+                    value                      = excluded.value,
+                    source                     = excluded.source,
+                    data_quality               = excluded.data_quality,
+                    observed_at                = excluded.observed_at,
+                    fetched_at                 = excluded.fetched_at,
+                    ingest_run_id              = excluded.ingest_run_id,
+                    raw_source_id              = excluded.raw_source_id,
+                    source_observed_at         = excluded.source_observed_at,
+                    ingested_at                = excluded.ingested_at,
+                    confidence_method_version  = excluded.confidence_method_version,
+                    geometry_assignment_method = excluded.geometry_assignment_method,
+                    spatial_support_json       = excluded.spatial_support_json
                 """,
                 [
                     h3_id, r.get("city_id", city_id), r.get("domain", domain),
@@ -222,6 +285,9 @@ def write_signals(
                     float(r["value"]),
                     r.get("unit"), row_source, data_quality,
                     r.get("level", level), observed_at, now,
+                    row_run_id, row_raw_id, row_src_obs, now,
+                    row_conf_m, row_method,
+                    _safe_json(row_spatial) if isinstance(row_spatial, (dict, list)) else row_spatial,
                 ],
             )
             inserted += 1
@@ -246,9 +312,18 @@ def write_assessment(
     dominant_issue: str | None = None,
     summary: dict | None = None,
     assessed_at: str | None = None,
+    # ── Tranche A reproducibility (methodology §14) ────────────────────────
+    assessment_version: str | None = None,
+    threshold_version: str | None = None,
+    input_signal_refs: list[dict] | None = None,
 ) -> None:
     """Upsert an assessment.  Only one row per (h3_id, city_id, domain, day).
     If the same cell is assessed twice in the same day, the newer value wins.
+
+    Reproducibility kwargs (§14):
+        assessment_version    — version tag of the assessment rules in force
+        threshold_version     — version of the threshold config file
+        input_signal_refs     — list of h3_signals row keys that fed this assessment
     """
     try:
         now = assessed_at or _now_iso()
@@ -256,21 +331,26 @@ def write_assessment(
             """
             INSERT INTO h3_assessments
                 (h3_id, city_id, domain, day_bucket, assessed_at,
-                 risk_level, primary_index, primary_value, dominant_issue, summary_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 risk_level, primary_index, primary_value, dominant_issue, summary_json,
+                 assessment_version, threshold_version, input_signal_refs_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (h3_id, city_id, domain, day_bucket) DO UPDATE SET
-                assessed_at    = excluded.assessed_at,
-                risk_level     = excluded.risk_level,
-                primary_index  = excluded.primary_index,
-                primary_value  = excluded.primary_value,
-                dominant_issue = excluded.dominant_issue,
-                summary_json   = excluded.summary_json
+                assessed_at            = excluded.assessed_at,
+                risk_level             = excluded.risk_level,
+                primary_index          = excluded.primary_index,
+                primary_value          = excluded.primary_value,
+                dominant_issue         = excluded.dominant_issue,
+                summary_json           = excluded.summary_json,
+                assessment_version     = excluded.assessment_version,
+                threshold_version      = excluded.threshold_version,
+                input_signal_refs_json = excluded.input_signal_refs_json
             """,
             [
                 h3_id, city_id, domain, _day_bucket(now), now,
                 risk_level, primary_index,
                 float(primary_value) if primary_value is not None else None,
                 dominant_issue, _safe_json(summary),
+                assessment_version, threshold_version, _safe_json(input_signal_refs),
             ],
         )
     except Exception as exc:
@@ -295,15 +375,24 @@ def write_packet(
     evidence: list | dict | None = None,
     safety_gates: list | None = None,
     blocked_uses: list | None = None,
+    # ── Tranche A reproducibility / tie-breaker (methodology §4.4, §14) ───
+    classifier_version: str | None = None,
+    weight_config_version: str | None = None,
+    attribution_uncertain: bool = False,
+    secondary_review_by: str | None = None,
 ) -> None:
     """Insert a decision packet.  Duplicate packet_id is silently ignored.
 
     Parameters
     ----------
-    packet              : Full packet payload (stored as JSON blob for backward compat)
-    evidence            : Structured evidence list for the Review Interface (§Evidence Panel)
-    safety_gates        : List of safety gate evaluations — each with status/evidence
-    blocked_uses        : List of prohibited use descriptions for reviewer acknowledgement
+    packet                  : Full packet payload (stored as JSON blob for backward compat)
+    evidence                : Structured evidence list for the Review Interface (§Evidence Panel)
+    safety_gates            : List of safety gate evaluations — each with status/evidence
+    blocked_uses            : List of prohibited use descriptions for reviewer acknowledgement
+    classifier_version      : Version tag of the cause-classifier weights that produced this packet (§4.4)
+    weight_config_version   : Version of the weights YAML/config file in force
+    attribution_uncertain   : True when top-2 cause confidences are within 0.15 (§4.4 tie-breaker)
+    secondary_review_by     : Department to CC when attribution is uncertain
     """
     if not packet_id or not h3_id:
         return
@@ -314,8 +403,10 @@ def write_packet(
                 (packet_id, h3_id, city_id, domain, created_at,
                  risk_level, confidence_score, field_verification_required,
                  packet_json, outcome_status,
-                 evidence_json, safety_gates_json, blocked_uses_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                 evidence_json, safety_gates_json, blocked_uses_json,
+                 classifier_version, weight_config_version,
+                 attribution_uncertain, secondary_review_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (packet_id) DO NOTHING
             """,
             [
@@ -328,6 +419,9 @@ def write_packet(
                 _safe_json(evidence) if evidence is not None else None,
                 _safe_json(safety_gates) if safety_gates is not None else None,
                 _safe_json(blocked_uses) if blocked_uses is not None else None,
+                classifier_version, weight_config_version,
+                1 if attribution_uncertain else 0,
+                secondary_review_by,
             ],
         )
     except Exception as exc:
@@ -363,15 +457,33 @@ def write_insight(
     priority_tier: str | None = None,
     # Legacy alias — accepted for backward compat, mapped to hypothesis_chain
     causal_chain: list[dict] | None = None,
+    # ── Tranche A reproducibility (methodology §4.1, §4.2, §14) ───────────
+    agent_model: str | None = None,
+    agent_prompt_version: str | None = None,
+    tool_trace_id: str | None = None,
+    context_hash: str | None = None,
+    evidence_refs: list | None = None,
+    confidence_type: str = "ordinal",
+    context_truncated: bool = False,
+    tool_policy_compliance: str | None = None,
 ) -> str:
+    """Insert a new agent insight and return its UUID.
+
+    Reproducibility kwargs (§14):
+        agent_model            — e.g. "claude-haiku-4-5"
+        agent_prompt_version   — git sha or semver of the system prompt at run time
+        tool_trace_id          — pointer to the row in `tool_traces` for this insight
+        context_hash           — sha256 of the assembled context bundle sent to the LLM
+        evidence_refs          — list of {type, ref_id} pointing to supporting signals/assessments/insights
+        confidence_type        — "ordinal" | "heuristic_composite" | "calibrated" (§4.2)
+        context_truncated      — True if the assembler dropped low-priority domains to fit the context window
+        tool_policy_compliance — "ok" | "violated" (§4.1 post-hoc check)
+    """
     insight_id = str(uuid.uuid4())
     resolved_chain = hypothesis_chain or causal_chain
 
     # Priority tier: use explicit value from agent if provided and valid,
     # otherwise fall back to confidence-based derivation.
-    # The agent sets priority_tier based on RISK SEVERITY; confidence reflects
-    # its analytical certainty. These are orthogonal — a high-severity risk
-    # with sparse data gets priority=high, confidence=0.5.
     _VALID_TIERS = {"critical", "high", "medium", "low"}
     if priority_tier and priority_tier in _VALID_TIERS:
         tier = priority_tier
@@ -391,8 +503,11 @@ def write_insight(
                 (insight_id, h3_id, city_id, agent_type, created_at,
                  domains_involved, finding, confidence, priority_tier,
                  hypothesis_chain_json,
-                 recommended_actions_json, uncertainty_notes_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 recommended_actions_json, uncertainty_notes_json,
+                 agent_model, agent_prompt_version, tool_trace_id, context_hash,
+                 evidence_refs_json, confidence_type,
+                 context_truncated, tool_policy_compliance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 insight_id, h3_id, city_id, agent_type,
@@ -404,11 +519,64 @@ def write_insight(
                 _safe_json(resolved_chain),
                 _safe_json(recommended_actions),
                 _safe_json(uncertainty_notes),
+                agent_model, agent_prompt_version, tool_trace_id, context_hash,
+                _safe_json(evidence_refs), confidence_type,
+                1 if context_truncated else 0,
+                tool_policy_compliance,
             ],
         )
     except Exception as exc:
         logger.warning("write_insight failed: %s", exc)
     return insight_id
+
+
+# ---------------------------------------------------------------------------
+# Agent tool-call trace log (methodology §14.3)
+# ---------------------------------------------------------------------------
+
+def write_tool_trace(
+    *,
+    trace_id: str,
+    insight_id: str | None,
+    city_id: str | None,
+    h3_id: str | None,
+    calls: list[dict],
+    policy_compliance: str = "unknown",
+) -> None:
+    """Persist a single H3 Expert Agent run's tool-call log.
+
+    `calls` is a list of per-call dicts, each shaped like::
+
+        {
+          "seq": 1,
+          "tool": "get_signal_history",
+          "args": {"domain": "air", "signal": "PM25", "hours": 24},
+          "result_summary": "24 rows; min 28, max 312, latest 287",
+          "latency_ms": 47,
+          "ok": True,
+        }
+
+    `policy_compliance` records whether the trace satisfies required-tool policy
+    (e.g. cross-domain claims must be preceded by a `get_domain_cross_correlation`
+    call). One of: "ok" | "violated" | "unknown".
+    """
+    if not trace_id:
+        return
+    try:
+        _store().execute(
+            """
+            INSERT INTO tool_traces
+                (trace_id, insight_id, city_id, h3_id, calls_json, policy_compliance)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (trace_id) DO UPDATE SET
+                insight_id        = excluded.insight_id,
+                calls_json        = excluded.calls_json,
+                policy_compliance = excluded.policy_compliance
+            """,
+            [trace_id, insight_id, city_id, h3_id, _safe_json(calls), policy_compliance],
+        )
+    except Exception as exc:
+        logger.warning("write_tool_trace failed: %s", exc)
 
 
 def write_city_pattern(
@@ -420,6 +588,11 @@ def write_city_pattern(
     summary: dict,
     pattern_id: str | None = None,
     created_at: str | None = None,
+    # ── Tranche A reproducibility (methodology §14) ────────────────────────
+    source_insight_ids: list[str] | None = None,
+    source_assessment_snapshot_id: str | None = None,
+    agent_model: str | None = None,
+    prompt_version: str | None = None,
 ) -> str:
     """Write a City Pattern Agent synthesis result to city_patterns.
 
@@ -435,6 +608,9 @@ def write_city_pattern(
     summary        : Full JSON output from the City Pattern Agent
     pattern_id     : Optional UUID; generated if not supplied
     created_at     : Optional ISO timestamp; system UTC if not supplied
+    source_insight_ids            : (§14) exhaustive list of insight_ids that fed this synthesis
+    source_assessment_snapshot_id : (§14) pointer to assessment-table snapshot at synthesis time
+    agent_model, prompt_version   : (§14) reproducibility for the synthesis agent
     """
     pid = pattern_id or str(uuid.uuid4())
     try:
@@ -442,12 +618,16 @@ def write_city_pattern(
             """
             INSERT INTO city_patterns
                 (pattern_id, city_id, created_at,
-                 lookback_hours, n_insights, theme_count, summary_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 lookback_hours, n_insights, theme_count, summary_json,
+                 source_insight_ids_json, source_assessment_snapshot_id,
+                 agent_model, prompt_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [pid, city_id, created_at or _now_iso(),
              lookback_hours, n_insights, theme_count,
-             _safe_json(summary)],
+             _safe_json(summary),
+             _safe_json(source_insight_ids), source_assessment_snapshot_id,
+             agent_model, prompt_version],
         )
         logger.debug(
             "write_city_pattern: %s themes for %s (n_insights=%d)",
@@ -463,36 +643,85 @@ def close_insight(
     insight_id: str,
     outcome_status: str,
     closed_by: str,
+    # ── Tranche C: four-way verdict split (methodology §4.3) ──────────────
+    condition_verdict: str | None = None,
+    cause_verdict: str | None = None,
+    routing_verdict: str | None = None,
+    action_verdict: str | None = None,
 ) -> None:
     """Record an officer's closure decision on an insight.
 
-    outcome_status : confirmed | refuted | unverifiable
-    closed_by      : Non-empty reviewer identity string (email, officer ID, etc.)
-                     An empty or missing closed_by is rejected — anonymous closure
-                     is a spec violation (REVIEW_CONTRACT §Close Operation Requirements).
+    Legacy:
+        outcome_status : confirmed | refuted | unverifiable (back-compat with
+                         single-verdict callers; the UI now collects four
+                         orthogonal sub-verdicts).
+        closed_by      : Non-empty reviewer identity string (email, officer ID).
+                         Anonymous closure is rejected (REVIEW_CONTRACT §Close
+                         Operation Requirements).
+
+    Four-way sub-verdicts (methodology §4.3 — all optional, accept partials):
+        condition_verdict : Was the hypothesised condition observed?
+                            confirmed | refuted | partially_confirmed | unverifiable
+        cause_verdict     : Was the top cause hypothesis correct? (same enum)
+        routing_verdict   : Was the routing target correct?
+                            correct | incorrect | joint_responsibility | unknown
+        action_verdict    : Was an action taken?
+                            taken | not_required | escalated |
+                            not_taken_resource_limited | not_taken_other
     """
     if not closed_by or not closed_by.strip():
         raise ValueError(
             "close_insight: closed_by must be a non-empty reviewer identity string. "
             "Anonymous closure is prohibited by the Review Contract."
         )
-    _VALID_OUTCOMES = {"confirmed", "refuted", "unverifiable"}
+    _VALID_OUTCOMES   = {"confirmed", "refuted", "unverifiable", "partially_confirmed"}
+    _VALID_COND_CAUSE = {"confirmed", "refuted", "partially_confirmed", "unverifiable"}
+    _VALID_ROUTING    = {"correct", "incorrect", "joint_responsibility", "unknown"}
+    _VALID_ACTION     = {
+        "taken", "not_required", "escalated",
+        "not_taken_resource_limited", "not_taken_other",
+    }
+
     if outcome_status not in _VALID_OUTCOMES:
         raise ValueError(
             f"close_insight: outcome_status must be one of {sorted(_VALID_OUTCOMES)}, "
             f"got {outcome_status!r}."
         )
+    # Optional sub-verdicts — only validate if supplied.
+    if condition_verdict and condition_verdict not in _VALID_COND_CAUSE:
+        raise ValueError(f"invalid condition_verdict: {condition_verdict!r}")
+    if cause_verdict and cause_verdict not in _VALID_COND_CAUSE:
+        raise ValueError(f"invalid cause_verdict: {cause_verdict!r}")
+    if routing_verdict and routing_verdict not in _VALID_ROUTING:
+        raise ValueError(f"invalid routing_verdict: {routing_verdict!r}")
+    if action_verdict and action_verdict not in _VALID_ACTION:
+        raise ValueError(f"invalid action_verdict: {action_verdict!r}")
+
+    # If the caller didn't supply condition_verdict, mirror the legacy
+    # outcome_status into it so the new column gets populated for v1
+    # deployments that only collect the condition layer.
+    if condition_verdict is None:
+        condition_verdict = outcome_status
+
     try:
         _store().execute(
             """
             UPDATE h3_insights
-               SET outcome_status = ?,
-                   closed_by      = ?,
-                   closed_at      = ?
+               SET outcome_status    = ?,
+                   closed_by         = ?,
+                   closed_at         = ?,
+                   condition_verdict = ?,
+                   cause_verdict     = COALESCE(?, cause_verdict),
+                   routing_verdict   = COALESCE(?, routing_verdict),
+                   action_verdict    = COALESCE(?, action_verdict)
              WHERE insight_id = ?
                AND outcome_status = 'open'
             """,
-            [outcome_status, closed_by.strip(), _now_iso(), insight_id],
+            [
+                outcome_status, closed_by.strip(), _now_iso(),
+                condition_verdict, cause_verdict, routing_verdict, action_verdict,
+                insight_id,
+            ],
         )
     except Exception as exc:
         logger.warning("close_insight failed: %s", exc)
@@ -631,6 +860,8 @@ def ingest_assessment_cells(
     unit: str = "",
     source: str = "pipeline",
     resolution: int = 8,
+    # ── Tranche D.4: per-domain geometry assignment tag (methodology §14) ─
+    geometry_assignment_method: str | None = None,
 ) -> int:
     """Write signals + assessments + coverage uncertainty for a batch of cell dicts.
 
@@ -703,7 +934,13 @@ def ingest_assessment_cells(
             centroid_lng=cell.get("centroid_lon"),
         )
 
-    return write_signals(signal_rows, city_id=city_id, domain=domain, source=source)
+    return write_signals(
+        signal_rows,
+        city_id=city_id,
+        domain=domain,
+        source=source,
+        geometry_assignment_method=geometry_assignment_method,
+    )
 
 
 def _apply_analysis_gate(

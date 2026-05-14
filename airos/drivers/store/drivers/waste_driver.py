@@ -12,10 +12,9 @@ class WasteDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "WASTE_SITE_PROBABILITY", "BURN_FRP_MW",
-        "WASTE_RISK_INDEX", "PERSISTENCE_DAYS", "DATA_CONFIDENCE",
+        "WASTE_RISK_SCORE", "WASTE_FRP", "DATA_CONFIDENCE",
     ]
-    data_sources = ["Sentinel-2 spectral (GEE)", "MODIS/VIIRS active fire"]
+    data_sources = ["NASA FIRMS VIIRS/MODIS active fire (FIRMS_API_KEY)"]
     _required_env_vars = []
 
     def fetch(self, city_id: str, bbox: dict, *, force: bool = False) -> int:
@@ -24,8 +23,9 @@ class WasteDriver(_InTreeDriver):
 
     def conformance_check(self) -> ConformanceResult:
         result = super().conformance_check()
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("FIRMS_API_KEY"):
             result.warnings.append(
-                "GOOGLE_APPLICATION_CREDENTIALS not set — satellite waste detection unavailable"
+                "FIRMS_API_KEY not set — waste domain will produce no fire-based signals "
+                "(WASTE_RISK_SCORE, WASTE_FRP)"
             )
         return result

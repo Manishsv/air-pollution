@@ -184,6 +184,91 @@ def _ruggedness(
 
 
 # ---------------------------------------------------------------------------
+# Hex-D6 flow routing (methodology §D.17)
+# ---------------------------------------------------------------------------
+# Each cell drains to its steepest-downhill H3 neighbour. The downstream graph
+# is acyclic by construction (strict less-than on elevation), so flow
+# accumulation can be computed via Kahn's topological sort: source cells (no
+# incoming flow) push their accumulation down to their downstream cell,
+# decrementing the downstream cell's in-degree until it itself is ready.
+
+def _compute_flow_graph(
+    cell_elevation: dict[str, float | None],
+    all_cells: list[str],
+) -> tuple[dict[str, float], dict[str, int]]:
+    """Return (flow_direction_deg, flow_accumulation) for every cell.
+
+    flow_direction_deg : bearing in degrees (0=N, 90=E) from this cell's
+        centroid to its downstream neighbour's centroid. Set to **-1** when
+        the cell is a **sink** (no neighbour is lower) — the flow graph
+        terminates there. Cells without elevation also get -1.
+
+    flow_accumulation : count of cells whose runoff transitively reaches this
+        cell, **including itself**. A truly isolated cell has 1; a major
+        basin outlet aggregates the count of its entire upstream basin.
+    """
+    import math
+    import h3 as _h3
+
+    # 1. Build the downstream map by finding the steepest-downhill neighbour
+    #    among each cell's 6 H3 neighbours.
+    downstream: dict[str, str | None] = {}
+    for cell in all_cells:
+        elev = cell_elevation.get(cell)
+        if elev is None:
+            downstream[cell] = None
+            continue
+        neighbours = [n for n in _h3.grid_disk(cell, 1) if n != cell]
+        best: str | None = None
+        best_elev = elev   # strict less-than: only flow if neighbour is LOWER
+        for n in neighbours:
+            n_elev = cell_elevation.get(n)
+            if n_elev is None:
+                continue
+            if n_elev < best_elev:
+                best_elev = n_elev
+                best = n
+        downstream[cell] = best   # None = sink
+
+    # 2. Topological-sort flow accumulation using Kahn's algorithm.
+    upstream_of: dict[str, list[str]] = {c: [] for c in all_cells}
+    for c, ds in downstream.items():
+        if ds is not None and ds in upstream_of:
+            upstream_of[ds].append(c)
+    indegree: dict[str, int] = {c: len(upstream_of[c]) for c in all_cells}
+    accumulation: dict[str, int] = {c: 1 for c in all_cells}
+    queue = [c for c in all_cells if indegree[c] == 0]
+    while queue:
+        c = queue.pop()
+        ds = downstream.get(c)
+        if ds is None or ds not in accumulation:
+            continue
+        accumulation[ds] += accumulation[c]
+        indegree[ds] -= 1
+        if indegree[ds] == 0:
+            queue.append(ds)
+
+    # 3. Compute bearing from each cell to its downstream cell.
+    flow_dir_deg: dict[str, float] = {}
+    for c, ds in downstream.items():
+        if ds is None:
+            flow_dir_deg[c] = -1.0
+            continue
+        lat1, lon1 = _h3.cell_to_latlng(c)
+        lat2, lon2 = _h3.cell_to_latlng(ds)
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dlam = math.radians(lon2 - lon1)
+        y = math.sin(dlam) * math.cos(phi2)
+        x = (math.cos(phi1) * math.sin(phi2)
+             - math.sin(phi1) * math.cos(phi2) * math.cos(dlam))
+        bearing = (math.degrees(math.atan2(y, x)) + 360) % 360
+        flow_dir_deg[c] = round(bearing, 1)
+
+    return flow_dir_deg, accumulation
+
+
+# ---------------------------------------------------------------------------
 # Public: ingest_terrain
 # ---------------------------------------------------------------------------
 
@@ -247,7 +332,12 @@ def ingest_terrain(city_id: str, bbox: dict, *, force: bool = False) -> int:
         cell_elevation[h3_id] = elev
         cell_confidence[h3_id] = conf
 
-    # ── Step 3: compute slope, aspect, ruggedness via neighbourhood ─────────
+    # ── Step 3: compute flow direction + flow accumulation (§D.17) ────────
+    # For each cell with elevation, find its steepest-downhill H3 neighbour
+    # and compute the size of its upstream basin via topological traversal.
+    flow_dir_deg, flow_accumulation = _compute_flow_graph(cell_elevation, all_cells)
+
+    # ── Step 4: compute slope, aspect, ruggedness via neighbourhood ─────────
     # Build neighbour elevation lookup (reuse already-computed means)
     signal_rows: list[dict] = []
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -284,17 +374,29 @@ def ingest_terrain(city_id: str, bbox: dict, *, force: bool = False) -> int:
         )
         rug = _ruggedness(elev, neighbour_elevs)
 
+        # Flow routing values for this cell (may be None for cells with no
+        # elevation; we only reach this branch when elev is not None, but
+        # flow_dir_deg uses -1 for sinks).
+        fdir = flow_dir_deg.get(h3_id, -1.0)
+        facc = flow_accumulation.get(h3_id, 1)
+
         signal_rows += [
-            {"h3_id": h3_id, "signal": "ELEVATION_M",      "value": round(elev, 1), "unit": "metres"},
-            {"h3_id": h3_id, "signal": "SLOPE_DEG",         "value": slope_deg,      "unit": "degrees"},
-            {"h3_id": h3_id, "signal": "ASPECT_DEG",        "value": aspect_deg,     "unit": "degrees"},
-            {"h3_id": h3_id, "signal": "RUGGEDNESS_INDEX",  "value": rug,            "unit": "metres"},
-            {"h3_id": h3_id, "signal": "DATA_CONFIDENCE",   "value": conf,           "unit": "ratio"},
+            {"h3_id": h3_id, "signal": "ELEVATION_M",       "value": round(elev, 1),    "unit": "metres"},
+            {"h3_id": h3_id, "signal": "SLOPE_DEG",         "value": slope_deg,         "unit": "degrees"},
+            {"h3_id": h3_id, "signal": "ASPECT_DEG",        "value": aspect_deg,        "unit": "degrees"},
+            {"h3_id": h3_id, "signal": "RUGGEDNESS_INDEX",  "value": rug,               "unit": "metres"},
+            # Hex-D6 flow routing (methodology §D.17). -1 = sink (no downstream neighbour).
+            {"h3_id": h3_id, "signal": "FLOW_DIRECTION",    "value": float(fdir),       "unit": "degrees"},
+            {"h3_id": h3_id, "signal": "FLOW_ACCUMULATION", "value": float(facc),       "unit": "count"},
+            {"h3_id": h3_id, "signal": "DATA_CONFIDENCE",   "value": conf,              "unit": "ratio"},
         ]
 
-    written = write_signals(signal_rows, city_id=city_id, domain="terrain", source="srtm_copernicus")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="terrain", source="srtm_copernicus",
+        geometry_assignment_method="raster",
+    )
     logger.info(
-        "[%s/terrain] %d cells × 5 signals = %d rows written.",
+        "[%s/terrain] %d cells × 7 signals = %d rows written (incl. FLOW_DIRECTION + FLOW_ACCUMULATION).",
         city_id, len(all_cells), written,
     )
 

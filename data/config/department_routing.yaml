@@ -1,0 +1,161 @@
+# Department routing rules for cause-classified air quality incidents.
+#
+# Structure
+# ---------
+# cities.<city_id>.departments.<dept_id>:
+#   name:         Human-readable department name
+#   email:        Contact (informational; not used programmatically yet)
+#   causes:       List of cause_hypothesis keys this dept handles
+#   signals:      (optional) additional signal triggers for routing to this dept
+#
+# cities.<city_id>.cause_routing:
+#   <cause_hypothesis>:
+#     primary:    dept_id that owns the response
+#     secondary:  list of dept_ids to copy in (informational escalation)
+#     action_template: short imperative for the dispatch ticket
+
+cities:
+
+  bangalore:
+    departments:
+      bbmp_solid_waste:
+        name: "BBMP Solid Waste Management"
+        causes: [waste_burning]
+        action_template: "Dispatch field team to suppress illegal waste burning"
+
+      bbmp_roads:
+        name: "BBMP Roads & Infrastructure"
+        causes: [construction_dust, traffic_resuspension]
+        action_template: "Issue stop-work notice / water-spraying order for dust suppression"
+
+      traffic_police:
+        name: "Bengaluru Traffic Police"
+        causes: [traffic_resuspension]
+        action_template: "Deploy traffic management to reduce congestion and idling"
+
+      kspcb:
+        name: "Karnataka State Pollution Control Board"
+        causes: [industrial_emission]
+        action_template: "Issue compliance notice to facility; schedule inspection"
+
+      bbmp_health:
+        name: "BBMP Public Health"
+        causes: [meteorological_trapping, construction_dust, waste_burning, industrial_emission]
+        action_template: "Issue public health advisory; prepare contingency for vulnerable populations"
+
+      imd_bangalore:
+        name: "IMD Bangalore (Meteorology)"
+        causes: [meteorological_trapping]
+        action_template: "Coordinate weather-based advisory; notify emergency services of trapping event"
+
+    cause_routing:
+      construction_dust:
+        primary: bbmp_roads
+        secondary: [bbmp_health, kspcb]
+        action_template: "Enforce dust suppression measures at active construction sites"
+
+      waste_burning:
+        primary: bbmp_solid_waste
+        secondary: [bbmp_health, kspcb]
+        action_template: "Locate and extinguish illegal waste burning; issue penalties"
+
+      traffic_resuspension:
+        primary: traffic_police
+        secondary: [bbmp_roads, bbmp_health]
+        action_template: "Reduce vehicle idling and road dust via traffic flow management"
+
+      industrial_emission:
+        primary: kspcb
+        secondary: [bbmp_health]
+        action_template: "Inspect industrial facilities for emission violations"
+
+      meteorological_trapping:
+        primary: bbmp_health
+        secondary: [imd_bangalore, kspcb]
+        action_template: "Issue public health advisory; coordinate with facilities to reduce emissions"
+
+      regional_transport:
+        primary: kspcb
+        secondary: [bbmp_health, imd_bangalore]
+        action_template: "Pollution is transported from upwind sources outside this cell — coordinate with regional/airshed-level intervention; local enforcement unlikely to resolve. Issue advisory for vulnerable groups during peak hours."
+
+  pune:
+    departments:
+      pmc_solid_waste:
+        name: "PMC Solid Waste Management"
+        causes: [waste_burning]
+        action_template: "Dispatch field team to suppress illegal waste burning"
+
+      pmc_roads:
+        name: "PMC Roads & Infrastructure"
+        causes: [construction_dust, traffic_resuspension]
+        action_template: "Issue stop-work notice / water-spraying order for dust suppression"
+
+      pune_traffic_police:
+        name: "Pune Traffic Police"
+        causes: [traffic_resuspension]
+        action_template: "Deploy traffic management to reduce congestion and idling"
+
+      mpcb:
+        name: "Maharashtra Pollution Control Board"
+        causes: [industrial_emission]
+        action_template: "Issue compliance notice to facility; schedule inspection"
+
+      pmc_health:
+        name: "PMC Public Health"
+        causes: [meteorological_trapping, construction_dust, waste_burning, industrial_emission]
+        action_template: "Issue public health advisory; prepare contingency for vulnerable populations"
+
+      imd_pune:
+        name: "IMD Pune (Meteorology)"
+        causes: [meteorological_trapping]
+        action_template: "Coordinate weather-based advisory; notify emergency services of trapping event"
+
+    cause_routing:
+      construction_dust:
+        primary: pmc_roads
+        secondary: [pmc_health, mpcb]
+        action_template: "Enforce dust suppression measures at active construction sites"
+
+      waste_burning:
+        primary: pmc_solid_waste
+        secondary: [pmc_health, mpcb]
+        action_template: "Locate and extinguish illegal waste burning; issue penalties"
+
+      traffic_resuspension:
+        primary: pune_traffic_police
+        secondary: [pmc_roads, pmc_health]
+        action_template: "Reduce vehicle idling and road dust via traffic flow management"
+
+      industrial_emission:
+        primary: mpcb
+        secondary: [pmc_health]
+        action_template: "Inspect industrial facilities for emission violations"
+
+      meteorological_trapping:
+        primary: pmc_health
+        secondary: [imd_pune, mpcb]
+        action_template: "Issue public health advisory; coordinate with facilities to reduce emissions"
+
+# Fallback routing when no city-specific config exists
+default:
+  cause_routing:
+    construction_dust:
+      primary: municipal_roads
+      action_template: "Enforce dust suppression at active construction sites"
+
+    waste_burning:
+      primary: municipal_solid_waste
+      action_template: "Suppress illegal waste burning; issue penalties"
+
+    traffic_resuspension:
+      primary: traffic_police
+      action_template: "Traffic management to reduce congestion and road dust"
+
+    industrial_emission:
+      primary: state_pcb
+      action_template: "Inspect industrial facilities for emission violations"
+
+    meteorological_trapping:
+      primary: municipal_health
+      action_template: "Issue public health advisory for pollution trapping event"

@@ -198,6 +198,7 @@ def classify_activity(city_id: str) -> int:
     written = write_signals(
         signal_rows, city_id=city_id, domain="nightlights",
         source="nightlights_classifier", skip_conformance=True,
+        geometry_assignment_method="derived",
     )
 
     counts = {}
@@ -309,7 +310,8 @@ def ingest_nightlights(city_id: str, bbox: dict, *, force: bool = False) -> int:
         ]
 
     written = write_signals(signal_rows, city_id=city_id, domain="nightlights",
-                            source="viirs_black_marble")
+                            source="viirs_black_marble",
+                            geometry_assignment_method="raster")
     logger.info(
         "[%s/nightlights] %d cells × 4 signals = %d rows written.",
         city_id, len(all_cells), written,

@@ -6,6 +6,9 @@ from docs/architecture/WARD_DECISION_CATALOGUE.md.
 """
 from __future__ import annotations
 
+import json
+import sqlite3
+
 import pandas as pd
 import streamlit as st
 
@@ -40,6 +43,253 @@ _DOMAIN_COLOR = {
     "Heat":          "#fd7e14",
     "Cross-Domain":  "#6f42c1",
 }
+
+
+_OUTCOME_LABEL = {
+    "pending":    "⏳ Pending",
+    "dispatched": "🚗 Dispatched",
+    "verified":   "🔍 Verified",
+    "resolved":   "✅ Resolved",
+}
+
+_OUTCOME_NEXT: dict[str, list[str]] = {
+    "pending":    ["dispatched"],
+    "dispatched": ["verified"],
+    "verified":   ["resolved"],
+    "resolved":   [],
+}
+
+_URGENCY_SORT = {"immediate": 0, "within_4h": 1, "within_24h": 2, "within_week": 3}
+
+
+# ── Task data helpers ─────────────────────────────────────────────────────────
+
+def _load_tasks(city_id: str, status_filter: str = "open") -> list[dict]:
+    """Load insight-derived packets from h3_packets."""
+    from airos.drivers.store.schema import DB_PATH
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        if status_filter == "open":
+            where = "outcome_status != 'resolved'"
+        elif status_filter == "resolved":
+            where = "outcome_status = 'resolved'"
+        else:
+            where = "1=1"
+        rows = conn.execute(f"""
+            SELECT packet_id, h3_id, domain, risk_level, confidence_score,
+                   outcome_status, created_at, packet_json, evidence_json
+            FROM h3_packets
+            WHERE city_id = ?
+              AND json_extract(packet_json, '$.source') = 'insight'
+              AND {where}
+            ORDER BY
+                CASE risk_level
+                    WHEN 'severe' THEN 0 WHEN 'high' THEN 1
+                    WHEN 'moderate' THEN 2 ELSE 3 END,
+                created_at DESC
+        """, (city_id,)).fetchall()
+        conn.close()
+        tasks = []
+        for r in rows:
+            payload = {}
+            try:
+                payload = json.loads(r["packet_json"] or "{}")
+            except Exception:
+                pass
+            tasks.append({
+                "packet_id":       r["packet_id"],
+                "h3_id":           r["h3_id"],
+                "domain":          r["domain"],
+                "risk_level":      r["risk_level"],
+                "confidence":      r["confidence_score"],
+                "outcome_status":  r["outcome_status"],
+                "created_at":      r["created_at"],
+                "finding":         payload.get("finding", ""),
+                "urgency":         payload.get("urgency", "within_24h"),
+                "domains_involved": payload.get("domains_involved", r["domain"]),
+                "actions":         payload.get("recommended_actions", []),
+                "priority_tier":   payload.get("priority_tier", "medium"),
+                "cause_hypotheses": payload.get("cause_hypotheses", []),
+                "primary_cause":   payload.get("primary_cause", ""),
+                "routed_to":       payload.get("routed_to", ""),
+                "routing_cc":      payload.get("routing_cc", []),
+                "routing_action":  payload.get("routing_action", ""),
+            })
+        tasks.sort(key=lambda t: (
+            _URGENCY_SORT.get(t["urgency"], 9),
+            {"severe": 0, "high": 1, "moderate": 2, "low": 3}.get(t["risk_level"], 4),
+        ))
+        return tasks
+    except Exception as exc:
+        st.error(f"Error loading tasks: {exc}")
+        return []
+
+
+def _advance_task(task: dict, new_status: str, officer: str, city_id: str) -> None:
+    """Update packet outcome_status; write h3_outcomes + close source insight on resolve."""
+    from airos.drivers.store.writer import update_packet_outcome, write_outcome
+    packet_id = task["packet_id"]
+    try:
+        update_packet_outcome(packet_id=packet_id, outcome_status=new_status)
+    except Exception:
+        pass
+    if new_status == "resolved":
+        try:
+            write_outcome(
+                packet_id=packet_id,
+                h3_id=task["h3_id"],
+                city_id=city_id,
+                domain=task["domain"],
+                outcome_type="resolved",
+                finding=f"Marked resolved by {officer}",
+                resolved_by=officer,
+            )
+        except Exception:
+            pass
+        # Close the source insight so it stops re-promoting
+        try:
+            from airos.drivers.store.schema import DB_PATH
+            conn = sqlite3.connect(str(DB_PATH))
+            row = conn.execute(
+                "SELECT json_extract(packet_json, '$.source_insight_id') "
+                "FROM h3_packets WHERE packet_id = ?", (packet_id,)
+            ).fetchone()
+            conn.close()
+            if row and row[0]:
+                from airos.drivers.store.writer import close_insight
+                close_insight(
+                    insight_id=row[0],
+                    outcome_status="confirmed",
+                    closed_by=officer,
+                )
+        except Exception:
+            pass
+
+
+# ── Task rendering ────────────────────────────────────────────────────────────
+
+def _render_tasks_panel(city_id: str) -> None:
+    """Render the insight-derived tasks tab."""
+    col_filter, col_refresh = st.columns([4, 1])
+    with col_filter:
+        status_filter = st.radio(
+            "Show", ["open", "resolved", "all"],
+            horizontal=True, key="tasks_status_filter",
+            label_visibility="collapsed",
+        )
+    with col_refresh:
+        if st.button("↻", key="tasks_refresh", help="Refresh tasks"):
+            st.rerun()
+
+    tasks = _load_tasks(city_id, status_filter)
+
+    # Summary strip
+    n_immediate = sum(1 for t in tasks if t["urgency"] == "immediate")
+    n_4h        = sum(1 for t in tasks if t["urgency"] == "within_4h")
+    n_pending   = sum(1 for t in tasks if t["outcome_status"] == "pending")
+    n_progress  = sum(1 for t in tasks if t["outcome_status"] in ("dispatched", "verified"))
+    n_resolved  = sum(1 for t in tasks if t["outcome_status"] == "resolved")
+
+    mc = st.columns(5)
+    mc[0].metric("Immediate", n_immediate)
+    mc[1].metric("Within 4h",  n_4h)
+    mc[2].metric("Pending",    n_pending)
+    mc[3].metric("In Progress", n_progress)
+    mc[4].metric("Resolved",   n_resolved)
+
+    if not tasks:
+        st.info("No tasks match the current filter.")
+        return
+
+    officer = st.text_input(
+        "Officer ID (required to advance status)",
+        key="tasks_officer_id",
+        placeholder="e.g. ward_officer_42",
+    )
+
+    st.divider()
+
+    for task in tasks:
+        urgency    = task["urgency"]
+        risk       = task["risk_level"]
+        status     = task["outcome_status"]
+        domains    = task["domains_involved"]
+        urgency_lbl = _URGENCY_LABEL.get(urgency, urgency)
+        status_lbl  = _OUTCOME_LABEL.get(status, status)
+        risk_icon   = {"severe": "🔴", "high": "🟠", "moderate": "🟡", "low": "🟢"}.get(risk, "⚪")
+
+        header = (
+            f"{risk_icon} **{domains}** — {urgency_lbl} — {status_lbl}"
+        )
+
+        with st.expander(header, expanded=(urgency in ("immediate", "within_4h") and status == "pending")):
+            st.write(task["finding"])
+
+            # Cause hypotheses + routing (air domain)
+            hyps = task.get("cause_hypotheses", [])
+            routed_to = task.get("routed_to", "")
+            routing_action = task.get("routing_action", "")
+            routing_cc = task.get("routing_cc", [])
+            if hyps or routed_to:
+                st.markdown("**Cause analysis & routing:**")
+                if routed_to:
+                    cc_str = f" · CC: {', '.join(routing_cc)}" if routing_cc else ""
+                    st.markdown(f"→ **{routed_to}**{cc_str}")
+                    if routing_action:
+                        st.markdown(f"  *{routing_action}*")
+                if hyps:
+                    cols = st.columns(min(len(hyps), 3))
+                    for i, h in enumerate(hyps[:3]):
+                        cause_label = h["cause"].replace("_", " ").title()
+                        conf_pct = int(h["confidence"] * 100)
+                        badge_color = (
+                            "#dc3545" if conf_pct >= 60 else
+                            "#fd7e14" if conf_pct >= 35 else "#6c757d"
+                        )
+                        cols[i].markdown(
+                            f'<span style="background:{badge_color};color:white;'
+                            f'padding:2px 8px;border-radius:4px;font-size:11px">'
+                            f'{cause_label} {conf_pct}%</span>',
+                            unsafe_allow_html=True,
+                        )
+                        for ev in h.get("evidence", [])[:2]:
+                            cols[i].caption(ev)
+
+            if task["actions"]:
+                st.markdown("**Recommended actions:**")
+                for a in task["actions"][:3]:
+                    actor   = a.get("actor", "")
+                    action  = a.get("action", "")
+                    blocked = a.get("blocked_if", "")
+                    st.markdown(
+                        f"- `{actor}` — {action}"
+                        + (f"  \n  *Blocked if: {blocked}*" if blocked else ""),
+                    )
+
+            conf_str = f" · Confidence: {task['confidence']:.0%}" if task["confidence"] else ""
+            st.caption(f"Cell: `{task['h3_id']}`{conf_str}")
+
+            # Advance-status buttons
+            next_statuses = _OUTCOME_NEXT.get(status, [])
+            if next_statuses:
+                btn_cols = st.columns(len(next_statuses) + 1)
+                for i, ns in enumerate(next_statuses):
+                    label_map = {
+                        "dispatched": "✅ Mark Dispatched",
+                        "verified":   "🔍 Mark Verified",
+                        "resolved":   "✅ Mark Resolved",
+                    }
+                    if btn_cols[i].button(
+                        label_map.get(ns, f"→ {ns}"),
+                        key=f"task_btn_{task['packet_id']}_{ns}",
+                    ):
+                        if not officer:
+                            st.warning("Enter your Officer ID above before advancing status.")
+                        else:
+                            _advance_task(task, ns, officer, city_id)
+                            st.success(f"Marked as {ns}.")
+                            st.rerun()
 
 
 # ── Data loading ───────────────────────────────────────────────────────────────
@@ -308,7 +558,12 @@ def render_ward_decisions_panel() -> None:
             key="wd_urgency_filter",
         )
 
-    t_open, t_wards, t_escalate = st.tabs(["Open Decisions", "By Ward", "Escalation Queue"])
+    t_tasks, t_open, t_wards, t_escalate = st.tabs([
+        "📋 Tasks", "Open Decisions", "By Ward", "Escalation Queue",
+    ])
+
+    with t_tasks:
+        _render_tasks_panel(city_id)
 
     with t_open:
         _render_decisions_table(packets, domain_filter, urgency_filter)

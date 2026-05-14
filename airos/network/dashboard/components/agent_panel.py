@@ -40,111 +40,16 @@ def _conf_emoji(conf: float) -> str:
 # ---------------------------------------------------------------------------
 
 def render_llm_settings(*, key_prefix: str = "llm") -> LLMConfig:
-    """Render LLM provider settings and return the current LLMConfig.
+    """Return the LLM config from environment variables.
 
-    Call this wherever agent controls are needed.  Uses st.session_state to
-    persist across rerenders without losing the user's choices.
+    The dashboard never exposes provider settings or API keys in the UI —
+    those are configured server-side (env vars / config file). A separate
+    authenticated admin API will manage them after auth is implemented.
+    The `key_prefix` parameter is accepted for backwards compatibility but
+    unused.
     """
-    # Load defaults from env vars on first render
-    env_cfg = load_config()
-
-    with st.expander("⚙️ LLM provider settings", expanded=False):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            provider_labels = {k: v["label"] for k, v in PROVIDER_PRESETS.items()}
-            selected_label = st.selectbox(
-                "Provider",
-                options=list(provider_labels.values()),
-                index=list(provider_labels.keys()).index(env_cfg.provider)
-                      if env_cfg.provider in provider_labels else 0,
-                key=f"{key_prefix}_provider_label",
-            )
-            # Map label back to key
-            provider = next(k for k, v in provider_labels.items()
-                            if v == selected_label)
-            preset = PROVIDER_PRESETS[provider]
-            st.caption(preset.get("notes", ""))
-
-        with col2:
-            model = st.text_input(
-                "Model",
-                value=env_cfg.model if env_cfg.provider == provider
-                      else preset["default_model"],
-                key=f"{key_prefix}_model",
-                placeholder=preset["default_model"],
-                help="Model name as the provider expects it.",
-            )
-
-        col3, col4 = st.columns(2)
-        with col3:
-            base_url = st.text_input(
-                "Base URL",
-                value=env_cfg.base_url if env_cfg.provider == provider
-                      else preset["base_url"],
-                key=f"{key_prefix}_base_url",
-                help="OpenAI-compatible /v1 endpoint. Change only for custom setups.",
-            )
-        with col4:
-            api_key_default = (
-                env_cfg.api_key
-                if env_cfg.provider == provider and env_cfg.api_key not in ("no-key", "")
-                else preset.get("api_key", "")
-            )
-            api_key = st.text_input(
-                "API key",
-                value=api_key_default,
-                key=f"{key_prefix}_api_key",
-                type="password",
-                help="Leave as 'ollama' for local Ollama. Not shown after entry.",
-                placeholder="ollama" if provider == "ollama" else "sk-...",
-            )
-
-        col5, col6, col7 = st.columns(3)
-        with col5:
-            max_tokens = st.number_input(
-                "Max tokens", min_value=256, max_value=32768,
-                value=env_cfg.max_tokens, step=256,
-                key=f"{key_prefix}_max_tokens",
-            )
-        with col6:
-            temperature = st.slider(
-                "Temperature", 0.0, 1.0,
-                value=env_cfg.temperature, step=0.05,
-                key=f"{key_prefix}_temperature",
-                help="Lower = more deterministic. 0.1 recommended for analysis tasks.",
-            )
-        with col7:
-            timeout = st.number_input(
-                "Timeout (s)", min_value=10, max_value=600,
-                value=env_cfg.timeout, step=10,
-                key=f"{key_prefix}_timeout",
-            )
-
-        # Test connection button
-        if st.button("🔌 Test connection", key=f"{key_prefix}_test_btn"):
-            cfg_test = LLMConfig(
-                provider=provider, base_url=base_url,
-                api_key=api_key or "no-key", model=model or preset["default_model"],
-                max_tokens=64, temperature=0.0, timeout=15,
-            )
-            with st.spinner("Testing…"):
-                from airos.agents.llm_client import LLMClient
-                ok, msg = LLMClient(cfg_test).test_connection()
-            if ok:
-                st.success(f"✅ {msg}")
-            else:
-                st.error(f"❌ {msg}")
-
-    return LLMConfig(
-        provider=provider,
-        base_url=base_url or preset["base_url"],
-        api_key=api_key or preset.get("api_key", "no-key"),
-        model=model or preset["default_model"],
-        max_tokens=int(max_tokens),
-        temperature=float(temperature),
-        timeout=int(timeout),
-    )
+    _ = key_prefix  # unused — settings come from environment only
+    return load_config()
 
 
 # ---------------------------------------------------------------------------

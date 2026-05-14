@@ -196,14 +196,23 @@ def run_air_quality_pipeline(
     h3_grid = build_h3_grid_from_bbox(lat_min, lon_min, lat_max, lon_max, h3_resolution)
     dqf = _data_quality_flag(aq_df)
 
-    # ── PM2.5 IDW ─────────────────────────────────────────────────────────
+    # ── Observation arrays (PM2.5, PM10, NO2, SO2) ───────────────────────
     has_aq = (not aq_df.empty
               and "pm25_ugm3" in aq_df.columns
               and aq_df["pm25_ugm3"].notna().any())
+
+    def _obs_array(col):
+        if col in aq_df.columns:
+            return aq_df[col].values
+        return np.full(len(aq_df), np.nan)
+
     if has_aq:
         obs_lats = aq_df["latitude"].values
         obs_lons = aq_df["longitude"].values
-        obs_pm25 = aq_df["pm25_ugm3"].values
+        obs_pm25 = _obs_array("pm25_ugm3")
+        obs_pm10 = _obs_array("pm10_ugm3")
+        obs_no2  = _obs_array("no2_ugm3")
+        obs_so2  = _obs_array("so2_ugm3")
 
     # ── Per-cell scoring ──────────────────────────────────────────────────
     rows = []
@@ -213,25 +222,47 @@ def run_air_quality_pipeline(
         if has_aq:
             pm25_val = _idw_interpolate(clat, clon, obs_lats, obs_lons, obs_pm25)
             score = min(pm25_val / _rules.get("air", "pm25_score_saturation_ug_m3", default=120.0), 1.0)
-            # Distance to nearest real observation — drives data confidence
             dists = np.array([_haversine_km(clat, clon, la, lo)
                               for la, lo in zip(obs_lats, obs_lons)])
             nearest_obs_km = float(dists.min()) if len(dists) else None
+
+            def _idw_or_none(obs):
+                valid = ~np.isnan(obs.astype(float))
+                if not valid.any():
+                    return None
+                return round(float(_idw_interpolate(
+                    clat, clon,
+                    obs_lats[valid], obs_lons[valid], obs[valid].astype(float),
+                )), 3)
+
+            pm10_val = _idw_or_none(obs_pm10)
+            no2_val  = _idw_or_none(obs_no2)
+            so2_val  = _idw_or_none(obs_so2)
         else:
             pm25_val, score = 0.0, 0.0
             nearest_obs_km = None
+            pm10_val = no2_val = so2_val = None
 
         cat = _aqi_category(float(pm25_val))
 
+        # PM2.5/PM10 ratio — key dust-vs-combustion discriminator
+        pm25_pm10_ratio = None
+        if pm25_val and pm10_val and pm10_val > 0:
+            pm25_pm10_ratio = round(pm25_val / pm10_val, 3)
+
         rows.append({
-            "h3_id": cell["h3_id"],
-            "pm25_ugm3": round(float(pm25_val), 3) if has_aq else None,
-            "aqi_score": round(score, 4),
-            "aqi_category": cat,
-            "color": _aqi_color(cat),
-            "nearest_obs_km": round(nearest_obs_km, 3) if nearest_obs_km is not None else None,
-            "centroid_lat": clat,
-            "centroid_lon": clon,
+            "h3_id":           cell["h3_id"],
+            "pm25_ugm3":       round(float(pm25_val), 3) if has_aq else None,
+            "pm10_ugm3":       pm10_val,
+            "no2_ugm3":        no2_val,
+            "so2_ugm3":        so2_val,
+            "pm25_pm10_ratio": pm25_pm10_ratio,
+            "aqi_score":       round(score, 4),
+            "aqi_category":    cat,
+            "color":           _aqi_color(cat),
+            "nearest_obs_km":  round(nearest_obs_km, 3) if nearest_obs_km is not None else None,
+            "centroid_lat":    clat,
+            "centroid_lon":    clon,
         })
 
     risk_cells = pd.DataFrame(rows)

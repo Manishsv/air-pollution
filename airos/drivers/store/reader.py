@@ -185,7 +185,17 @@ def get_h3_context(
     # Lets the agent tell apart "bad week" from "genuinely anomalous vs cell history"
     # N-guard: require >= 30 readings before reporting percentile rank —
     # below that threshold the rank is statistically unreliable.
-    _BASELINE_MIN_N = 30
+    # ── Three-state N-guard (methodology §3.1, §3.2) ──────────────────────
+    # Use a tiered guard instead of a single threshold:
+    #   < N_DESCRIPTIVE         → baseline suppressed entirely (unavailable)
+    #   N_DESCRIPTIVE .. N_RANK → mean/min/max only, no percentile rank
+    #   N_RANK .. N_HIGH_CONF   → rank reported but flagged `low_confidence`
+    #   ≥ N_HIGH_CONF           → rank treated as reliable
+    _BASELINE_N_DESCRIPTIVE = 10
+    _BASELINE_N_RANK        = 30
+    _BASELINE_N_HIGH_CONF   = 100
+    # Legacy alias kept for backwards-compat callers that read this attribute.
+    _BASELINE_MIN_N = _BASELINE_N_RANK
 
     def _pct(vals: list[float], p: float) -> float:
         """Return the p-th percentile of a pre-sorted list."""
@@ -221,17 +231,34 @@ def get_h3_context(
         """,
         [h3_id, city_id],
     )
-    historical_baseline: dict[str, dict] = {}
-    if not baseline_df.empty:
-        for row in baseline_df.to_dict(orient="records"):
-            domain = row["domain"]
-            signal_name = row["signal"]
-            n = row["n_readings"]
-            if n < 5:
-                continue  # fewer than 5 readings — not worth reporting at all
+    def _baseline_state(n: int) -> str:
+        """Map sample count to the three-state guard label (§3.1)."""
+        if n < _BASELINE_N_DESCRIPTIVE:
+            return "unavailable"
+        if n < _BASELINE_N_RANK:
+            return "descriptive"
+        if n < _BASELINE_N_HIGH_CONF:
+            return "rank_low_confidence"
+        return "rank_high_confidence"
 
-            # Parse and sort values to compute percentiles
-            # (GROUP_CONCAT without ORDER BY — sort in Python for portability)
+    def _build_baseline_entry(row: dict, *, include_provenance: bool) -> dict | None:
+        """Build a baseline entry honouring the three-state N-guard.
+
+        Returns None when the sample is too small to surface anything at all
+        (state == 'unavailable'). For descriptive-only state, returns mean/min/max
+        but no percentile values. For rank states, returns percentiles too —
+        flagged with `low_confidence: True` when below N_HIGH_CONF.
+        """
+        n = row["n_readings"]
+        state = _baseline_state(n)
+        if state == "unavailable":
+            return None
+
+        signal_name = row["signal"]
+
+        # Sort values for percentile computation (only needed if we'll rank)
+        sorted_vals: list[float] = []
+        if state.startswith("rank"):
             try:
                 sorted_vals = sorted(
                     float(v) for v in (row.get("values_csv") or "").split(",") if v
@@ -239,61 +266,95 @@ def get_h3_context(
             except Exception:
                 sorted_vals = []
 
-            # Provenance mix — what fraction of readings are real vs modelled
-            n_real = row.get("n_real_station", 0) or 0
-            n_model = row.get("n_model_estimate", 0) or 0
-            n_sat = row.get("n_satellite", 0) or 0
-            provenance_note = None
-            if n > 0:
-                mix_parts = []
-                if n_real:
-                    mix_parts.append(f"{n_real/n*100:.0f}% real_station")
-                if n_sat:
-                    mix_parts.append(f"{n_sat/n*100:.0f}% satellite_derived")
-                if n_model:
-                    mix_parts.append(f"{n_model/n*100:.0f}% model_estimate")
-                provenance_note = ", ".join(mix_parts) if mix_parts else "unknown provenance"
+        entry: dict[str, Any] = {
+            "signal": signal_name,
+            "n": n,
+            "state": state,
+            "mean": round(row["mean"], 3),
+            "min":  round(row["min_val"], 3),
+            "max":  round(row["max_val"], 3),
+        }
+        # Percentile statistics only when we have rank-state and values
+        if sorted_vals:
+            entry["p75"] = _pct(sorted_vals, 75)
+            entry["p90"] = _pct(sorted_vals, 90)
+        # Reliability flags — kept for backward compat plus the new bit
+        entry["percentile_rank_reliable"] = state == "rank_high_confidence"
+        if state == "rank_low_confidence":
+            entry["rank_low_confidence"] = True
 
-            entry: dict[str, Any] = {
-                "signal": signal_name,
-                "n": n,
-                "mean": round(row["mean"], 3),
-                "min": round(row["min_val"], 3),
-                "max": round(row["max_val"], 3),
-                "p75": _pct(sorted_vals, 75),
-                "p90": _pct(sorted_vals, 90),
-                "provenance": provenance_note,
-                "percentile_rank_reliable": n >= _BASELINE_MIN_N,
-            }
-            # Attach current value + percentile rank only if N meets the guard
+        if include_provenance:
+            n_real  = row.get("n_real_station", 0) or 0
+            n_model = row.get("n_model_estimate", 0) or 0
+            n_sat   = row.get("n_satellite", 0) or 0
+            mix_parts = []
+            if n_real:
+                mix_parts.append(f"{n_real/n*100:.0f}% real_station")
+            if n_sat:
+                mix_parts.append(f"{n_sat/n*100:.0f}% satellite_derived")
+            if n_model:
+                mix_parts.append(f"{n_model/n*100:.0f}% model_estimate")
+            entry["provenance"] = ", ".join(mix_parts) if mix_parts else "unknown provenance"
+
+        return entry, sorted_vals, state
+
+    historical_baseline: dict[str, dict] = {}
+    if not baseline_df.empty:
+        for row in baseline_df.to_dict(orient="records"):
+            domain = row["domain"]
+            signal_name = row["signal"]
+            built = _build_baseline_entry(row, include_provenance=True)
+            if built is None:
+                continue
+            entry, sorted_vals, state = built
+            # Attach current value + percentile rank only in rank states
             if domain in latest_by_domain:
                 cur_sig, cur_val = latest_by_domain[domain]
                 if cur_sig == signal_name:
                     entry["current"] = round(cur_val, 3)
-                    if n >= _BASELINE_MIN_N and sorted_vals:
+                    if sorted_vals and state.startswith("rank"):
                         pct_rank = (
                             sum(1 for v in sorted_vals if v <= cur_val)
                             / len(sorted_vals) * 100
                         )
                         entry["percentile_rank"] = round(pct_rank, 0)
                     else:
-                        # Too few readings — report raw value without a rank
                         entry["percentile_rank"] = None
             historical_baseline[domain] = entry
 
     # --- circadian baseline — same-hour-of-day stats over 30 days
     # Compares the current reading against readings taken at a similar time of
-    # day (±2 hours UTC) over the past 30 days.  Removes the diurnal cycle so
-    # a 2am PM2.5 spike is judged against other 2am readings rather than the
-    # all-day mean.  Returned as a parallel dict keyed by domain.
+    # day (±2 hours) over the past 30 days, **using the city's local civil time**
+    # (methodology §3.2). Removes the diurnal cycle so a 2 AM PM2.5 spike is
+    # judged against other 2 AM readings rather than the all-day mean.
     #
-    # Hour window: current UTC hour ± 2 (wraps modulo 24 → 5 candidate hours).
-    # N-guard: same _BASELINE_MIN_N threshold as all-day baseline.
-    from datetime import datetime, timezone as _tz
-    _now_h = datetime.now(_tz.utc).hour
+    # Earlier versions used UTC hours, which produced an unintuitive offset
+    # for IST cities (5:30) — switched to local time. UTC `observed_at` is
+    # stored as canonical; we add the local offset in SQL via `datetime(..., +Xh)`.
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        from airos.os.city_config import get_timezone as _get_tz
+        _tz_name = _get_tz(city_id)
+        _now_local = _dt.now(_ZI(_tz_name))
+        _now_h     = _now_local.hour
+        # Compute the offset string for SQL — e.g. '+05:30' for IST.
+        _off_secs  = int(_now_local.utcoffset().total_seconds())
+        _off_sign  = "+" if _off_secs >= 0 else "-"
+        _off_hh    = abs(_off_secs) // 3600
+        _off_mm    = (abs(_off_secs) % 3600) // 60
+        _sql_offset = f"'{_off_sign}{_off_hh:02d}:{_off_mm:02d}'"
+    except Exception:
+        # Fallback to UTC if timezone resolution fails (e.g. zoneinfo missing).
+        _now_h = _dt.now(_tz.utc).hour
+        _sql_offset = "'+00:00'"
+        _tz_name = "UTC"
+
     _circ_hours = [(_now_h + d) % 24 for d in range(-2, 3)]  # 5 hours
     _circ_placeholders = ",".join(str(h) for h in _circ_hours)
 
+    # In SQLite, datetime(observed_at, '+05:30') converts UTC → local civil
+    # time. We then extract the local hour for the same-hour filter.
     circ_df = s.fetchdf(
         f"""
         SELECT domain, signal,
@@ -306,7 +367,8 @@ def get_h3_context(
         WHERE h3_id = ? AND city_id = ?
           AND observed_at >= datetime('now', '-30 days')
           AND value IS NOT NULL
-          AND CAST(strftime('%H', observed_at) AS INTEGER) IN ({_circ_placeholders})
+          AND CAST(strftime('%H', datetime(observed_at, {_sql_offset})) AS INTEGER)
+              IN ({_circ_placeholders})
         GROUP BY domain, signal
         """,
         [h3_id, city_id],
@@ -316,34 +378,18 @@ def get_h3_context(
         for row in circ_df.to_dict(orient="records"):
             domain = row["domain"]
             signal_name = row["signal"]
-            n = row["n_readings"]
-            if n < 5:
+            built = _build_baseline_entry(row, include_provenance=False)
+            if built is None:
                 continue
-
-            try:
-                sorted_vals = sorted(
-                    float(v) for v in (row.get("values_csv") or "").split(",") if v
-                )
-            except Exception:
-                sorted_vals = []
-
-            entry: dict[str, Any] = {
-                "signal": signal_name,
-                "n": n,
-                "hour_window_utc": f"{_circ_hours[0]:02d}–{_circ_hours[-1]:02d}",
-                "mean": round(row["mean"], 3),
-                "min": round(row["min_val"], 3),
-                "max": round(row["max_val"], 3),
-                "p75": _pct(sorted_vals, 75),
-                "p90": _pct(sorted_vals, 90),
-                "percentile_rank_reliable": n >= _BASELINE_MIN_N,
-            }
+            entry, sorted_vals, state = built
+            entry["hour_window_local"] = f"{_circ_hours[0]:02d}–{_circ_hours[-1]:02d}"
+            entry["timezone"]          = _tz_name
             # Attach current value + same-hour percentile rank
             if domain in latest_by_domain:
                 cur_sig, cur_val = latest_by_domain[domain]
                 if cur_sig == signal_name:
                     entry["current"] = round(cur_val, 3)
-                    if n >= _BASELINE_MIN_N and sorted_vals:
+                    if sorted_vals and state.startswith("rank"):
                         pct_rank = (
                             sum(1 for v in sorted_vals if v <= cur_val)
                             / len(sorted_vals) * 100

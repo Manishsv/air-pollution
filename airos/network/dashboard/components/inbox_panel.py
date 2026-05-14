@@ -11,11 +11,14 @@ Design principles
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import pandas as pd
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,6 +83,36 @@ def _parse_chain(raw) -> list:
         return []
 
 
+def _format_chain_step(i: int, step) -> str:
+    """Render one step of either the current (proposition/testable_by/confidence)
+    or legacy (evidence/inference) chain shape into a single line for the LLM
+    system prompt."""
+    if not isinstance(step, dict):
+        return f"  {i+1}. {step}"
+
+    # Current shape — used by h3_expert agent
+    proposition = step.get("proposition")
+    testable    = step.get("testable_by")
+    confidence  = step.get("confidence")
+
+    # Legacy shape
+    evidence    = step.get("evidence")
+    inference   = step.get("inference")
+
+    head = proposition or evidence or ""
+    parts = [f"  {i+1}. {head}"]
+    if confidence is not None:
+        try:
+            parts[0] += f" (conf {float(confidence):.0%})"
+        except Exception:
+            pass
+    if testable:
+        parts.append(f"     verifiable by: {testable}")
+    elif inference:
+        parts.append(f"     → {inference}")
+    return "\n".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
@@ -120,6 +153,72 @@ def _row_location(r) -> str:
     return f"{loc}, {city.title()}" if city else loc
 
 
+def _cluster_similar(df: pd.DataFrame) -> pd.DataFrame:
+    """Collapse near-duplicate insights into one row per (location, pattern).
+
+    The packet generator (insight_packets._spatially_thin) only sees insights
+    once they become packets. The inbox shows raw insights, where adjacent
+    cells in the same neighbourhood routinely produce 4–5 near-identical
+    findings in a single sweep (IDW spatial smoothing + city-broadcast
+    heat/weather — see methodology §4.4).
+
+    We cluster by `(city, location_name, finding_signature, hour_bucket)`
+    where `finding_signature` is the first ~50 chars of the finding text
+    normalised. The top-ranked insight in each cluster is kept; an extra
+    `cluster_count` column records how many were collapsed. The renderer
+    shows this as `Nx Location, City — finding…`.
+    """
+    if df is None or df.empty:
+        return df
+
+    def _signature(s) -> str:
+        """Return the primary pattern of a finding, ignoring numeric jitter and
+        compound-domain modifiers. "Persistent air-heat-noise compound stress:
+        PM2.5 spike (58 µg/m³, ↑391%…)" and "Persistent air-heat-green compound
+        risk: PM2.5 spike (58.3 µg/m³, ↑396%…)" both collapse to
+        "compound|pm25_spike" — same incident, different framing.
+        """
+        if not isinstance(s, str):
+            return ""
+        t = s.lower()
+        tokens = []
+        if "compound" in t:
+            tokens.append("compound")
+        if "pm2.5 spike" in t or "pm25 spike" in t:
+            tokens.append("pm25_spike")
+        if "wqi" in t or "water" in t:
+            tokens.append("water")
+        if "flood" in t:
+            tokens.append("flood")
+        if "heat" in t and "air-heat" not in t and "compound" not in t:
+            tokens.append("heat")
+        if "fire" in t or "frp" in t:
+            tokens.append("fire")
+        # Fall back to the first 24 chars if no recognised pattern fired —
+        # better to under-cluster than to merge unrelated findings.
+        return "|".join(tokens) if tokens else " ".join(t.split())[:24]
+
+    def _hour_bucket(ts) -> str:
+        try:
+            return str(ts)[:13]  # YYYY-MM-DDTHH — group within the same hour
+        except Exception:
+            return ""
+
+    work = df.copy()
+    work["_sig"]  = work["finding"].map(_signature)
+    work["_hour"] = work["created_at"].map(_hour_bucket)
+    work["_loc"]  = work.apply(_row_location, axis=1)
+
+    cluster_key = ["city_id", "_loc", "_sig", "_hour"]
+    grouped = work.groupby(cluster_key, dropna=False, sort=False)
+    sizes   = grouped.size().rename("cluster_count")
+    # Keep the first row per cluster (df is already sorted by the caller's choice)
+    out = work.drop_duplicates(subset=cluster_key, keep="first").merge(
+        sizes, on=cluster_key, how="left"
+    )
+    return out.drop(columns=["_sig", "_hour", "_loc"]).reset_index(drop=True)
+
+
 # ---------------------------------------------------------------------------
 # Detail — causal chain
 # ---------------------------------------------------------------------------
@@ -140,7 +239,7 @@ def _render_causal_chain(chain: list) -> None:
                 st.markdown(f"**{i+1}.** {ev}")
                 if inf:
                     st.markdown(
-                        f'<div style="margin-left:18px;color:rgba(0,0,0,0.55);'
+                        f'<div style="margin-left:18px;color:#6b7280;'
                         f'font-size:12px;margin-top:2px;">→ {inf}</div>',
                         unsafe_allow_html=True,
                     )
@@ -164,23 +263,60 @@ def _render_chat(insight: dict, llm_key_prefix: str = "ask_llm") -> None:
         st.session_state[chat_key] = []
     history: list[dict] = st.session_state[chat_key]
 
+    # Surface the dossier timestamp + version so the user can reconcile
+    # answers if the underlying signals changed between questions
+    # (methodology §4.5). Compute lazily — we already build the dossier
+    # inside the LLM call below; cheap to also do it once for display.
+    try:
+        from airos.os.cell_dossier import build_cell_dossier
+        _preview = build_cell_dossier(
+            str(insight.get("city_id")),
+            str(insight.get("h3_id")),
+        )
+        _built_at = _preview.get("built_at", "")
+        _ver      = (_preview.get("dossier_version") or "")[:12]
+        if _built_at and _ver:
+            st.caption(
+                f"📋 Dossier built at {_built_at[:19]}Z · version `{_ver}` — "
+                f"every chat answer is grounded in this signal snapshot."
+            )
+    except Exception:
+        pass
+
+    # Track whether the chat has ever been started for this insight. The
+    # suggestion buttons are gated on BOTH (a) empty history AND (b) this
+    # flag being False, so Streamlit cannot leave a stale button visible
+    # after the conditional flips on rerun.
+    started_key = f"chat_started_{scope}"
+    chat_started = bool(st.session_state.get(started_key, False)) or bool(history)
+
     for msg in history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if not history:
+    if not chat_started:
         st.caption("Suggested questions:")
-        for sug in [
+        # Lay out as columns so all 3 buttons share one row, and the whole
+        # block is unambiguously one UI element to hide on first interaction.
+        sug_cols = st.columns(3)
+        suggestions = [
             "Why is the confidence at this level?",
             "What would escalate this to critical?",
             "Draft a field inspection brief.",
-        ]:
-            if st.button(sug, key=f"sug_{scope}_{sug[:15]}"):
-                st.session_state[chat_key].append({"role": "user", "content": sug})
-                st.rerun()
+        ]
+        for col, sug in zip(sug_cols, suggestions):
+            with col:
+                if st.button(sug, key=f"sug_{scope}_{sug[:15]}",
+                             use_container_width=True):
+                    st.session_state[chat_key].append({"role": "user", "content": sug})
+                    st.session_state[started_key] = True
+                    st.session_state["ib_keep_open"] = True
+                    st.rerun()
 
     if prompt := st.chat_input("Ask about this insight…", key=f"inp_{scope}"):
         st.session_state[chat_key].append({"role": "user", "content": prompt})
+        st.session_state[started_key] = True
+        st.session_state["ib_keep_open"] = True
         st.rerun()
 
     if history and history[-1]["role"] == "user":
@@ -188,35 +324,100 @@ def _render_chat(insight: dict, llm_key_prefix: str = "ask_llm") -> None:
             with st.spinner("Thinking…"):
                 try:
                     from airos.agents.llm_client import LLMClient
+                    from airos.os.cell_dossier import build_cell_dossier, format_dossier_for_prompt
+
                     domains  = _parse_domains(insight.get("domains_involved"))
-                    chain    = _parse_chain(insight.get("causal_chain_json"))
-                    chain_tx = "\n".join(
-                        f"  {i+1}. {s.get('evidence','')}"
-                        + (f" → {s.get('inference','')}" if isinstance(s, dict) and s.get('inference') else "")
-                        if isinstance(s, dict) else f"  {i+1}. {s}"
-                        for i, s in enumerate(chain)
+                    # Current schema uses `hypothesis_chain_json`. Earlier
+                    # writers wrote to `causal_chain_json` (kept as fallback
+                    # for old data). Read both so the chat tab never sees an
+                    # empty chain for an insight that actually has one.
+                    chain    = _parse_chain(
+                        insight.get("hypothesis_chain_json")
+                        or insight.get("causal_chain_json")
+                        or insight.get("hypothesis_chain")
+                        or []
                     )
+                    chain_tx = "\n".join(
+                        _format_chain_step(i, s) for i, s in enumerate(chain)
+                    )
+
+                    # Pull the agent's structured outputs — the LLM should
+                    # see what the agent already flagged so it validates
+                    # against them instead of re-discovering them.
+                    rec_actions = _parse_chain(insight.get("recommended_actions_json") or [])
+                    uncertainty = _parse_chain(insight.get("uncertainty_notes_json") or [])
+
+                    actions_tx = "\n".join(
+                        f"  {i+1}. {a.get('action', a)}"
+                        + (f"  [{a.get('urgency','')}, {a.get('actor','')}]"
+                           if isinstance(a, dict) and (a.get('urgency') or a.get('actor')) else "")
+                        for i, a in enumerate(rec_actions)
+                    ) if rec_actions else ""
+
+                    uncertainty_tx = "\n".join(
+                        f"  - [{n.get('impact','medium')}] {n.get('note', n)}"
+                        if isinstance(n, dict) else f"  - {n}"
+                        for n in uncertainty
+                    ) if uncertainty else ""
+
+                    # Build full cell dossier — gives the LLM all signals,
+                    # POI breakdown, cause hypotheses, and 7-day trend.
+                    dossier_text = ""
+                    try:
+                        d = build_cell_dossier(
+                            str(insight.get("city_id")),
+                            str(insight.get("h3_id")),
+                        )
+                        dossier_text = format_dossier_for_prompt(d)
+                    except Exception as exc:
+                        logger.warning("Dossier build failed: %s", exc)
+
                     system = f"""You are an urban intelligence assistant helping a city officer
-understand an AI-generated environmental risk finding.
+investigate the root cause of an environmental risk finding in one H3 cell.
 
 Finding: {insight.get('finding')}
-Confidence: {float(insight.get('confidence') or 0):.0%}
-Domains: {', '.join(domains)}
-Cell: {insight.get('h3_id')} ({insight.get('city_id')})
-Causal chain:\n{chain_tx or '  (not recorded)'}
+Agent confidence: {float(insight.get('confidence') or 0):.0%}
+Insight domains: {', '.join(domains)}
 
-Answer clearly and concisely. Reference specific signal values when available.
-If asked for a document, produce one. Acknowledge uncertainty honestly."""
+Hypothesis chain from agent:
+{chain_tx or '  (not recorded — agent did not emit a hypothesis chain)'}
+
+Recommended actions the agent emitted:
+{actions_tx or '  (none recorded — older insight pre-dating the schema change)'}
+
+Uncertainty notes the agent explicitly flagged:
+{uncertainty_tx or '  (none recorded)'}
+
+You have a full dossier of cell signals below — refer to specific numbers
+when you reason. The cause classifier's hypotheses are pre-computed; treat
+them as evidence to validate or challenge, not as ground truth. The agent's
+own uncertainty notes above are gaps the agent already knows about — do not
+re-list them unless asked; use them as a starting point for deeper analysis.
+
+When the user asks about root cause, structure your answer as:
+1. Most likely cause (with the strongest 1–3 pieces of evidence from below)
+2. Alternative hypothesis (what would have to be true)
+3. What field check would discriminate between them
+4. Specific data gaps that limit confidence (incremental to what the agent already flagged)
+
+If asked to draft a brief or ticket, produce one. Be concise. Cite signal
+values explicitly. Acknowledge uncertainty.
+
+--- CELL DOSSIER ---
+{dossier_text or '(dossier unavailable)'}
+--- END DOSSIER ---"""
 
                     resp  = LLMClient(llm_cfg).chat(
                         [{"role": m["role"], "content": m["content"]} for m in history],
-                        system=system, max_tokens=1024,
+                        system=system, max_tokens=1500,
                     )
                     reply = resp.content or "(Empty response from model.)"
                 except Exception as exc:
                     reply = f"⚠️ {exc}"
             st.markdown(reply)
         st.session_state[chat_key].append({"role": "assistant", "content": reply})
+        # Keep the dialog open so the assistant reply is visible after rerun.
+        st.session_state["ib_keep_open"] = True
         st.rerun()
 
 
@@ -252,11 +453,29 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
             closed_by_val = row.get("closed_by") or "—"
             closed_at_val = row.get("closed_at", "")
             closed_label  = _time_ago(closed_at_val) if closed_at_val else "—"
-            _STATUS_ICONS = {"confirmed": "✅", "refuted": "❌", "unverifiable": "❓"}
+            _STATUS_ICONS = {
+                "confirmed":           "✅",
+                "refuted":             "❌",
+                "partially_confirmed": "◐",
+                "unverifiable":        "❓",
+            }
             icon = _STATUS_ICONS.get(outcome, "ℹ️")
             st.markdown(
                 f'{icon} **{outcome.title()}** · closed by `{closed_by_val}` · {closed_label}',
             )
+            # Four-way verdict layers (methodology §4.3) — show whichever
+            # were captured. Older closures only have condition.
+            _layer_pairs = [
+                ("Condition", row.get("condition_verdict")),
+                ("Cause",     row.get("cause_verdict")),
+                ("Routing",   row.get("routing_verdict")),
+                ("Action",    row.get("action_verdict")),
+            ]
+            _layer_pairs = [(n, v) for n, v in _layer_pairs if v]
+            if _layer_pairs:
+                st.markdown(
+                    "  ".join(f"`{name}`: **{v}**" for name, v in _layer_pairs)
+                )
             st.caption(
                 "This insight has been closed. Closed records are permanent — "
                 "if conditions recur the agent will produce a new insight on the next sweep."
@@ -274,7 +493,10 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
             else:
                 st.markdown(
                     "**Record your field verdict on this hypothesis.**  \n"
-                    "This closes the feedback loop — outcomes calibrate future agent confidence scores."
+                    "Four orthogonal sub-verdicts (methodology §4.3) — only "
+                    "**Condition** is required. The others are optional and help "
+                    "the evaluation framework stratify failures by layer "
+                    "(condition vs cause vs routing vs action)."
                 )
 
                 # REVIEW_CONTRACT §Reviewer Identity: closed_by MUST be non-empty.
@@ -285,15 +507,75 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
                     help="Required. Must uniquely identify you within this deployment.",
                 )
 
-                verdict = st.radio(
-                    "Verdict",
-                    ["confirmed", "refuted", "unverifiable"],
+                # ── 1. Condition verdict (required) ───────────────────────
+                st.markdown("**1. Condition verdict** — was the hypothesised condition observed?")
+                condition_verdict = st.radio(
+                    "condition_verdict",
+                    ["confirmed", "refuted", "partially_confirmed", "unverifiable"],
                     format_func=lambda x: {
-                        "confirmed":    "✓ Confirmed — field check validated the hypothesis",
-                        "refuted":      "✗ Refuted — field check contradicted the hypothesis",
-                        "unverifiable": "? Unverifiable — cannot check (access, resources, etc.)",
+                        "confirmed":            "✓ Confirmed",
+                        "refuted":              "✗ Refuted",
+                        "partially_confirmed":  "◐ Partially confirmed",
+                        "unverifiable":         "? Unverifiable",
                     }[x],
-                    key=f"verdict_{llm_key_prefix}_{insight_id}",
+                    horizontal=True,
+                    key=f"vc_cond_{llm_key_prefix}_{insight_id}",
+                    label_visibility="collapsed",
+                )
+
+                # ── 2. Cause verdict (optional) ───────────────────────────
+                st.markdown("**2. Cause verdict** — was the top cause hypothesis the right attribution? *(optional)*")
+                cause_verdict = st.radio(
+                    "cause_verdict",
+                    ["—", "confirmed", "refuted", "partially_confirmed", "unverifiable"],
+                    format_func=lambda x: {
+                        "—":                    "Skip",
+                        "confirmed":            "✓ Confirmed",
+                        "refuted":              "✗ Refuted",
+                        "partially_confirmed":  "◐ Partially",
+                        "unverifiable":         "? Unverifiable",
+                    }[x],
+                    horizontal=True,
+                    key=f"vc_cause_{llm_key_prefix}_{insight_id}",
+                    label_visibility="collapsed",
+                )
+
+                # ── 3. Routing verdict (optional) ─────────────────────────
+                st.markdown("**3. Routing verdict** — was the department in `routed_to` the right owner? *(optional)*")
+                routing_verdict = st.radio(
+                    "routing_verdict",
+                    ["—", "correct", "incorrect", "joint_responsibility", "unknown"],
+                    format_func=lambda x: {
+                        "—":                    "Skip",
+                        "correct":              "✓ Correct",
+                        "incorrect":            "✗ Wrong department",
+                        "joint_responsibility": "⇆ Joint responsibility",
+                        "unknown":              "? Unknown",
+                    }[x],
+                    horizontal=True,
+                    key=f"vc_route_{llm_key_prefix}_{insight_id}",
+                    label_visibility="collapsed",
+                )
+
+                # ── 4. Action verdict (optional) ──────────────────────────
+                st.markdown("**4. Action verdict** — was an action taken? *(optional)*")
+                action_verdict = st.radio(
+                    "action_verdict",
+                    [
+                        "—", "taken", "not_required", "escalated",
+                        "not_taken_resource_limited", "not_taken_other",
+                    ],
+                    format_func=lambda x: {
+                        "—":                          "Skip",
+                        "taken":                      "✓ Taken",
+                        "not_required":               "○ Not required",
+                        "escalated":                  "↑ Escalated",
+                        "not_taken_resource_limited": "✗ Blocked (resource)",
+                        "not_taken_other":            "✗ Not taken (other)",
+                    }[x],
+                    horizontal=True,
+                    key=f"vc_action_{llm_key_prefix}_{insight_id}",
+                    label_visibility="collapsed",
                 )
 
                 submit_disabled = not officer.strip()
@@ -308,12 +590,25 @@ def _render_detail(row: dict, llm_key_prefix: str = "ask_llm") -> None:
                 ):
                     try:
                         from airos.os.sdk import AirOSClient
+                        # Treat "—" sentinels as None (not collected)
+                        _norm = lambda v: None if v == "—" else v
                         AirOSClient().close_insight(
                             insight_id=insight_id,
-                            outcome_status=verdict,
+                            outcome_status=condition_verdict,   # legacy field — mirrors condition
                             closed_by=officer.strip(),
+                            condition_verdict=condition_verdict,
+                            cause_verdict=_norm(cause_verdict),
+                            routing_verdict=_norm(routing_verdict),
+                            action_verdict=_norm(action_verdict),
                         )
-                        st.success(f"Marked as **{verdict}**. Thank you — this improves future analysis.")
+                        _layers = [
+                            ("Condition", condition_verdict),
+                            ("Cause",     _norm(cause_verdict)),
+                            ("Routing",   _norm(routing_verdict)),
+                            ("Action",    _norm(action_verdict)),
+                        ]
+                        _summary = ", ".join(f"{name}={v}" for name, v in _layers if v)
+                        st.success(f"Submitted: {_summary}. Thank you — this calibrates future analysis.")
                         st.rerun()
                     except ValueError as e:
                         st.error(f"Submission rejected: {e}")
@@ -377,7 +672,7 @@ def _render_empty_state(city_id: str | None, city_registry: dict) -> None:
         f'<div style="font-size:28px;margin-bottom:8px;">📭</div>'
         f'<div style="font-size:15px;font-weight:500;margin-bottom:6px;">'
         f'No insights for {city_label} yet</div>'
-        f'<div style="font-size:13px;color:rgba(0,0,0,0.5);">'
+        f'<div style="font-size:13px;color:#6b7280;">'
         f'{cell_count:,} cells assessed · last data pull {last_ingest}'
         f'</div>'
         f'</div>',
@@ -390,25 +685,25 @@ def _render_empty_state(city_id: str | None, city_registry: dict) -> None:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(
-            f'<div style="border:0.5px solid rgba(0,0,0,0.12);border-radius:8px;'
+            f'<div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:8px;'
             f'padding:12px 16px;">'
-            f'<div style="font-size:12px;color:rgba(0,0,0,0.45);margin-bottom:4px;">DATA PIPELINE</div>'
+            f'<div style="font-size:12px;color:#6b7280;margin-bottom:4px;">DATA PIPELINE</div>'
             f'<div style="font-size:13px;">'
             f'{"🟢" if ok_count else "🟡"} {ok_count} sources live'
             f'{f", {partial_count} degraded" if partial_count else ""}'
             f'</div>'
-            f'<div style="font-size:11px;color:rgba(0,0,0,0.45);margin-top:4px;">'
+            f'<div style="font-size:11px;color:#6b7280;margin-top:4px;">'
             f'Last pull: {last_ingest}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
     with c2:
         st.markdown(
-            f'<div style="border:0.5px solid rgba(0,0,0,0.12);border-radius:8px;'
+            f'<div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:8px;'
             f'padding:12px 16px;">'
-            f'<div style="font-size:12px;color:rgba(0,0,0,0.45);margin-bottom:4px;">AI AGENT</div>'
+            f'<div style="font-size:12px;color:#6b7280;margin-bottom:4px;">AI AGENT</div>'
             f'<div style="font-size:13px;">⏳ Waiting for scheduled run</div>'
-            f'<div style="font-size:11px;color:rgba(0,0,0,0.45);margin-top:4px;">'
+            f'<div style="font-size:11px;color:#6b7280;margin-top:4px;">'
             f'Insights are generated automatically by the batch process</div>'
             f'</div>',
             unsafe_allow_html=True,
@@ -508,12 +803,18 @@ div[data-testid="stDialog"] div[data-testid="stVerticalBlockBorderWrapper"] {
     overflow-x: hidden  !important;
 }
 
-/* Reposition the close (✕) button to match the narrower right edge */
+/* Anchor the close (✕) button to the top-right of the dialog box.
+   Earlier CSS used `position: sticky` which now drops the button at the
+   bottom of the layout flow in current Streamlit DOM — pin it explicitly. */
 div[data-testid="stDialog"] [role="dialog"] button[aria-label="Close"] {
-    right: 1.5rem !important;
-    position: sticky !important;
-    top: 0 !important;
+    position: absolute !important;
+    top:   0.75rem !important;
+    right: 1.25rem !important;
     z-index: 10 !important;
+}
+/* The dialog needs a positioning context so absolute children anchor to it. */
+div[data-testid="stDialog"] [role="dialog"] {
+    position: relative !important;
 }
 </style>
 """
@@ -526,24 +827,55 @@ _SORT_OPTIONS = {
 }
 
 
-def _render_list(df: pd.DataFrame) -> None:
-    """Paginated inbox list as a selectable dataframe.
+_ROW_CSS = """
+<style>
+/* Inbox row buttons — scoped via the per-widget class Streamlit adds
+   from the button's key (st-key-ib_row_<insight_id>). Affects only
+   the row buttons, not pagination / refresh / other buttons. */
+div[class*="st-key-ib_row_"] button {
+    text-align: left !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 0.5px solid rgba(128,128,128,0.20) !important;
+    border-radius: 0 !important;
+    padding: 8px 12px !important;
+    font-weight: 400 !important;
+    min-height: 0 !important;
+}
+div[class*="st-key-ib_row_"] button:hover {
+    background: rgba(128,128,128,0.10) !important;
+}
+/* Streamlit wraps button labels in nested <div>/<p> with centred flex —
+   override both so the markdown text aligns left. */
+div[class*="st-key-ib_row_"] button > div,
+div[class*="st-key-ib_row_"] button > div > p,
+div[class*="st-key-ib_row_"] button p {
+    text-align: left !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+</style>
+"""
 
-    Sorting is done server-side (session state) so sort order survives reruns.
-    Dialog open/close is tracked by insight_id — no key rotation needed, so
-    the table widget is stable and never flickers on row click.
+
+def _render_list(df: pd.DataFrame) -> None:
+    """Paginated inbox list as click-anywhere rows.
+
+    Each row is a full-width button — clicking anywhere on the row opens
+    the detail dialog. Sort selection lives in the unified filter bar
+    rendered by `render_inbox_panel`; this function reads it from session
+    state (`ib_sort`) and applies it.
     """
-    # ── Server-side sort ───────────────────────────────────────────────────
-    sort_label = st.selectbox(
-        "Sort by",
-        list(_SORT_OPTIONS.keys()),
-        index=0,
-        key="ib_sort",
-        label_visibility="collapsed",
-    )
-    sort_col, sort_asc = _SORT_OPTIONS[sort_label]
+    # Sort value is set by the unified filter bar in render_inbox_panel.
+    sort_label = st.session_state.get("ib_sort", next(iter(_SORT_OPTIONS)))
+    sort_col, sort_asc = _SORT_OPTIONS.get(sort_label, ("created_at", False))
     if sort_col in df.columns:
         df = df.sort_values(sort_col, ascending=sort_asc).reset_index(drop=True)
+
+    # Collapse near-duplicate rows (methodology §4.4 similarity-bias mitigation)
+    df = _cluster_similar(df)
 
     total   = len(df)
     page    = st.session_state.get("ib_page", 0)
@@ -554,47 +886,60 @@ def _render_list(df: pd.DataFrame) -> None:
 
     page_df = df.iloc[start:end].reset_index(drop=True)
 
-    display_df = pd.DataFrame({
-        " ":       page_df["risk_level"].map(_RISK_DOT).fillna("⚪"),
-        "Place":   page_df.apply(_row_location, axis=1),
-        "Insight": page_df["finding"].astype(str),
-        "When":    page_df["created_at"].apply(_time_ago),
-    })
+    # ── Click-anywhere row buttons ────────────────────────────────────────
+    st.markdown(_ROW_CSS, unsafe_allow_html=True)
 
-    # Stable key — never rotated.  Dialog reopen prevention is handled by
-    # tracking the last-opened insight_id instead of resetting the widget.
-    event = st.dataframe(
-        display_df,
-        hide_index=True,
-        use_container_width=True,
-        height=520,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="ib_table",
-        column_config={
-            " ":       st.column_config.TextColumn(" ",       width=40),
-            "Place":   st.column_config.TextColumn("Place",   width=180),
-            "Insight": st.column_config.TextColumn("Insight"),
-            "When":    st.column_config.TextColumn("When",    width=90),
-        },
+    just_clicked_id: str | None = None
+    for i in range(len(page_df)):
+        row = page_df.iloc[i]
+        risk    = str(row.get("risk_level", "unknown") or "unknown")
+        dot     = _RISK_DOT.get(risk, "⚪")
+        place   = _row_location(row)
+        finding = str(row.get("finding") or "")
+        if len(finding) > 110:
+            finding = finding[:110] + "…"
+        when    = _time_ago(row.get("created_at"))
+        insight_id = str(row.get("insight_id", f"row_{start + i}"))
+
+        # Cluster badge — if this row represents N>1 similar insights collapsed
+        # by `_cluster_similar`, prefix the label with the count so the user
+        # knows the click opens the top-ranked of N near-duplicates.
+        try:
+            cc = int(row.get("cluster_count") or 1)
+        except (TypeError, ValueError):
+            cc = 1
+        badge = f"**{cc}× **" if cc > 1 else ""
+        # Button label supports markdown (bold, italic, emoji).
+        label = f"{dot}  {badge}**{place}** — {finding}  ·  _{when}_"
+        if st.button(
+            label,
+            key=f"ib_row_{insight_id}",
+            use_container_width=True,
+        ):
+            just_clicked_id = insight_id
+            st.session_state["ib_open_target"] = insight_id
+
+    # ── Dialog open logic ─────────────────────────────────────────────────
+    # Streamlit's @st.dialog closes whenever any widget inside it triggers a
+    # rerun, *unless* we re-call the dialog function on the next run. Two
+    # paths re-open it:
+    #   (a) The user just clicked a row in this run.
+    #   (b) A widget inside the dialog (suggested-question button, chat input,
+    #       LLM-reply append) called st.rerun() and set `ib_keep_open` to ask
+    #       us to keep showing the same insight.
+    # The ✕ close button is handled implicitly — it doesn't set `ib_keep_open`
+    # and doesn't trigger (a), so the dialog stays closed.
+    keep_open = st.session_state.pop("ib_keep_open", False)
+    target_id = just_clicked_id or (
+        st.session_state.get("ib_open_target") if keep_open else None
     )
-
-    sel = event.selection.rows
-    if sel:
-        orig_idx  = start + sel[0]
-        row_data  = df.iloc[orig_idx]
-        selected_id = str(row_data.get("insight_id", orig_idx))
-
-        # Open dialog only for a *new* selection.
-        # When the dialog closes, Streamlit reruns and the row may still be
-        # highlighted — we skip reopening so the user must click again to reopen.
-        if st.session_state.get("ib_open_for") != selected_id:
-            st.session_state["ib_open_for"] = selected_id
-            row = _load_full_row(row_data.to_dict())
-            _insight_dialog(row)
-    else:
-        # Row deselected — allow the same row to reopen next time it's clicked.
-        st.session_state.pop("ib_open_for", None)
+    if target_id:
+        # Find the insight row across the full filtered df (not just the
+        # current page) so pagination changes don't lose the dialog target.
+        matching = df[df["insight_id"].astype(str) == target_id]
+        if not matching.empty:
+            opened_row = _load_full_row(matching.iloc[0].to_dict())
+            _insight_dialog(opened_row)
 
     # ── Pagination ─────────────────────────────────────────────────────────
     if n_pages > 1:
@@ -629,41 +974,63 @@ def render_inbox_panel() -> None:
     # Inject responsive dialog CSS + row styling once per render
     st.markdown(_DIALOG_CSS, unsafe_allow_html=True)
 
-    # ── Filter bar (REVIEW_CONTRACT §Required Filters) ────────────────────
-    # Spec requires: Priority tier | Domain | Time window
-    f1, f2, f3, f4, f5, f6 = st.columns([2, 1, 1, 1, 3, 1])
-    with f1:
+    # ── Unified single-row toolbar ────────────────────────────────────────
+    # City | Priority | Window | Status | Domains | Sort | View | ↺
+    # All controls live on one row; the View toggle decides whether the
+    # List renderer or the Map panel renders below the bar.
+    fc_city, fc_tier, fc_win, fc_status, fc_doms, fc_sort, fc_view, fc_refresh = \
+        st.columns([2.0, 1.1, 0.9, 1.1, 2.4, 1.6, 1.3, 0.6])
+
+    with fc_city:
         city_opts  = {"All cities": None} | {v["display_name"]: k for k, v in _CITY_REGISTRY.items()}
         city_label = st.selectbox("City", list(city_opts.keys()), key="ib_city",
                                   label_visibility="collapsed")
         city_id    = city_opts[city_label]
-    with f2:
-        # REVIEW_CONTRACT §Required Filters: Priority tier filter
+    with fc_tier:
         tier_opts = {"All tiers": None, "High": "high", "Medium": "medium", "Low": "low"}
         tier_label = st.selectbox("Priority", list(tier_opts.keys()), key="ib_tier",
                                   label_visibility="collapsed")
         priority_tier = tier_opts[tier_label]
-    with f3:
-        # REVIEW_CONTRACT §Required Filters: Time window — 24h / 48h / 7d / custom
+    with fc_win:
         days = st.selectbox("Window", [1, 2, 7, 30, 90], index=2,
                             format_func=lambda d: {1: "24h", 2: "48h"}.get(d, f"{d}d"),
                             key="ib_days", label_visibility="collapsed")
-    with f4:
-        # Toggle between open-only (default inbox view) and all statuses
+    with fc_status:
         outcome_opts = {"Open only": "open", "All": None}
         outcome_label = st.selectbox("Status", list(outcome_opts.keys()), key="ib_outcome",
                                      label_visibility="collapsed")
         outcome_filter = outcome_opts[outcome_label]
-    with f5:
-        # REVIEW_CONTRACT §Required Filters: Domain filter
+    with fc_doms:
         all_domains = ["air","water","noise","fire","heat","flood","construction","green","waste"]
         dom_filter  = st.multiselect("Domains", all_domains, key="ib_domains",
                                      placeholder="All domains", label_visibility="collapsed")
-    with f6:
-        if st.button("↺ Refresh", key="ib_refresh", use_container_width=True):
+    with fc_sort:
+        st.selectbox(
+            "Sort by",
+            list(_SORT_OPTIONS.keys()),
+            index=0,
+            key="ib_sort",
+            label_visibility="collapsed",
+        )
+    with fc_view:
+        view_choice = st.radio(
+            "View",
+            ["📋 List", "🗺️ Map"],
+            horizontal=True,
+            key="ib_view",
+            label_visibility="collapsed",
+        )
+    with fc_refresh:
+        if st.button("↺", key="ib_refresh", use_container_width=True, help="Clear cache and reload"):
             st.cache_data.clear()
 
-    # Reset page when filters change
+    # ── Dispatch — Map view delegates to map_panel and returns ────────────
+    if view_choice == "🗺️ Map":
+        from airos.network.dashboard.components.map_panel import render_map_panel
+        render_map_panel()
+        return
+
+    # ── List view — apply filters, reset pagination on change ────────────
     new_filter_state = {
         "city_id": city_id, "days": days, "tier": priority_tier,
         "outcome": outcome_filter, "domains": dom_filter,
@@ -698,4 +1065,89 @@ def render_inbox_panel() -> None:
         f"avg conf {avg_conf:.0%} · oldest {_time_ago(oldest)} · latest {_time_ago(latest)}"
     )
 
+    # City-broadcast weather banner — surfaces signals that are constant across
+    # every cell so they are NOT repeated inside per-cell findings (methodology §4.4).
+    _render_city_weather_banner(city_id)
+
     _render_list(df)
+
+
+def _render_city_weather_banner(city_id: str | None) -> None:
+    """Show one row of city-broadcast weather context above the inbox list.
+
+    Pulls latest WIND/HUMIDITY/TEMPERATURE/PRECIP values per city. With no
+    city filter selected, renders a row per city for which we have current
+    data. The banner makes city-wide conditions visible once instead of
+    showing up redundantly inside every per-cell "compound" finding.
+    """
+    import sqlite3
+    from airos.drivers.store.schema import DB_PATH
+
+    sigs = ("TEMPERATURE_C", "HUMIDITY_PCT", "WIND_SPEED_KMH", "WIND_DIR_DEG",
+            "PRECIP_MM", "HEAT_INDEX_C")
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        # Pull median across cells per city (median to suppress IDW edge artefacts;
+        # for true city-broadcast signals every cell has the same value anyway).
+        placeholders = ",".join("?" * len(sigs))
+        params: list = list(sigs)
+        where_city = ""
+        if city_id:
+            where_city = " AND city_id = ?"
+            params.append(city_id)
+        rows = conn.execute(
+            f"""
+            SELECT city_id, signal, value FROM h3_signals
+            WHERE signal IN ({placeholders}) AND value IS NOT NULL
+              AND hour_bucket >= datetime('now', '-6 hours'){where_city}
+            """,
+            params,
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return
+
+    if not rows:
+        return
+
+    by_city: dict[str, dict[str, list[float]]] = {}
+    for r in rows:
+        by_city.setdefault(r["city_id"], {}).setdefault(r["signal"], []).append(
+            float(r["value"])
+        )
+
+    def _med(xs: list[float]) -> float | None:
+        if not xs:
+            return None
+        s = sorted(xs); n = len(s)
+        return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+
+    def _wind_compass(deg: float | None) -> str:
+        if deg is None:
+            return ""
+        compass = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+                   "S","SSW","SW","WSW","W","WNW","NW","NNW"]
+        return compass[int((deg % 360) / 22.5 + 0.5) % 16]
+
+    for cid, sig_map in by_city.items():
+        t  = _med(sig_map.get("TEMPERATURE_C") or [])
+        h  = _med(sig_map.get("HUMIDITY_PCT") or [])
+        w  = _med(sig_map.get("WIND_SPEED_KMH") or [])
+        wd = _med(sig_map.get("WIND_DIR_DEG") or [])
+        p  = _med(sig_map.get("PRECIP_MM") or [])
+        hi = _med(sig_map.get("HEAT_INDEX_C") or [])
+
+        parts = []
+        if t  is not None: parts.append(f"🌡 {t:.0f} °C")
+        if hi is not None and hi > (t or 0) + 1: parts.append(f"feels {hi:.0f}")
+        if h  is not None: parts.append(f"💧 {h:.0f}%")
+        if w  is not None:
+            parts.append(f"💨 {w:.0f} km/h {_wind_compass(wd)}".rstrip())
+        if p  is not None and p > 0.0: parts.append(f"🌧 {p:.1f} mm")
+        if not parts:
+            continue
+        st.caption(
+            f"**{cid.title()}** city-wide today · " + " · ".join(parts)
+            + "  ·  _shown once because these are constant across every cell_"
+        )

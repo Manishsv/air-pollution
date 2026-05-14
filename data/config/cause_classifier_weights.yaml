@@ -1,0 +1,115 @@
+# Cause classifier weights — methodology §4.4
+# ============================================
+# Externalised weights and thresholds for the deterministic cause classifier.
+# Tuning these numbers does NOT require a code change.
+#
+# Convention:
+#   thresholds:    physical / domain-specific cutoffs (µg/m³, km/h, m/km², %, etc.)
+#   weights:       per-cause additive weights for each evidence band
+#   margins:       confidence margins for downstream logic (e.g. tie-breaker routing)
+#
+# Versioning
+# ----------
+# Bump the top-level `version` field whenever any number changes. The value
+# is written to every decision packet as `weight_config_version` and stored
+# in the audit trail so historical packets can be reproduced against the
+# weights that were in force at the time.
+
+version: weights-v0.5-urban-canyon
+
+# ── Tie-breaker / routing margins ────────────────────────────────────────────
+margins:
+  attribution_margin: 0.15   # when top1.conf - top2.conf < this, packet is flagged
+
+# ── Physical thresholds (units in comments) ──────────────────────────────────
+thresholds:
+  pm25_elevated:        60.0       # µg/m³ — NAAQS annual standard × 2
+  pm10_high:           100.0       # µg/m³
+  no2_high:             40.0       # µg/m³ — WHO 24h guideline
+  so2_high:             20.0       # µg/m³ — WHO 24h guideline
+  ratio_coarse:          0.5       # PM25/PM10 < this → coarse-dominant (dust)
+  ratio_fine:            0.8       # PM25/PM10 > this → fine combustion
+  wind_calm:             5.0       # km/h — near-calm, promotes trapping
+  wind_low:             10.0       # km/h
+  humidity_high:        70.0       # %
+  construction_high:     0.6       # CONSTRUCTION_RISK_INDEX (satellite-derived)
+  construction_mod:      0.3
+  road_high:         25000         # ROAD_DENSITY in m/km² (avg ~18k, high 25k+)
+  road_mod:          15000
+  frp_present:          10.0       # MW — fire detected via satellite
+  poi_many:              5         # POI count: "many" tier
+  poi_some:              1         # POI count: at least one
+
+# ── Per-cause additive weights ───────────────────────────────────────────────
+# Each numeric line in a cause function corresponds to one of these keys.
+# Each weight is also tagged with the evidence band it contributes:
+#   static    — slow-changing structural fact (POI counts, road density)
+#   recent    — measurement averaged over last 24h (PM10, NO2, ratio)
+#   active    — direct observation of an active event (FRP, FIRMS hits)
+#   forecast  — predicted future condition (e.g. forecast wind, AQ forecast)
+
+causes:
+
+  construction_dust:
+    coarse_ratio:          { weight: 0.30, band: recent }
+    moderate_coarse_ratio: { weight: 0.12, band: recent }
+    pm10_high:             { weight: 0.20, band: recent }
+    pm10_moderate:         { weight: 0.08, band: recent }
+    constr_high:           { weight: 0.20, band: static }   # satellite snapshot ~ static-ish
+    constr_moderate:       { weight: 0.10, band: static }
+    poi_many:              { weight: 0.25, band: static }
+    poi_some:              { weight: 0.12, band: static }
+    low_no2_bonus:         { weight: 0.05, band: recent }
+
+  waste_burning:
+    fine_ratio:            { weight: 0.25, band: recent }
+    moderate_fine_ratio:   { weight: 0.08, band: recent }
+    frp_present:           { weight: 0.30, band: active }
+    waste_site:            { weight: 0.20, band: static }
+    poi_waste:             { weight: 0.15, band: static }
+    poi_crematorium:       { weight: 0.10, band: static }
+    so2_elevated:          { weight: 0.08, band: recent }
+    pm25_elevated:         { weight: 0.05, band: recent }
+
+  traffic_resuspension:
+    road_high:             { weight: 0.25, band: static }
+    road_moderate:         { weight: 0.12, band: static }
+    major_road_ratio:      { weight: 0.10, band: static }
+    no2_high:              { weight: 0.20, band: recent }
+    no2_moderate:          { weight: 0.08, band: recent }
+    poi_transit:           { weight: 0.15, band: static }
+    poi_fuel_many:         { weight: 0.10, band: static }
+    poi_fuel_some:         { weight: 0.05, band: static }
+    coarse_road_signature: { weight: 0.08, band: recent }
+    pm10_high:             { weight: 0.08, band: recent }
+
+  industrial_emission:
+    so2_very_high:         { weight: 0.35, band: recent }
+    so2_elevated:          { weight: 0.20, band: recent }
+    no2_very_high:         { weight: 0.25, band: recent }
+    no2_elevated:          { weight: 0.12, band: recent }
+    poi_industrial_many:   { weight: 0.25, band: static }
+    poi_industrial_some:   { weight: 0.12, band: static }
+    poi_kiln:              { weight: 0.15, band: static }
+    fine_signature:        { weight: 0.08, band: recent }
+
+  meteorological_trapping:
+    wind_calm:             { weight: 0.40, band: forecast }   # forecast or recent wind
+    wind_low:              { weight: 0.20, band: forecast }
+    humidity_high:         { weight: 0.15, band: recent }
+    aqi_high_bonus:        { weight: 0.10, band: recent }
+    pm25_elevated:         { weight: 0.10, band: recent }
+    # Topographic enclosure (basin cells with low VENTILATION_INDEX trap
+    # pollution under stable conditions even when wind is moderate)
+    low_ventilation:       { weight: 0.20, band: static }
+    # Urban canyon (tall + dense built mass restricts street-level mixing,
+    # independent of topography — GHSL BUILT_V/BUILT_S, methodology §D.18)
+    urban_canyon:          { weight: 0.15, band: static }
+
+  regional_transport:
+    # Pollution arriving from upwind cells dominates over local emission.
+    # Triggers when UPWIND_PM25_LOAD exceeds the cell's own PM25.
+    upwind_dominates:      { weight: 0.45, band: recent }   # upwind PM > own PM
+    upwind_high:           { weight: 0.20, band: recent }   # upwind PM elevated absolutely
+    upwind_wind_moderate:  { weight: 0.15, band: forecast } # wind strong enough to transport
+    low_local_sources:     { weight: 0.10, band: static }   # few local POIs argues against local cause

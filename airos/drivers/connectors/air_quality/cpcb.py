@@ -38,7 +38,7 @@ _CITY_ALIASES: dict[str, list[str]] = {
 # Columns we emit (matches openmeteo_aq.py output)
 _COLUMNS = [
     "station_id", "latitude", "longitude", "timestamp",
-    "pm25_ugm3", "pm10_ugm3", "european_aqi",
+    "pm25_ugm3", "pm10_ugm3", "no2_ugm3", "so2_ugm3", "european_aqi",
     "data_source", "quality_flag",
 ]
 
@@ -241,7 +241,7 @@ def fetch_air_quality_observations(
 
     out = stations.rename(columns={})[
         ["station_id", "latitude", "longitude", "timestamp",
-         "pm25_ugm3", "pm10_ugm3", "european_aqi",
+         "pm25_ugm3", "pm10_ugm3", "no2_ugm3", "so2_ugm3", "european_aqi",
          "data_source", "quality_flag"]
     ].copy()
 

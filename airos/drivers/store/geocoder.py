@@ -10,9 +10,16 @@ cell detail header) can display it without repeated API calls.
 
 Caching
 -------
-A coordinate cache (lat/lon rounded to 2 decimal places ≈ 1.1 km grid)
-deduplicates Nominatim calls.  Cells within the same ~1 km² share one
-API call, reducing total requests by ~40–60 %.
+A coordinate cache (lat/lon rounded to 3 decimal places ≈ 110 m grid)
+deduplicates Nominatim calls. The grid is **deliberately finer than an H3
+res-8 cell** (~1 km wide) so each cell receives its own Nominatim lookup —
+otherwise neighbouring cells with different true locations collide on the
+same cache key and inherit a single (often wrong) area name.
+
+Earlier versions used 2-decimal precision (~1.1 km grid), which collided
+with the cell scale and produced systematic mislabelling. If you see
+"area X" labels appearing on cells visibly distant from area X on the
+map, re-run with ``--overwrite`` after this fix.
 
 Usage
 -----
@@ -54,8 +61,11 @@ _OSM_FIELDS = [
 _RATE_LIMIT_SEC = 1.1
 _USER_AGENT     = "airos-urban-platform/1.0"
 
-# Coordinate precision for cache key: 2dp ≈ 1.1 km grid
-_COORD_PRECISION = 2
+# Coordinate precision for cache key: 3 dp ≈ 110 m grid.
+# Must be finer than H3 res 8 cell width (~1 km) so each cell receives its
+# own Nominatim lookup. A coarser grid caused systematic mislabelling
+# (multiple cells sharing one name) and was fixed in this revision.
+_COORD_PRECISION = 3
 
 
 def _best_area(address: dict) -> str:

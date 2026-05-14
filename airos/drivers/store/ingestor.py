@@ -120,6 +120,8 @@ _DOMAIN_INTERVAL: dict[str, timedelta] = {
     "terrain":      timedelta(days=90),
     # Night Lights: VIIRS monthly composite — refresh monthly
     "nightlights":  timedelta(days=30),
+    # Census: GHSL 100 m population epoch — refresh yearly (epoch updates are 5-yr)
+    "census":       timedelta(days=365),
 }
 
 DEFAULT_H3_RES = 8
@@ -135,6 +137,286 @@ DEFAULT_H3_RES = 8
 #   Construction risk index   0–1  (higher = more activity / disturbance)
 #   Green cover change index  -1–+1 (negative = cover loss = higher risk)
 #   Water quality / clarity   0–1  (higher = clearer / better quality)
+
+# ---------------------------------------------------------------------------
+# Flow-routing-aware upstream rainfall (methodology §D.5)
+# ---------------------------------------------------------------------------
+
+def _compute_upstream_rainfall(
+    city_id: str,
+    rainfall_by_cell: dict[str, float],
+) -> dict[str, float]:
+    """Sum upstream rainfall for every cell using the terrain-derived flow graph.
+
+    For each cell X, returns the sum of `RAINFALL_i` for every cell `i`
+    that lies upstream of X (transitively) in the hex-D6 flow graph.
+    Sources (cells with no upstream contributors) get 0. The returned dict
+    is keyed by every cell in `rainfall_by_cell`'s flow basin.
+
+    Implementation:
+        - Loads `ELEVATION_M` from `h3_signals` for the city (single SQL query)
+        - Re-derives the flow graph via `_compute_flow_graph` from terrain_ingestor
+        - Topologically sums own + incoming rainfall down the flow graph
+
+    Returns `{}` if elevation is unavailable (e.g. terrain has never ingested).
+    """
+    import sqlite3
+    from airos.drivers.store.schema import DB_PATH
+    from airos.drivers.store.terrain_ingestor import _compute_flow_graph
+
+    if not rainfall_by_cell:
+        return {}
+
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        # Per-cell latest ELEVATION_M for this city.
+        rows = conn.execute(
+            """
+            SELECT s.h3_id, s.value
+            FROM h3_signals s
+            INNER JOIN (
+                SELECT h3_id, MAX(hour_bucket) AS max_bucket
+                FROM h3_signals
+                WHERE city_id = ? AND signal = 'ELEVATION_M'
+                GROUP BY h3_id
+            ) latest ON s.h3_id = latest.h3_id AND s.hour_bucket = latest.max_bucket
+            WHERE s.city_id = ? AND s.signal = 'ELEVATION_M'
+            """,
+            (city_id, city_id),
+        ).fetchall()
+        conn.close()
+    except Exception as exc:
+        logger.warning("_compute_upstream_rainfall: ELEVATION_M query failed: %s", exc)
+        return {}
+
+    if not rows:
+        return {}
+
+    cell_elevation: dict[str, float | None] = {r[0]: r[1] for r in rows}
+    all_cells = list(cell_elevation.keys())
+
+    # Re-derive flow graph from elevation. (We cache by sweep elsewhere in
+    # `terrain_ingestor`; here we recompute since terrain ran quarterly and
+    # we want consistency between the stored graph and the rainfall sweep.)
+    flow_dir_deg, _facc = _compute_flow_graph(cell_elevation, all_cells)
+
+    # Re-derive the downstream map from flow_dir_deg by re-running the
+    # neighbour search — bearing → neighbour mapping is lossy enough that
+    # rerunning the same logic is cleaner than decoding bearings.
+    import h3 as _h3
+    downstream: dict[str, str | None] = {}
+    for cell in all_cells:
+        elev = cell_elevation.get(cell)
+        if elev is None:
+            downstream[cell] = None
+            continue
+        best: str | None = None
+        best_elev = elev
+        for n in _h3.grid_disk(cell, 1):
+            if n == cell:
+                continue
+            n_elev = cell_elevation.get(n)
+            if n_elev is None:
+                continue
+            if n_elev < best_elev:
+                best_elev = n_elev
+                best = n
+        downstream[cell] = best
+
+    # In-degrees for Kahn topological sort.
+    upstream_of: dict[str, list[str]] = {c: [] for c in all_cells}
+    for c, ds in downstream.items():
+        if ds is not None and ds in upstream_of:
+            upstream_of[ds].append(c)
+    indegree: dict[str, int] = {c: len(upstream_of[c]) for c in all_cells}
+
+    # Each cell starts with its own rainfall (0 if no reading); incoming
+    # accumulator collects upstream contributions.
+    own_rain     = {c: rainfall_by_cell.get(c, 0.0) for c in all_cells}
+    incoming_up  = {c: 0.0 for c in all_cells}
+
+    queue = [c for c in all_cells if indegree[c] == 0]
+    while queue:
+        c = queue.pop()
+        ds = downstream.get(c)
+        if ds is None or ds not in incoming_up:
+            continue
+        incoming_up[ds] += own_rain[c] + incoming_up[c]
+        indegree[ds] -= 1
+        if indegree[ds] == 0:
+            queue.append(ds)
+
+    # Return upstream-only sum (excludes the cell's own rainfall) — that's
+    # the new information the cell didn't already know.
+    return {c: incoming_up[c] for c in all_cells if c in rainfall_by_cell}
+
+
+# ---------------------------------------------------------------------------
+# Wind-aware airborne transport (methodology §D.1)
+# ---------------------------------------------------------------------------
+# Wind moves pollution between cells the same way slope moves water — but with
+# three complications:
+#   1. Direction is dynamic (recompute per sweep, not quarterly).
+#   2. Magnitude is double-edged — high wind transports further AND dilutes.
+#   3. Terrain enclosure traps pollution under stable conditions (analog of
+#      FLOW_ACCUMULATION basin outlets).
+# We compute two signals: UPWIND_PM25_LOAD (incoming PM2.5 from upwind cells)
+# and VENTILATION_INDEX (wind speed dampened by topographic enclosure).
+
+def _bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Initial bearing from point 1 to point 2 (degrees, 0=N, 90=E)."""
+    import math
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dlam = math.radians(lon2 - lon1)
+    y = math.sin(dlam) * math.cos(phi2)
+    x = (math.cos(phi1) * math.sin(phi2)
+         - math.sin(phi1) * math.cos(phi2) * math.cos(dlam))
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+    R = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = (math.sin(dphi / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2)
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def _compute_upwind_aggregation(
+    city_id: str,
+    pm25_by_cell: dict[str, float],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Return (UPWIND_PM25_LOAD, VENTILATION_INDEX) per cell.
+
+    For each cell C with PM2.5 reading:
+
+    **UPWIND_PM25_LOAD** — sum over the cell's k≤2 H3 neighbours N that lie in
+    the upwind direction (the bearing from C to N is within ±45° of the
+    current `WIND_DIR_DEG`), each weighted by:
+        (a) `exp(-d_km / L)` where L = max(wind_speed_kmh, 1) × 0.5 hr is a
+            travel-distance scale — low wind → tight decay, high wind →
+            broader reach;
+        (b) `cos(angular_offset)` so neighbours exactly upwind contribute
+            more than those at the edge of the ±45° cone.
+
+    **VENTILATION_INDEX** — `WIND_SPEED_KMH × exp(-(FLOW_ACCUMULATION-1)/50)`.
+    Ridge cells (FA=1) get the full wind effect; basin-outlet cells (FA≥100)
+    get near-zero ventilation regardless of wind. This is the air analog of
+    the flood case: enclosed terrain traps pollution.
+
+    Wind direction convention: `WIND_DIR_DEG` is the direction the wind is
+    **coming from** (meteorological standard). So upwind direction = wind_dir.
+
+    Returns `{}, {}` when wind or terrain signals are unavailable.
+    """
+    import math
+    import sqlite3
+    import h3 as _h3
+    from airos.drivers.store.schema import DB_PATH
+
+    if not pm25_by_cell:
+        return {}, {}
+
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        # Latest WIND_DIR_DEG, WIND_SPEED_KMH, FLOW_ACCUMULATION per cell
+        signals_needed = ("WIND_DIR_DEG", "WIND_SPEED_KMH", "FLOW_ACCUMULATION")
+        rows = conn.execute(
+            f"""
+            SELECT s.h3_id, s.signal, s.value
+            FROM h3_signals s
+            INNER JOIN (
+                SELECT h3_id, signal, MAX(hour_bucket) AS max_b
+                FROM h3_signals
+                WHERE city_id = ? AND signal IN ({",".join(["?"] * len(signals_needed))})
+                GROUP BY h3_id, signal
+            ) latest
+              ON s.h3_id = latest.h3_id
+             AND s.signal = latest.signal
+             AND s.hour_bucket = latest.max_b
+            WHERE s.city_id = ?
+            """,
+            (city_id, *signals_needed, city_id),
+        ).fetchall()
+        conn.close()
+    except Exception as exc:
+        logger.warning("_compute_upwind_aggregation: signal query failed: %s", exc)
+        return {}, {}
+
+    wind_dir:   dict[str, float] = {}
+    wind_speed: dict[str, float] = {}
+    flow_acc:   dict[str, float] = {}
+    for h3_id, signal, value in rows:
+        if value is None:
+            continue
+        if signal == "WIND_DIR_DEG":
+            wind_dir[h3_id] = float(value)
+        elif signal == "WIND_SPEED_KMH":
+            wind_speed[h3_id] = float(value)
+        elif signal == "FLOW_ACCUMULATION":
+            flow_acc[h3_id] = float(value)
+
+    if not wind_dir:
+        # No wind data — cannot compute upwind load.
+        return {}, {}
+
+    # Pre-compute neighbour bearings for the k≤2 ring of every cell.
+    # H3 res-8 spacing is ~1 km, so k=1 ring at ~1km, k=2 at ~2km.
+    upwind_load:        dict[str, float] = {}
+    ventilation_index:  dict[str, float] = {}
+
+    # PM25 is unlikely to be available for all cells in pm25_by_cell's basin;
+    # treat missing as 0 (no contribution) so we never extrapolate.
+    for cell, pm25 in pm25_by_cell.items():
+        wd = wind_dir.get(cell)
+        ws = wind_speed.get(cell, 5.0)
+        if wd is None:
+            upwind_load[cell] = 0.0
+            ventilation_index[cell] = 0.0
+            continue
+
+        # Cell centroid (used as origin for bearings)
+        lat_c, lon_c = _h3.cell_to_latlng(cell)
+
+        # Travel-distance scale: 30-min transport at current wind speed.
+        L_km = max(ws, 1.0) * 0.5
+
+        # Aggregate over k=1 and k=2 rings. h3.grid_disk returns either a
+        # list or a set depending on the installed version — normalise.
+        ring = set(_h3.grid_disk(cell, 2))
+        ring.discard(cell)
+        total_load = 0.0
+        for n in ring:
+            n_pm25 = pm25_by_cell.get(n)
+            if n_pm25 is None:
+                continue
+            lat_n, lon_n = _h3.cell_to_latlng(n)
+            # Bearing from `cell` to `n` (i.e. where n is, relative to cell)
+            bearing = _bearing_deg(lat_c, lon_c, lat_n, lon_n)
+            # Upwind direction = where the wind is coming from = wind_dir.
+            # If n is in the upwind direction (bearing ≈ wind_dir), it
+            # contributes its pollution to this cell.
+            angular_diff = abs(((bearing - wd + 180) % 360) - 180)
+            if angular_diff > 45:
+                continue   # outside the upwind cone
+            d_km = _haversine_km(lat_c, lon_c, lat_n, lon_n)
+            decay = math.exp(-d_km / L_km)
+            cos_w = math.cos(math.radians(angular_diff))
+            total_load += float(n_pm25) * decay * cos_w
+        upwind_load[cell] = round(total_load, 3)
+
+        # Ventilation: wind speed dampened by topographic enclosure.
+        fa = flow_acc.get(cell, 1.0)
+        damping = math.exp(-(fa - 1.0) / 50.0)
+        ventilation_index[cell] = round(ws * damping, 3)
+
+    return upwind_load, ventilation_index
+
 
 def _tier_construction(val: float | None) -> str:
     """Map CONSTRUCTION_RISK_INDEX (0–1) → risk tier."""
@@ -266,7 +548,11 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
                         centroid_lat=clat, centroid_lon=clon)
 
         import pandas as _pd
-        pm25 = cell.get("pm25_ugm3")
+        pm25      = cell.get("pm25_ugm3")
+        pm10      = cell.get("pm10_ugm3")
+        no2       = cell.get("no2_ugm3")
+        so2       = cell.get("so2_ugm3")
+        ratio     = cell.get("pm25_pm10_ratio")
         aqi_score = cell.get("aqi_score")
         cat = cell.get("aqi_category", "good")
         risk = _cat_lookup(cat)
@@ -274,6 +560,18 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
         if _pd.notna(pm25):
             signal_rows.append({"h3_id": h3_id, "signal": "PM25",
                                  "value": pm25, "unit": "µg/m³"})
+        if _pd.notna(pm10):
+            signal_rows.append({"h3_id": h3_id, "signal": "PM10",
+                                 "value": pm10, "unit": "µg/m³"})
+        if _pd.notna(no2):
+            signal_rows.append({"h3_id": h3_id, "signal": "NO2",
+                                 "value": no2, "unit": "µg/m³"})
+        if _pd.notna(so2):
+            signal_rows.append({"h3_id": h3_id, "signal": "SO2",
+                                 "value": so2, "unit": "µg/m³"})
+        if _pd.notna(ratio):
+            signal_rows.append({"h3_id": h3_id, "signal": "PM25_PM10_RATIO",
+                                 "value": ratio, "unit": "ratio"})
         if _pd.notna(aqi_score):
             signal_rows.append({"h3_id": h3_id, "signal": "AQI",
                                  "value": aqi_score, "unit": "index"})
@@ -299,7 +597,60 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
             centroid_lat=clat, centroid_lng=clon,
         )
 
-    written = write_signals(signal_rows, city_id=city_id, domain="air", source="cpcb")
+    # ── Wind-aware airborne aggregation (methodology §D.1) ────────────────
+    # For each cell with a PM reading, compute UPWIND_*_LOAD (incoming
+    # pollution from upwind cells) and VENTILATION_INDEX (wind speed
+    # dampened by topographic enclosure). These let the cause classifier
+    # distinguish "high PM from local source" from "high PM blown in from
+    # upwind". We aggregate whichever pollutants are present this sweep —
+    # PM25 when available, PM10 as fallback, both when we have them.
+    pm25_by_cell: dict[str, float] = {}
+    pm10_by_cell: dict[str, float] = {}
+    for row in signal_rows:
+        if row.get("value") is None:
+            continue
+        if row.get("signal") == "PM25":
+            pm25_by_cell[row["h3_id"]] = float(row["value"])
+        elif row.get("signal") == "PM10":
+            pm10_by_cell[row["h3_id"]] = float(row["value"])
+
+    ventilation_published = False
+
+    if pm25_by_cell:
+        upwind_pm25, ventilation = _compute_upwind_aggregation(city_id, pm25_by_cell)
+        for cell_id, load in upwind_pm25.items():
+            signal_rows.append({
+                "h3_id": cell_id, "signal": "UPWIND_PM25_LOAD",
+                "value": load, "unit": "µg/m³-equiv",
+            })
+        for cell_id, vent in ventilation.items():
+            signal_rows.append({
+                "h3_id": cell_id, "signal": "VENTILATION_INDEX",
+                "value": vent, "unit": "km/h-equiv",
+            })
+        ventilation_published = True
+
+    if pm10_by_cell:
+        upwind_pm10, vent_pm10 = _compute_upwind_aggregation(city_id, pm10_by_cell)
+        for cell_id, load in upwind_pm10.items():
+            signal_rows.append({
+                "h3_id": cell_id, "signal": "UPWIND_PM10_LOAD",
+                "value": load, "unit": "µg/m³-equiv",
+            })
+        # If we didn't already publish VENTILATION_INDEX from the PM25 pass,
+        # use the PM10 pass result (the ventilation formula is purely a
+        # function of wind + topography, identical regardless of pollutant).
+        if not ventilation_published:
+            for cell_id, vent in vent_pm10.items():
+                signal_rows.append({
+                    "h3_id": cell_id, "signal": "VENTILATION_INDEX",
+                    "value": vent, "unit": "km/h-equiv",
+                })
+
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="air", source="cpcb",
+        geometry_assignment_method="idw",
+    )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""),
                      h3_id=pkt.get("spatial_unit_id", ""),
@@ -340,7 +691,8 @@ def _ingest_water(city_id: str, bbox: dict, *, force: bool = False) -> int:
             cell["risk_level"] = _tier_water(idx_val)
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="water",
                                       signal_key="optical_water_clarity_index", risk_key="risk_level",
-                                      issue_key="dominant_issue", unit="index", source="gee")
+                                      issue_key="dominant_issue", unit="index", source="gee",
+                                      geometry_assignment_method="raster")
     packets = build_water_decision_packets(
         cells_dict, DEFAULT_H3_RES, city_id, **bbox,
     )
@@ -375,7 +727,8 @@ def _ingest_construction(city_id: str, bbox: dict, *, force: bool = False) -> in
             cell["risk_level"] = _tier_construction(cell.get("construction_risk_index"))
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="construction",
                                       signal_key="construction_risk_index", risk_key="risk_level",
-                                      issue_key="dominant_issue", unit="index", source="gee")
+                                      issue_key="dominant_issue", unit="index", source="gee",
+                                      geometry_assignment_method="raster")
     packets = build_construction_decision_packets(cells_dict, DEFAULT_H3_RES, city_id, **bbox)
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
@@ -417,7 +770,8 @@ def _ingest_green(city_id: str, bbox: dict, *, force: bool = False) -> int:
                     cell["dominant_issue"] = "vegetation_gain"
     written = ingest_assessment_cells(cell_list, city_id=city_id, domain="green",
                                       signal_key="green_cover_change_index", risk_key="risk_level",
-                                      unit="index", source="gee", issue_key="dominant_issue")
+                                      unit="index", source="gee", issue_key="dominant_issue",
+                                      geometry_assignment_method="raster")
     packets = build_green_decision_packets(cells_dict, DEFAULT_H3_RES, city_id, **bbox)
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
@@ -432,11 +786,20 @@ def _ingest_green(city_id: str, bbox: dict, *, force: bool = False) -> int:
 
 def _ingest_noise(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("noise", city_id, force)
+    import os
     from airos.drivers.connectors.satellite.cdse_construction import fetch_construction_signals
     from airos.apps.noise.noise_pipeline import (
         build_noise_risk, build_noise_decision_packets,
     )
+    from airos.drivers.store.writer import write_signals
     import pandas as pd
+
+    # Synthetic mode: when no real sensor API is wired up, the proximity-model
+    # output is a structural estimate, not an observation. Methodology §D.10
+    # requires synthetic signals to carry an EST_ prefix so downstream
+    # consumers cannot mistake them for measurements.
+    is_synthetic = not os.getenv("NOISE_API_URL")
+
     h3_ids = _h3_grid_for_bbox(bbox, DEFAULT_H3_RES)
     construction_cells = fetch_construction_signals(
         list(h3_ids), bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"],
@@ -449,10 +812,47 @@ def _ingest_noise(city_id: str, bbox: dict, *, force: bool = False) -> int:
         record_ingest(city_id=city_id, domain="noise", rows_written=0, status="partial")
         return 0
     cell_list = [{"h3_id": k, **v} for k, v in noise_cells.items()]
-    written = ingest_assessment_cells(cell_list, city_id=city_id, domain="noise",
-                                      signal_key="noise_risk_index", risk_key="risk_level",
-                                      issue_key="dominant_source", unit="index",
-                                      source="proximity_model")
+
+    # Back-compat: still emit the legacy NOISE_RISK_INDEX so consumers that
+    # haven't migrated to the EST_ prefix keep working. Source string remains
+    # `proximity_model` so historical rows keep their semantics.
+    written = ingest_assessment_cells(
+        cell_list, city_id=city_id, domain="noise",
+        signal_key="noise_risk_index", risk_key="risk_level",
+        issue_key="dominant_source", unit="index",
+        source="proximity_model",
+        geometry_assignment_method="proximity_model",
+    )
+
+    # NEW: in synthetic mode, also emit EST_NOISE_RISK_INDEX with source
+    # `noise_synth` so its data_quality lands as `synthetic_fallback` (vs the
+    # legacy mapping of `proximity_model → model_estimate`). The two signals
+    # carry the same value but different provenance — downstream code should
+    # prefer the EST_ variant once consumers are migrated.
+    if is_synthetic:
+        est_rows = []
+        for cell in cell_list:
+            v = cell.get("noise_risk_index")
+            h3_id = cell.get("h3_id")
+            if v is None or not h3_id:
+                continue
+            est_rows.append({
+                "h3_id": h3_id,
+                "signal": "EST_NOISE_RISK_INDEX",
+                "value": float(v),
+                "unit": "index",
+                "source": "noise_synth",
+            })
+        if est_rows:
+            # Skip conformance: this is a supplementary write that only carries
+            # the EST_ alias. The primary NOISE_RISK_INDEX + DATA_CONFIDENCE
+            # were already written above by ingest_assessment_cells.
+            written += write_signals(
+                est_rows, city_id=city_id, domain="noise", source="noise_synth",
+                skip_conformance=True,
+                geometry_assignment_method="proximity_model",
+            )
+
     packets = build_noise_decision_packets(noise_cells, DEFAULT_H3_RES, city_id, **bbox)
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
@@ -503,7 +903,10 @@ def _ingest_fire(city_id: str, bbox: dict, *, force: bool = False) -> int:
             h3_id=h3_id, city_id=city_id, domain="fire",
             new_risk_level=fire_risk, data_confidence=1.0,
         )
-    written = write_signals(signal_rows, city_id=city_id, domain="fire", source="firms")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="fire", source="firms",
+        geometry_assignment_method="point",
+    )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
                      city_id=city_id, domain="fire",
@@ -517,9 +920,7 @@ def _ingest_fire(city_id: str, bbox: dict, *, force: bool = False) -> int:
 
 def _ingest_flood(city_id: str, bbox: dict, *, force: bool = False) -> int:
     _check_interval("flood", city_id, force)
-    from airos.apps.flood.flood_pipeline import (
-        build_flood_risk_dashboard, build_flood_decision_packets,
-    )
+    from airos.apps.flood.flood_pipeline import build_flood_decision_packets
     from airos.drivers.store.writer import write_signals, write_assessment, upsert_metadata
     from airos.drivers.connectors.flood.synthetic import (
         synthetic_rainfall as _synthetic_rainfall,
@@ -549,18 +950,18 @@ def _ingest_flood(city_id: str, bbox: dict, *, force: bool = False) -> int:
             rainfall_df = pd.DataFrame()
     if rainfall_df is None or rainfall_df.empty:
         rainfall_df = _synthetic_rainfall(bbox)
+    inc_df = _synthetic_incidents(bbox)
+    ast_df = _synthetic_assets(bbox)
     try:
-        dashboard = build_flood_risk_dashboard(
-            rainfall_df=rainfall_df,
-            incidents_df=_synthetic_incidents(bbox),
-            assets_df=_synthetic_assets(bbox),
-            h3_resolution=DEFAULT_H3_RES,
-            city_id=city_id, **bbox,
+        from airos.apps.flood.flood_pipeline import run_flood_pipeline
+        pipeline = run_flood_pipeline(
+            rainfall_df, inc_df, ast_df,
+            DEFAULT_H3_RES, city_id, **bbox,
         )
         packets = build_flood_decision_packets(
             rainfall_df=rainfall_df,
-            incidents_df=_synthetic_incidents(bbox),
-            assets_df=_synthetic_assets(bbox),
+            incidents_df=inc_df,
+            assets_df=ast_df,
             h3_resolution=DEFAULT_H3_RES,
             city_id=city_id, **bbox, top_n=20,
         )
@@ -569,37 +970,61 @@ def _ingest_flood(city_id: str, bbox: dict, *, force: bool = False) -> int:
         record_ingest(city_id=city_id, domain="flood", rows_written=0, status="error",
                       error_msg=str(exc))
         return 0
+    risk_cells_df = pipeline["risk_cells"]
     from airos.drivers.store.coverage import coverage_signals
+    import pandas as _pd2
+
+    # ── Flow-routing-aware UPSTREAM_RAINFALL (methodology §D.5) ───────────
+    # For each cell, sum the RAINFALL_i of every cell upstream of it (via the
+    # terrain-derived hex-D6 flow graph). This captures the runoff arriving
+    # from cells that drain into this one — a low-lying cell with modest
+    # local rainfall can still flood from a wet upstream basin.
+    rainfall_by_cell: dict[str, float] = {}
+    for _, cell in risk_cells_df.iterrows():
+        h3_id = cell.get("h3_id")
+        rain  = cell.get("rainfall_mm_per_hr")
+        if h3_id and rain is not None and _pd2.notna(rain):
+            rainfall_by_cell[h3_id] = float(rain)
+    upstream_rainfall = _compute_upstream_rainfall(city_id, rainfall_by_cell)
+
     signal_rows = []
-    for cell in dashboard.get("risk_cells", []):
+    for _, cell in risk_cells_df.iterrows():
         h3_id = cell.get("h3_id")
         if not h3_id:
             continue
         upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=DEFAULT_H3_RES)
         score = cell.get("flood_risk_score")
         rain  = cell.get("rainfall_mm_per_hr")
-        if score is not None:
+        if score is not None and _pd2.notna(score):
             signal_rows.append({"h3_id": h3_id, "signal": "FLOOD_RISK_SCORE",
                                  "value": score, "unit": "index"})
-        if rain is not None:
+        if rain is not None and _pd2.notna(rain):
             signal_rows.append({"h3_id": h3_id, "signal": "RAINFALL",
                                  "value": rain, "unit": "mm/hr"})
+        # Upstream rainfall — runoff arriving from cells that drain into this one
+        if h3_id in upstream_rainfall:
+            signal_rows.append({
+                "h3_id": h3_id, "signal": "UPSTREAM_RAINFALL",
+                "value": round(upstream_rainfall[h3_id], 2),
+                "unit": "mm/hr-equiv",
+            })
         # Coverage: flood uses a centroid rainfall broadcast — default confidence
         signal_rows.extend(coverage_signals(h3_id, None, "flood"))
         flood_risk = cell.get("risk_level", "unknown")
         write_assessment(h3_id=h3_id, city_id=city_id, domain="flood",
                          risk_level=flood_risk,
                          primary_index="FLOOD_RISK_SCORE", primary_value=score,
-                         dominant_issue=cell.get("dominant_issue"), summary=cell)
-        # Analysis gate: flood default confidence is 0.45 — below threshold
-        # Most flood cells will be flagged for siting rather than analysis
+                         dominant_issue=cell.get("dominant_issue"), summary=cell.to_dict())
         from airos.drivers.store.coverage import DOMAIN_DEFAULT_CONFIDENCE
         _apply_analysis_gate(
             h3_id=h3_id, city_id=city_id, domain="flood",
             new_risk_level=flood_risk,
             data_confidence=DOMAIN_DEFAULT_CONFIDENCE.get("flood", 0.45),
         )
-    written = write_signals(signal_rows, city_id=city_id, domain="flood", source="imd")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="flood", source="imd",
+        geometry_assignment_method="idw",
+    )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
                      city_id=city_id, domain="flood",
@@ -688,7 +1113,10 @@ def _ingest_heat(city_id: str, bbox: dict, *, force: bool = False) -> int:
             new_risk_level=heat_risk,
             data_confidence=DOMAIN_DEFAULT_CONFIDENCE.get("heat", 0.50),
         )
-    written = write_signals(signal_rows, city_id=city_id, domain="heat", source="openmeteo")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="heat", source="openmeteo",
+        geometry_assignment_method="raster_idw_hybrid",
+    )
     for cand in candidates.get("candidates", []):
         write_packet(packet_id=cand.get("candidate_id", ""),
                      h3_id=cand.get("h3_id", ""),
@@ -745,7 +1173,10 @@ def _ingest_waste(city_id: str, bbox: dict, *, force: bool = False) -> int:
             h3_id=h3_id, city_id=city_id, domain="waste",
             new_risk_level=waste_risk, data_confidence=1.0,
         )
-    written = write_signals(signal_rows, city_id=city_id, domain="waste", source="firms")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="waste", source="firms",
+        geometry_assignment_method="point",
+    )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
                      city_id=city_id, domain="waste",
@@ -842,7 +1273,8 @@ def _ingest_weather(city_id: str, bbox: dict, *, force: bool = False) -> int:
         signal_rows.extend(coverage_signals(h3_id, dist_km, "weather"))
 
     written = write_signals(signal_rows, city_id=city_id, domain="weather",
-                            source="openmeteo_forecast")
+                            source="openmeteo_forecast",
+                            geometry_assignment_method="idw")
     logger.info(
         "[%s/weather] %d cells × %d signals = %d rows  "
         "(wind %.1f km/h @ %s°, humidity %.0f%%, pressure %.0f hPa)",
@@ -956,6 +1388,16 @@ def _ingest_nightlights(city_id: str, bbox: dict, *, force: bool = False) -> int
     return ingest_nightlights(city_id, bbox, force=force)
 
 
+def _ingest_pois(city_id: str, bbox: dict, *, force: bool = False) -> int:
+    from airos.drivers.store.pois_ingestor import ingest_pois
+    return ingest_pois(city_id, bbox, force=force)
+
+
+def _ingest_census(city_id: str, bbox: dict, *, force: bool = False) -> int:
+    from airos.drivers.store.census_ingestor import ingest_census
+    return ingest_census(city_id, bbox, force=force)
+
+
 _DOMAIN_FN: dict[str, Callable] = {
     "air":          _ingest_air,
     "water":        _ingest_water,
@@ -976,6 +1418,10 @@ _DOMAIN_FN: dict[str, Callable] = {
     "terrain":      _ingest_terrain,
     # Night Lights (VIIRS monthly composite)
     "nightlights":  _ingest_nightlights,
+    # POIs (OSM categorised points-of-interest)
+    "pois":         _ingest_pois,
+    # Census / population (GHSL_POP 100 m raster — structural exposure layer)
+    "census":       _ingest_census,
 }
 
 
@@ -1086,23 +1532,40 @@ def run(
     Uses SQLite + WAL mode — the dashboard (readers) and ingestor (writer)
     can run simultaneously without lock errors.
 
+    Sets a sweep-wide `ingest_run_id` via the writer's ContextVar so every
+    row written by every driver inherits the same id. Methodology §14:
+    `ingest_run_id` lets a reviewer answer "which sweep produced this row?"
+    without a separate JOIN to a sweep log.
+
     Returns a nested dict: {city_id: {domain: rows_written}}.
     """
+    import uuid as _uuid
+    from airos.drivers.store.writer import (
+        set_current_ingest_run_id, reset_ingest_run_id,
+    )
+
     cities  = cities  or ALL_CITIES
     domains = domains or ALL_DOMAINS
 
+    ingest_run_id = f"ir_{_uuid.uuid4().hex[:14]}"
+    _token = set_current_ingest_run_id(ingest_run_id)
+    logger.info("Ingest sweep started — run_id=%s", ingest_run_id)
+
     results: dict[str, dict[str, int]] = {}
+    try:
+        for city_id in cities:
+            bbox = _get_city_bbox(city_id)
+            if not bbox:
+                logger.warning("Unknown city '%s' — skipping.", city_id)
+                continue
+            results[city_id] = {}
+            for domain in domains:
+                n = _run_domain(domain, city_id, bbox, force=force)
+                results[city_id][domain] = n
+    finally:
+        reset_ingest_run_id(_token)
 
-    for city_id in cities:
-        bbox = _get_city_bbox(city_id)
-        if not bbox:
-            logger.warning("Unknown city '%s' — skipping.", city_id)
-            continue
-        results[city_id] = {}
-        for domain in domains:
-            n = _run_domain(domain, city_id, bbox, force=force)
-            results[city_id][domain] = n
-
+    logger.info("Ingest sweep finished — run_id=%s", ingest_run_id)
     return results
 
 

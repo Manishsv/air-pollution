@@ -158,6 +158,7 @@ def render_property_buildings_panel() -> None:
             "Review support only. Do not use this dashboard to issue tax demands, penalties, demolition notices, or enforcement actions."
         ),
         primary_alert_kind="error",
+        domain="buildings",
     )
 
     artifacts = build_demo_property_buildings_artifacts()

@@ -14,6 +14,8 @@ class TerrainDriver(_InTreeDriver):
         "SLOPE_DEG",
         "ASPECT_DEG",
         "RUGGEDNESS_INDEX",
+        "FLOW_DIRECTION",        # hex-D6 flow routing — bearing to downstream neighbour (-1 = sink)
+        "FLOW_ACCUMULATION",     # count of cells whose runoff transitively reaches this cell (incl. itself)
         "DATA_CONFIDENCE",
         "TERRAIN_CLASS",   # rule-based classifier runs at end of ingest
     ]

@@ -393,6 +393,7 @@ def render_noise_panel() -> None:
             "construction activity (Sentinel-2 BSI), and fire/industrial burning (NASA FIRMS). "
             "NRI is a prioritisation signal — acoustic measurement required for enforcement."
         ),
+        domain="noise",
     )
 
     city_id, bbox, live, day_range = _city_selector()

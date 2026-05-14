@@ -153,7 +153,10 @@ def ingest_drains(city_id: str, bbox: dict, *, force: bool = False) -> int:
             {"h3_id": h3_id, "signal": "DATA_CONFIDENCE",       "value": _data_confidence(), "unit": "ratio"},
         ]
 
-    written = write_signals(signal_rows, city_id=city_id, domain="drains", source="osm")
+    written = write_signals(
+        signal_rows, city_id=city_id, domain="drains", source="osm",
+        geometry_assignment_method="line_clip",
+    )
     logger.info("[%s/drains] %d cells × 5 signals = %d rows written.",
                 city_id, len(h3_ids), written)
     record_ingest(city_id=city_id, domain="drains", rows_written=written)

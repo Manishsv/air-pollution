@@ -147,6 +147,20 @@ drivers:
     cadence_hint: "30 days"
     notes: "VIIRS night-time light (NASA Black Marble VNP46A2). No key required for synthetic mode. Set EARTHDATA_TOKEN for real VIIRS data. Signals: NTL_RADIANCE, NTL_LIT_FRACTION, ECONOMIC_ACTIVITY_INDEX, DATA_CONFIDENCE, ACTIVITY_CLASS."
 
+  pois:
+    builtin_class: airos.drivers.store.drivers.pois_driver:POIsDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "90 days"
+    notes: "OSM Overpass POIs by category. No key required. Quarterly refresh. Signals: POI_INDUSTRIAL_COUNT, POI_CONSTRUCTION_COUNT, POI_FUEL_STATION_COUNT, POI_KILN_COUNT, POI_EATERY_COUNT, POI_CREMATORIUM_COUNT, POI_WASTE_FACILITY_COUNT, POI_MARKET_COUNT, POI_TRANSIT_TERMINAL_COUNT, POI_HOSPITAL_COUNT, POI_SCHOOL_COUNT, DATA_CONFIDENCE."
+
+  census:
+    builtin_class: airos.drivers.store.drivers.census_driver:CensusDriver
+    trust_level: core
+    trusted: true
+    cadence_hint: "365 days"
+    notes: "GHSL R2023A 100 m residential population grid (JRC, CC-BY 4.0). No API key. Yearly refresh. Signals: POPULATION, POPULATION_DENSITY_PER_KM2, VULNERABLE_POPULATION_EST, DATA_CONFIDENCE. See methodology §D.21."
+
   # --------------------------------------------------------------------------
   # Example third-party driver (commented out — shows the format)
   # --------------------------------------------------------------------------

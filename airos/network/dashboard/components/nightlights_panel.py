@@ -319,6 +319,7 @@ def render_nightlights_panel() -> None:
             "It must not be used as the sole basis for any operational recommendation."
         ),
         primary_alert_kind="info",
+        domain="nightlights",
     )
 
     # ── City selector ──────────────────────────────────────────────────────

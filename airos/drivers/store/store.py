@@ -97,6 +97,49 @@ def _ensure_schema(db_path: Path) -> None:
             "ALTER TABLE h3_packets ADD COLUMN evidence_json TEXT",
             "ALTER TABLE h3_packets ADD COLUMN safety_gates_json TEXT",
             "ALTER TABLE h3_packets ADD COLUMN blocked_uses_json TEXT",
+            # ────────────────────────────────────────────────────────────────
+            # Tranche A — Reproducibility & audit trail (methodology §14)
+            # ────────────────────────────────────────────────────────────────
+            # h3_signals
+            "ALTER TABLE h3_signals ADD COLUMN ingest_run_id TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN raw_source_id TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN source_observed_at TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN ingested_at TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN confidence_method_version TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN geometry_assignment_method TEXT",
+            "ALTER TABLE h3_signals ADD COLUMN spatial_support_json TEXT",
+            # h3_assessments
+            "ALTER TABLE h3_assessments ADD COLUMN assessment_version TEXT",
+            "ALTER TABLE h3_assessments ADD COLUMN threshold_version TEXT",
+            "ALTER TABLE h3_assessments ADD COLUMN input_signal_refs_json TEXT",
+            # h3_insights — provenance
+            "ALTER TABLE h3_insights ADD COLUMN agent_model TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN agent_prompt_version TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN tool_trace_id TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN context_hash TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN evidence_refs_json TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN confidence_type TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN context_truncated INTEGER DEFAULT 0",
+            "ALTER TABLE h3_insights ADD COLUMN tool_policy_compliance TEXT",
+            # h3_insights — four-way verdicts (§4.3)
+            "ALTER TABLE h3_insights ADD COLUMN condition_verdict TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN cause_verdict TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN routing_verdict TEXT",
+            "ALTER TABLE h3_insights ADD COLUMN action_verdict TEXT",
+            # h3_packets — classifier reproducibility + tie-breaker (§4.4)
+            "ALTER TABLE h3_packets ADD COLUMN classifier_version TEXT",
+            "ALTER TABLE h3_packets ADD COLUMN weight_config_version TEXT",
+            "ALTER TABLE h3_packets ADD COLUMN attribution_uncertain INTEGER DEFAULT 0",
+            "ALTER TABLE h3_packets ADD COLUMN secondary_review_by TEXT",
+            # city_patterns
+            "ALTER TABLE city_patterns ADD COLUMN source_insight_ids_json TEXT",
+            "ALTER TABLE city_patterns ADD COLUMN source_assessment_snapshot_id TEXT",
+            "ALTER TABLE city_patterns ADD COLUMN agent_model TEXT",
+            "ALTER TABLE city_patterns ADD COLUMN prompt_version TEXT",
+            # ────────────────────────────────────────────────────────────────
+            # Tranche C — POI multi-tag (methodology §D.16)
+            # ────────────────────────────────────────────────────────────────
+            "ALTER TABLE poi_points ADD COLUMN secondary_tags_json TEXT",
         ]
         with _connect(db_path) as conn:
             for mig in _migrations:

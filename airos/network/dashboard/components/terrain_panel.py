@@ -359,6 +359,7 @@ def render_terrain_panel() -> None:
             "(spec safety gate: block_terrain_as_sole_risk_basis)."
         ),
         primary_alert_kind="info",
+        domain="terrain",
     )
 
     # ── City selector ──────────────────────────────────────────────────────

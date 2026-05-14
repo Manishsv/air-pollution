@@ -71,6 +71,151 @@ def _ensure_table() -> None:
 # Context builder — reads recent cell insights
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Signal-derived denominators per cause (methodology §7.2 / §11)
+# ---------------------------------------------------------------------------
+#
+# Each entry defines the diagnostic signal pattern that a cell must satisfy
+# to be counted as "supporting" a given cause. Patterns mirror the cause
+# classifier rules at §4.4 but evaluated at the cell-population level —
+# they give the City Pattern Agent a raw-evidence denominator alongside
+# the LLM-derived insight count, so themes always cite both
+# `n_insights` AND `n_cells_with_signal_pattern`.
+#
+# A cell qualifies for a cause when ALL the listed predicates pass on its
+# latest-per-signal values. Predicates use the same thresholds as the
+# externalised classifier weights config (data/config/cause_classifier_weights.yaml).
+_CAUSE_SIGNAL_PATTERNS: dict[str, list[tuple[str, str, float]]] = {
+    "construction_dust": [
+        ("PM10",                ">",  100.0),
+        ("PM25_PM10_RATIO",     "<",    0.5),
+        ("POI_CONSTRUCTION_COUNT", ">=", 1),
+    ],
+    "waste_burning": [
+        # Either active burning (FRP) or static waste-site near elevated fine PM
+        # Implemented as two patterns combined with OR in the query.
+        ("__or_active__",       "",    0),    # sentinel handled in _build_pattern_sql
+    ],
+    "traffic_resuspension": [
+        ("ROAD_DENSITY",        ">",  25000),
+        ("NO2",                 ">",     40.0),
+    ],
+    "industrial_emission": [
+        ("POI_INDUSTRIAL_COUNT", ">=",   5),
+        ("SO2",                  ">",  20.0),
+    ],
+    "meteorological_trapping": [
+        ("WIND_SPEED_KMH",       "<",    5.0),
+        ("PM25",                 ">",  60.0),
+    ],
+}
+
+
+def _build_pattern_sql(predicates: list[tuple[str, str, float]]) -> tuple[str, list]:
+    """Build a SQL fragment that counts cells satisfying ALL predicates.
+
+    Each predicate is (signal_name, op, threshold). The query uses a
+    per-cell-per-signal latest-value view (within last 7 days) and applies
+    the predicates as a single boolean expression.
+
+    Returns (sql_query, params_template_marker) — caller fills in city_id
+    via parameter substitution.
+    """
+    # Build CASE-pivot of latest values per signal
+    needed_signals = [p[0] for p in predicates]
+    sel_cases = ",\n               ".join(
+        f"MAX(CASE WHEN signal = '{sig}' THEN value END) AS \"{sig}\""
+        for sig in needed_signals
+    )
+    where_terms = " AND ".join(
+        f"\"{sig}\" {op} {thr}" for sig, op, thr in predicates
+    )
+    return f"""
+        WITH latest AS (
+            SELECT s.h3_id, s.signal, s.value
+            FROM h3_signals s
+            INNER JOIN (
+                SELECT h3_id, signal, MAX(hour_bucket) AS max_bucket
+                FROM h3_signals
+                WHERE city_id = ? AND signal IN ({",".join(["?"] * len(needed_signals))})
+                  AND observed_at >= datetime('now', '-7 days')
+                GROUP BY h3_id, signal
+            ) latest_bucket
+              ON s.h3_id = latest_bucket.h3_id
+             AND s.signal = latest_bucket.signal
+             AND s.hour_bucket = latest_bucket.max_bucket
+            WHERE s.city_id = ?
+        ),
+        pivot AS (
+            SELECT h3_id,
+               {sel_cases}
+            FROM latest
+            GROUP BY h3_id
+        )
+        SELECT h3_id FROM pivot
+        WHERE {where_terms}
+    """
+
+
+def _compute_signal_denominators(city_id: str) -> dict[str, dict]:
+    """Return {cause: {n_cells, intersection_cell_ids}} for every cause.
+
+    Used by the City Pattern Agent to ground each theme in raw signal-level
+    evidence, not just the LLM-derived insight count (methodology §7.2).
+    Failures fall back to {n_cells: None, intersection_cell_ids: []} for
+    that cause so the agent simply runs with reduced evidence rather than
+    aborting.
+    """
+    from airos.drivers.store.store import H3KnowledgeStore
+    store = H3KnowledgeStore.get()
+
+    out: dict[str, dict] = {}
+    for cause, predicates in _CAUSE_SIGNAL_PATTERNS.items():
+        # Special-case waste_burning: two OR'd patterns
+        if cause == "waste_burning":
+            try:
+                # Pattern A: active fire detection
+                qa = _build_pattern_sql([("FRP", ">", 10.0)])
+                # Pattern B: known waste / crematorium POI + fine combustion ratio
+                qb = _build_pattern_sql([
+                    ("POI_WASTE_FACILITY_COUNT", ">=", 1),
+                    ("PM25_PM10_RATIO",          ">",  0.8),
+                ])
+                params_a = [city_id, "FRP", city_id]
+                params_b = [city_id, "POI_WASTE_FACILITY_COUNT", "PM25_PM10_RATIO", city_id]
+                df_a = store.fetchdf(qa, params_a)
+                df_b = store.fetchdf(qb, params_b)
+                cells = set()
+                if not df_a.empty:
+                    cells.update(df_a["h3_id"].tolist())
+                if not df_b.empty:
+                    cells.update(df_b["h3_id"].tolist())
+                out[cause] = {
+                    "n_cells_with_signal_pattern": len(cells),
+                    "intersection_cell_ids":       sorted(cells)[:50],
+                }
+            except Exception as exc:
+                logger.debug("denominator query failed for %s: %s", cause, exc)
+                out[cause] = {"n_cells_with_signal_pattern": None, "intersection_cell_ids": []}
+            continue
+
+        try:
+            needed = [p[0] for p in predicates]
+            q = _build_pattern_sql(predicates)
+            params = [city_id, *needed, city_id]
+            df = store.fetchdf(q, params)
+            cells = df["h3_id"].tolist() if not df.empty else []
+            out[cause] = {
+                "n_cells_with_signal_pattern": len(cells),
+                "intersection_cell_ids":       cells[:50],
+            }
+        except Exception as exc:
+            logger.debug("denominator query failed for %s: %s", cause, exc)
+            out[cause] = {"n_cells_with_signal_pattern": None, "intersection_cell_ids": []}
+
+    return out
+
+
 def _build_sweep_context(city_id: str, lookback_hours: int = 6) -> dict:
     """Pull recent cell-level insights and cross-correlation stats for the LLM."""
     from airos.drivers.store.store import H3KnowledgeStore
@@ -222,6 +367,15 @@ def _build_sweep_context(city_id: str, lookback_hours: int = 6) -> dict:
             "top_issue":    top_issues.get(dom),
         })
 
+    # Signal-derived denominators per cause — raw cell counts that are
+    # independent of the LLM agent (methodology §7.2). Provided alongside
+    # the insight counts so themes can cite both.
+    try:
+        signal_denominators = _compute_signal_denominators(city_id)
+    except Exception as exc:
+        logger.warning("Signal denominator computation failed: %s", exc)
+        signal_denominators = {}
+
     return {
         "city_id": city_id,
         "lookback_hours": lookback_hours,
@@ -232,6 +386,7 @@ def _build_sweep_context(city_id: str, lookback_hours: int = 6) -> dict:
         "cross_correlations": corr_data,
         "city_risk_distribution": city_risk_dist,
         "domain_assessment_summary": domain_assessment_summary,
+        "signal_denominators": signal_denominators,
         "insights": insights,
     }
 
@@ -315,6 +470,26 @@ def _build_prompt(ctx: dict) -> str:
         parts.append(", ".join(ctx["hotspot_cells"][:10]))
         parts.append("")
 
+    # Signal-derived denominators (§7.2) — raw cell counts independent of LLM
+    sig_dens = ctx.get("signal_denominators", {})
+    if sig_dens:
+        parts.append(
+            "## Signal-derived denominators (raw, NOT LLM-derived)\n"
+            "These are cell counts where the diagnostic signal pattern for each cause "
+            "is satisfied at the population level. Use them as the denominator for any "
+            "theme that names one of these causes — every theme MUST emit "
+            "`n_cells_with_signal_pattern` (taken from this table) AND `n_insights` "
+            "(your own insight count). Themes where both are < threshold get "
+            "demoted to `validity: \"interpretive\"`."
+        )
+        for cause, info in sig_dens.items():
+            n = info.get("n_cells_with_signal_pattern")
+            if n is None:
+                parts.append(f"- {cause}: n_cells_with_signal_pattern = (query failed)")
+            else:
+                parts.append(f"- {cause}: n_cells_with_signal_pattern = {n}")
+        parts.append("")
+
     # Individual insights (truncated — top 30 by confidence to keep prompt compact)
     parts.append("## Cell-level insights from this sweep (highest confidence first, max 30)")
     for ins in ctx["insights"][:30]:
@@ -343,7 +518,12 @@ You must produce a structured JSON response with EXACTLY this schema:
       "title": "<short theme name>",
       "description": "<2-4 sentences: what pattern you see and why it matters>",
       "domains": ["domain1", "domain2"],
-      "n_cells_affected": <integer>,
+      "primary_cause": "<one of: construction_dust | waste_burning | traffic_resuspension | industrial_emission | meteorological_trapping | other>",
+      "n_insights": <integer — agent insights supporting this theme>,
+      "n_cells_with_signal_pattern": <integer — from the signal-derived denominator table>,
+      "n_cells_with_assessment": <integer — cells with elevated assessment in the affected domains>,
+      "n_cells_intersection": <integer — cells satisfying BOTH (intersection of the above two)>,
+      "n_cells_affected": <integer — total cells you claim this affects (legacy field, often == intersection)>,
       "confidence": <float 0.0-1.0>,
       "evidence": "<what data supports this — be specific about lift scores, cell counts, signal levels>",
       "recommended_city_action": "<one specific city-level intervention, not just 'monitor'>",
@@ -356,7 +536,15 @@ You must produce a structured JSON response with EXACTLY this schema:
 
 Rules:
 - Identify 2-5 themes. Do not pad with weak observations.
-- A theme must span ≥3 cells OR appear in ≥2 independent insights to be valid.
+- VALIDITY GATE (methodology §7.2): a theme is valid only if
+      (n_insights >= 2) OR (n_cells_intersection >= 5)
+  Themes failing this gate must still be emitted but with priority="low" and
+  evidence prefixed with "[interpretive — not supported by raw signal evidence]".
+- For each theme, n_cells_with_signal_pattern MUST come from the
+  "Signal-derived denominators" section above — do not invent it.
+- n_cells_intersection = cells supporting BOTH the signal pattern AND
+  having an insight or elevated assessment. If you cannot derive it
+  precisely, use the smaller of n_insights and n_cells_with_signal_pattern.
 - Cite specific evidence (lift scores, cell counts, domain frequencies).
 - Do NOT invent patterns not supported by the data.
 - Data quality note must be specific — if n_insights < 10, say so and lower confidence.
@@ -438,6 +626,32 @@ class CityPatternAgent:
                 "data_quality_note": "Response was not valid JSON.",
                 "parse_error": str(exc),
             }
+
+        # ── Validity gate (methodology §7.2) ──────────────────────────────
+        # Demote any theme where neither (n_insights >= 2) nor
+        # (n_cells_intersection >= 5) — these are "interpretive" themes that
+        # the LLM produced from weak evidence. We don't drop them entirely
+        # so the operator can see what the agent saw, but they are
+        # priority-downgraded and tagged so the dashboard can render them
+        # differently from validated themes.
+        themes = summary.get("themes") or []
+        for theme in themes:
+            try:
+                n_ins   = int(theme.get("n_insights") or 0)
+                n_inter = int(theme.get("n_cells_intersection") or 0)
+            except Exception:
+                n_ins = n_inter = 0
+            theme["validity"] = (
+                "validated" if (n_ins >= 2 or n_inter >= 5) else "interpretive"
+            )
+            if theme["validity"] == "interpretive":
+                # Demote priority and prefix evidence so it's visible everywhere
+                theme["priority"] = "low"
+                ev = theme.get("evidence") or ""
+                if not ev.startswith("[interpretive"):
+                    theme["evidence"] = (
+                        "[interpretive — not supported by raw signal evidence] " + ev
+                    )
 
         # Persist to DB
         self._persist(ctx, summary)

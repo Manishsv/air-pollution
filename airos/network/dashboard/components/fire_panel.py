@@ -304,6 +304,7 @@ def render_fire_panel() -> None:
             "Do not issue advisories or dispatch resources without field confirmation."
         ),
         primary_alert_kind="warning",
+        domain="fire",
     )
 
     # ── Confidence filter ──────────────────────────────────────────────────

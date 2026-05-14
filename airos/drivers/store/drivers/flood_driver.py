@@ -10,7 +10,10 @@ class FloodDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "FLOOD_RISK_SCORE", "RAINFALL", "DATA_CONFIDENCE",
+        "FLOOD_RISK_SCORE",
+        "RAINFALL",
+        "UPSTREAM_RAINFALL",        # sum of upstream-cell rainfall via terrain flow graph (§D.5)
+        "DATA_CONFIDENCE",
     ]
     data_sources = [
         "OpenMeteo API (precipitation, free, no key)",

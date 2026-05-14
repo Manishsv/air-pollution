@@ -140,6 +140,11 @@ class AirOSClient:
         insight_id: str,
         outcome_status: str,
         closed_by: str,
+        *,
+        condition_verdict: str | None = None,
+        cause_verdict: str | None = None,
+        routing_verdict: str | None = None,
+        action_verdict: str | None = None,
     ) -> None:
         """Record an officer's closure decision on an insight.
 
@@ -148,21 +153,29 @@ class AirOSClient:
         insight_id:
             The insight to close.
         outcome_status:
-            One of ``"confirmed"``, ``"refuted"``, ``"unverifiable"``.
+            One of ``"confirmed"``, ``"refuted"``, ``"partially_confirmed"``,
+            ``"unverifiable"``. This is the back-compat condition-layer field.
         closed_by:
             Non-empty reviewer identity string (email or officer ID).
             Anonymous closure is prohibited by the Review Contract.
+        condition_verdict, cause_verdict, routing_verdict, action_verdict:
+            Four-way verdict split (methodology §4.3). All optional;
+            v1 deployments typically only collect ``condition_verdict``.
 
         Raises
         ------
         ValueError
-            If ``closed_by`` is empty or ``outcome_status`` is not valid.
+            If ``closed_by`` is empty or any verdict value is invalid.
         """
         from airos.drivers.store.writer import close_insight as _close
         _close(
             insight_id=insight_id,
             outcome_status=outcome_status,
             closed_by=closed_by,
+            condition_verdict=condition_verdict,
+            cause_verdict=cause_verdict,
+            routing_verdict=routing_verdict,
+            action_verdict=action_verdict,
         )
 
     def submit_analysis_request(self, h3_id: str, city_id: str) -> tuple[bool, str]:

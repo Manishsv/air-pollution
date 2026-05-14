@@ -386,7 +386,12 @@ def get_insights(
             i.insight_id, i.h3_id, i.city_id, i.created_at,
             i.domains_involved, i.finding, i.confidence,
             i.priority_tier, i.outcome_status,
-            i.closed_by, i.closed_at, i.hypothesis_chain_json,
+            i.closed_by, i.closed_at,
+            i.hypothesis_chain_json,
+            i.recommended_actions_json,
+            i.uncertainty_notes_json,
+            i.condition_verdict, i.cause_verdict,
+            i.routing_verdict, i.action_verdict,
             m.area_name, m.land_use_class, m.centroid_lat, m.centroid_lon,
             coalesce(max(CASE a.risk_level
                 WHEN 'severe'   THEN 4
@@ -404,7 +409,12 @@ def get_insights(
         GROUP BY i.insight_id, i.h3_id, i.city_id, i.created_at,
                  i.domains_involved, i.finding, i.confidence,
                  i.priority_tier, i.outcome_status, i.closed_by, i.closed_at,
-                 i.hypothesis_chain_json, m.area_name, m.land_use_class,
+                 i.hypothesis_chain_json,
+                 i.recommended_actions_json,
+                 i.uncertainty_notes_json,
+                 i.condition_verdict, i.cause_verdict,
+                 i.routing_verdict, i.action_verdict,
+                 m.area_name, m.land_use_class,
                  m.centroid_lat, m.centroid_lon
         ORDER BY
             CASE i.priority_tier

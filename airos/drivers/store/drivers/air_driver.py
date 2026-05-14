@@ -12,7 +12,12 @@ class AirDriver(_InTreeDriver):
     produces_assessments = True
 
     signal_names = [
-        "PM25", "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
+        "PM25", "PM10", "NO2", "SO2", "PM25_PM10_RATIO",
+        "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
+        # Wind-aware airborne aggregation (methodology §D.1)
+        "UPWIND_PM25_LOAD",      # sum of upwind k≤2 cells' PM25, distance- + angle-weighted
+        "UPWIND_PM10_LOAD",      # same aggregation applied to PM10 (used when CPCB has no PM2.5)
+        "VENTILATION_INDEX",     # wind speed dampened by topographic enclosure
     ]
     data_sources = ["AQICN API", "CPCB sensor network"]
     _required_env_vars = []       # AQICN_API_KEY is optional (degrades to mock)

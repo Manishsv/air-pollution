@@ -502,6 +502,7 @@ def render_air_panel() -> None:
             "OpenMeteo Air Quality API. Review-support only."
         ),
         primary_alert=None,
+        domain="air",
     )
 
     # ── Map layer toggles ──────────────────────────────────────────────────

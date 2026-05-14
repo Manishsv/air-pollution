@@ -48,10 +48,13 @@ _URGENCY_CSS = {
 _GATE_CSS   = {"pass": "#16a34a", "fail": "#dc2626", "not_applicable": "#6b7280"}
 _IMPACT_CSS = {"high": "#b42318", "medium": "#92670a", "low": "#6b7280"}
 _DQ_LABEL   = {
-    "real_station":      "📡 Real station",
-    "satellite_derived": "🛰️ Satellite derived",
-    "model_estimate":    "🔮 Model estimate",
-    "unknown":           "❓ Unknown",
+    "real_station":       "📡 Real station",
+    "satellite_derived":  "🛰️ Satellite derived",
+    "model_estimate":     "🔮 Model estimate",
+    "osm_structural":     "🗺️ OSM structural",
+    "derived":            "🧮 Derived",
+    "synthetic_fallback": "⚠️ Synthetic estimate",
+    "unknown":            "❓ Unknown",
 }
 
 
@@ -83,9 +86,11 @@ def _time_ago(ts: str | None) -> str:
 
 
 def _section(label: str) -> None:
+    # Use mid-grey #6b7280 which has adequate contrast on both light and dark
+    # themes (~4.5:1 on white, ~3.5:1 on Streamlit's dark bg).
     st.markdown(
         f'<div style="font-size:11px;font-weight:700;letter-spacing:.08em;'
-        f'text-transform:uppercase;color:rgba(0,0,0,0.38);margin:18px 0 6px;">'
+        f'text-transform:uppercase;color:#6b7280;margin:18px 0 6px;">'
         f'{label}</div>',
         unsafe_allow_html=True,
     )
@@ -149,6 +154,57 @@ def _load_packets(h3_id: str, city_id: str) -> list[dict]:
         return []
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_pois_for_cells(city_id: str, h3_ids: tuple[str, ...]) -> list[dict]:
+    """Return individual POI points whose centroid falls in any of h3_ids."""
+    if not h3_ids:
+        return []
+    import sqlite3 as _sql
+    from airos.drivers.store.schema import DB_PATH
+    placeholders = ",".join("?" * len(h3_ids))
+    try:
+        conn = _sql.connect(str(DB_PATH))
+        conn.row_factory = _sql.Row
+        rows = conn.execute(
+            f"""
+            SELECT poi_id, h3_id, category, name, latitude, longitude
+            FROM poi_points
+            WHERE city_id = ? AND h3_id IN ({placeholders})
+            """,
+            [city_id, *h3_ids],
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        # Table may not exist yet on older DBs — that's fine, just no POIs to show.
+        return []
+
+
+# Map category → display colour (RGBA) for the scatter layer.
+# Pollution-source categories use warm colours; exposure categories cool.
+_POI_COLOR: dict[str, list[int]] = {
+    "INDUSTRIAL":        [180,  35,  24, 220],  # red
+    "KILN":              [120,   0,   0, 230],  # dark red
+    "CONSTRUCTION":      [217, 119,   6, 220],  # orange
+    "FUEL_STATION":      [234, 88,   12, 220],  # bright orange
+    "WASTE_FACILITY":    [120,  53,  15, 220],  # brown
+    "CREMATORIUM":       [88,   28,  135, 220], # purple
+    "EATERY":            [180, 83,    9, 180],  # light brown
+    "MARKET":            [161, 98,    7, 200],  # tan
+    "TRANSIT_TERMINAL":  [29,  78,  216, 220],  # blue
+    "HOSPITAL":          [22,  101,  52, 220],  # green
+    "SCHOOL":            [21,  94,  117, 200],  # teal
+}
+_POI_ICON: dict[str, str] = {
+    "INDUSTRIAL":       "🏭", "KILN":             "🧱",
+    "CONSTRUCTION":     "🚧", "FUEL_STATION":     "⛽",
+    "WASTE_FACILITY":   "🗑️", "CREMATORIUM":      "🔥",
+    "EATERY":           "🍴", "MARKET":           "🛒",
+    "TRANSIT_TERMINAL": "🚌", "HOSPITAL":         "🏥",
+    "SCHOOL":           "🏫",
+}
+
+
 # ---------------------------------------------------------------------------
 # Section renderers
 # ---------------------------------------------------------------------------
@@ -178,8 +234,8 @@ def _render_s1_summary(row: dict) -> None:
         f'{_badge(f"confidence {conf:.0%}", tier_col)}'
         f'&nbsp;{_badge(tier.upper() + " PRIORITY", tier_col)}'
         f'&nbsp;{_badge(outcome, outcome_col)}'
-        f'&nbsp;<span style="color:rgba(0,0,0,0.45);">agent: {agent}</span>'
-        f'&nbsp;<span style="color:rgba(0,0,0,0.45);">{_time_ago(created)}</span>'
+        f'&nbsp;<span style="color:#6b7280;">agent: {agent}</span>'
+        f'&nbsp;<span style="color:#6b7280;">{_time_ago(created)}</span>'
         f'</div>'
         f'<div style="margin-top:8px;">{domain_chips}</div>',
         unsafe_allow_html=True,
@@ -205,8 +261,8 @@ def _render_s2_hypothesis(chain: list) -> None:
         st.markdown(f"**{i+1}.** {prop}{conf_str}")
         if test:
             st.markdown(
-                f'<div style="margin-left:16px;font-size:12px;color:rgba(0,0,0,0.5);'
-                f'border-left:2px solid rgba(0,0,0,0.1);padding-left:8px;margin-top:2px;">'
+                f'<div style="margin-left:16px;font-size:12px;color:#6b7280;'
+                f'border-left:2px solid rgba(128,128,128,0.25);padding-left:8px;margin-top:2px;">'
                 f'🔍 Verify: {test}</div>',
                 unsafe_allow_html=True,
             )
@@ -216,7 +272,15 @@ def _render_s3_actions(actions: list) -> None:
     """§3 Recommended Actions"""
     _section("§3 — Recommended Actions")
     if not actions:
-        st.caption("No recommended actions recorded.")
+        st.info(
+            "This insight predates the schema change that requires the agent "
+            "to emit at least one recommended action. The next agent run on "
+            "this cell will produce structured actions. Until then, use the "
+            "**💬 Ask agent** tab to draft a follow-up plan from the full "
+            "cell dossier — the LLM has access to all signals, POIs, and the "
+            "cause classifier output and can produce a brief on demand.",
+            icon="ℹ️",
+        )
         return
     for i, a in enumerate(actions):
         if not isinstance(a, dict):
@@ -389,12 +453,72 @@ def _render_s5_spatial(h3_id: str, city_id: str, row: dict) -> None:
                 line_width_min_pixels=3,
                 extruded=False,
             )
+
+            # Layer 3: POIs — load points in target + neighbour cells
+            poi_layer = None
+            poi_categories_shown: dict[str, int] = {}
+            cell_pool = tuple({h3_id, *risk_by_cell.keys()})
+            pois = _load_pois_for_cells(city_id, cell_pool)
+            if pois:
+                poi_data = []
+                for p in pois:
+                    cat = p.get("category", "")
+                    color = _POI_COLOR.get(cat, [100, 100, 100, 200])
+                    poi_data.append({
+                        "lon":      float(p["longitude"]),
+                        "lat":      float(p["latitude"]),
+                        "color":    color,
+                        "name":     p.get("name") or cat.replace("_", " ").title(),
+                        "category": cat.replace("_", " ").title(),
+                    })
+                    poi_categories_shown[cat] = poi_categories_shown.get(cat, 0) + 1
+                poi_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=poi_data,
+                    get_position="[lon, lat]",
+                    get_fill_color="color",
+                    get_radius=18,
+                    radius_min_pixels=4,
+                    radius_max_pixels=10,
+                    pickable=True,
+                    stroked=True,
+                    line_width_min_pixels=0.5,
+                    get_line_color=[255, 255, 255, 200],
+                )
+
             view = pdk.ViewState(latitude=float(lat), longitude=float(lon), zoom=13, pitch=0)
+            layers = [nb_layer, target_layer]
+            if poi_layer is not None:
+                layers.append(poi_layer)
             st.pydeck_chart(
-                pdk.Deck(layers=[nb_layer, target_layer], initial_view_state=view,
-                         map_style="light"),
+                pdk.Deck(
+                    layers=layers,
+                    initial_view_state=view,
+                    map_style="light",
+                    tooltip={"html": "<b>{name}</b><br/>{category}",
+                             "style": {"backgroundColor": "white",
+                                       "color":           "black",
+                                       "fontSize":        "12px"}},
+                ),
                 use_container_width=True,
             )
+
+            # Legend — only the categories actually visible in this view
+            if poi_categories_shown:
+                legend_chips = "&nbsp; ".join(
+                    f'<span style="display:inline-block;width:9px;height:9px;'
+                    f'border-radius:50%;background:rgb({_POI_COLOR[cat][0]},'
+                    f'{_POI_COLOR[cat][1]},{_POI_COLOR[cat][2]});"></span>&nbsp;'
+                    f'{_POI_ICON.get(cat, "•")} {cat.replace("_", " ").title()} '
+                    f'<span style="color:#6b7280;">×{n}</span>'
+                    for cat, n in sorted(poi_categories_shown.items(),
+                                         key=lambda x: -x[1])
+                )
+                st.markdown(
+                    f'<div style="font-size:11px;margin:4px 0 8px 0;">'
+                    f'<b>POIs on map:</b>&nbsp; {legend_chips}</div>',
+                    unsafe_allow_html=True,
+                )
 
             # k=1 ring summary table
             if neighbors:
@@ -473,11 +597,11 @@ def _render_s6_signals(h3_id: str, city_id: str) -> None:
 
             st.markdown(
                 f'<div style="font-size:12px;padding:3px 0 3px 12px;'
-                f'border-left:2px solid rgba(0,0,0,0.08);">'
+                f'border-left:2px solid rgba(128,128,128,0.22);">'
                 f'<b>{sig_name}</b>: {val_str}'
-                + (f'&ensp;<span style="color:rgba(0,0,0,0.45);">{pct_str}</span>' if pct_str else "")
-                + (f'&ensp;<span style="color:rgba(0,0,0,0.35);font-size:11px;">{mean_str}</span>' if mean_str else "")
-                + f'<br><span style="font-size:11px;color:rgba(0,0,0,0.4);">{dq_label} · {obs}</span>'
+                + (f'&ensp;<span style="color:#6b7280;">{pct_str}</span>' if pct_str else "")
+                + (f'&ensp;<span style="color:#9ca3af;font-size:11px;">{mean_str}</span>' if mean_str else "")
+                + f'<br><span style="font-size:11px;color:#9ca3af;">{dq_label} · {obs}</span>'
                 + '</div>',
                 unsafe_allow_html=True,
             )
@@ -514,7 +638,7 @@ def _render_s7_prior_outcomes(h3_id: str, city_id: str, insight_id: str) -> None
         st.markdown(
             f'{_badge(status, col)}'
             f'&nbsp;<span style="font-size:12px;">{finding}…</span>'
-            f'<br><span style="font-size:11px;color:rgba(0,0,0,0.4);">'
+            f'<br><span style="font-size:11px;color:#9ca3af;">'
             f'closed by {closedby} · {when}</span>',
             unsafe_allow_html=True,
         )
@@ -538,13 +662,22 @@ def _render_s8_safety_gates(packets: list) -> None:
     for g in all_gates:
         status = g.get("status", "not_applicable")
         name   = g.get("gate") or g.get("name", "unnamed gate")
-        evid   = g.get("evidence") or g.get("reason", "")
+        # Detail text can arrive under several keys depending on which writer
+        # produced the gate (insight_packets uses `note`; older writers use
+        # `evidence`/`reason`).  Read all three.
+        evid   = (
+            g.get("evidence")
+            or g.get("reason")
+            or g.get("note")
+            or g.get("description")
+            or ""
+        )
         col    = _GATE_CSS.get(status, "#6b7280")
         icon   = {"pass": "✅", "fail": "❌", "not_applicable": "➖"}.get(status, "❓")
         st.markdown(
             f'{icon} {_badge(status, col)}'
             f'&nbsp;<span style="font-size:13px;font-weight:600;">{name}</span>'
-            + (f'<br><span style="font-size:12px;color:rgba(0,0,0,0.5);padding-left:22px;">{evid}</span>' if evid else ""),
+            + (f'<br><span style="font-size:12px;color:#6b7280;padding-left:22px;">{evid}</span>' if evid else ""),
             unsafe_allow_html=True,
         )
 
@@ -613,6 +746,37 @@ def render_evidence_panel(row: dict, *, scope: str = "ev") -> bool:
     actions = _parse(row.get("recommended_actions_json") or row.get("recommended_actions") or [])
     notes   = _parse(row.get("uncertainty_notes_json") or row.get("uncertainty_notes") or [])
     packets = _load_packets(h3_id, city_id) if h3_id and city_id else []
+
+    # Fallback: older insights (before schema required recommended_actions)
+    # may have an empty list. Look up the associated packet's routing_action
+    # so the section is never blank.
+    if not actions and h3_id and city_id:
+        try:
+            import sqlite3 as _sql
+            from airos.drivers.store.schema import DB_PATH
+            _conn = _sql.connect(str(DB_PATH))
+            _row = _conn.execute(
+                """
+                SELECT packet_json FROM h3_packets
+                WHERE h3_id = ? AND city_id = ?
+                  AND json_extract(packet_json, '$.source_insight_id') = ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (h3_id, city_id, insight_id),
+            ).fetchone()
+            _conn.close()
+            if _row and _row[0]:
+                _pj = json.loads(_row[0])
+                _ra = _pj.get("routing_action")
+                if _ra:
+                    actions = [{
+                        "action":    _ra,
+                        "actor":     _pj.get("routed_to") or "ward_engineer",
+                        "urgency":   _pj.get("urgency", "within_24h"),
+                        "condition": "Auto-derived from cause-classifier routing — verify in field before dispatch.",
+                    }]
+        except Exception:
+            pass
 
     _render_s1_summary(row)
     st.divider()

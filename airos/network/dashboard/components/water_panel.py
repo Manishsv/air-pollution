@@ -377,6 +377,7 @@ def render_water_panel() -> None:
     render_domain_header(
         title="Water Quality",
         caption="Sentinel-2 SR water quality indices (MNDWI / NDTI / CI / FAI) aggregated to H3 cells.",
+        domain="water",
     )
 
     city_id, bbox, live, lookback = _city_selector()
