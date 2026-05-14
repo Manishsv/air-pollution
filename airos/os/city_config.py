@@ -1,66 +1,92 @@
 """
 City registry for the AIR Climate Suite.
 
-Each entry defines the canonical city_id, display name, bounding box, and
-CPCB city name aliases used by the CPCB connector.
+Loads from `data/config/cities.yaml` at import time so the ingestor and
+dashboard share a single source of truth. Adding a new city is a YAML
+edit + restart — no Python changes needed.
 
 Connector selection is driven by environment variables (not per-city config):
-  CPCB_API_KEY   — if set, CPCB is used for air quality
-  EARTHDATA_TOKEN — if set, NASA Earthdata (MODIS LST + GPM IMERG) is used for heat and flood
+  CPCB_API_KEY    — if set, CPCB is used for air quality
+  EARTHDATA_TOKEN — if set, NASA Earthdata (MODIS LST + GPM IMERG)
   Fallback: OpenMeteo for any domain whose env var is absent
 """
 from __future__ import annotations
 
-CITIES: dict[str, dict] = {
-    "bangalore": {
-        "display_name": "Bangalore",
-        "cpcb_name":    "Bengaluru",      # city name as it appears in CPCB API
-        "centre":       (12.9716, 77.5946),
-        "zoom":         11,
-        "bbox": dict(lat_min=12.87, lon_min=77.49, lat_max=13.07, lon_max=77.69),
-        "timezone":     "Asia/Kolkata",
-    },
-    "delhi": {
-        "display_name": "Delhi",
-        "cpcb_name":    "Delhi",
-        "centre":       (28.6139, 77.2090),
-        "zoom":         11,
-        "bbox": dict(lat_min=28.50, lon_min=76.90, lat_max=28.80, lon_max=77.30),
-        "timezone":     "Asia/Kolkata",
-    },
-    "mumbai": {
-        "display_name": "Mumbai",
-        "cpcb_name":    "Mumbai",
-        "centre":       (19.0760, 72.8777),
-        "zoom":         11,
-        "bbox": dict(lat_min=18.90, lon_min=72.75, lat_max=19.20, lon_max=73.00),
-        "timezone":     "Asia/Kolkata",
-    },
-    "hyderabad": {
-        "display_name": "Hyderabad",
-        "cpcb_name":    "Hyderabad",
-        "centre":       (17.3850, 78.4867),
-        "zoom":         11,
-        "bbox": dict(lat_min=17.30, lon_min=78.35, lat_max=17.55, lon_max=78.60),
-        "timezone":     "Asia/Kolkata",
-    },
-    "chennai": {
-        "display_name": "Chennai",
-        "cpcb_name":    "Chennai",
-        "centre":       (13.0827, 80.2707),
-        "zoom":         11,
-        "bbox": dict(lat_min=12.90, lon_min=80.15, lat_max=13.15, lon_max=80.35),
-        "timezone":     "Asia/Kolkata",
-    },
-    "pune": {
-        "display_name": "Pune",
-        "cpcb_name":    "Pune",
-        "centre":       (18.5204, 73.8567),
-        "zoom":         11,
-        "bbox": dict(lat_min=18.45, lon_min=73.75, lat_max=18.65, lon_max=73.98),
-        "timezone":     "Asia/Kolkata",
-    },
+import logging
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+# Path resolution: this file is at airos/os/city_config.py, so the repo
+# root is parents[2]. The YAML lives at data/config/cities.yaml.
+_REPO_ROOT  = Path(__file__).resolve().parents[2]
+_CITIES_YML = _REPO_ROOT / "data" / "config" / "cities.yaml"
+
+# CPCB API uses inconsistent city spellings — these overrides map our
+# canonical city_id to the spelling the CPCB feed expects. Only listed
+# when the CPCB name differs from a title-cased city_id (Bangalore →
+# "Bengaluru" is the only current case; others default to city_id.title()).
+_CPCB_NAME_OVERRIDES: dict[str, str] = {
+    "bangalore": "Bengaluru",
 }
+
+# Map zoom default for cities whose explicit zoom isn't set in YAML.
+_DEFAULT_ZOOM = 11
+
+# Display-name suffix to strip ("Bangalore, India" → "Bangalore") so the
+# inbox selectbox stays compact. Keeps backward compat with the old
+# hardcoded names.
+_STRIP_SUFFIX = ", India"
+
+
+def _bbox_centre(bbox: dict) -> tuple[float, float]:
+    """Compute the (lat, lon) midpoint of a bbox dict."""
+    return (
+        (bbox["lat_min"] + bbox["lat_max"]) / 2.0,
+        (bbox["lon_min"] + bbox["lon_max"]) / 2.0,
+    )
+
+
+def _load_cities() -> dict[str, dict]:
+    """Parse cities.yaml and return only enabled cities, in YAML order."""
+    if not _CITIES_YML.exists():
+        logger.warning(
+            "cities.yaml not found at %s — city registry will be empty.",
+            _CITIES_YML,
+        )
+        return {}
+    raw = yaml.safe_load(_CITIES_YML.read_text()) or {}
+    cities_raw = raw.get("cities", {}) or {}
+    out: dict[str, dict] = {}
+    for cid, cfg in cities_raw.items():
+        if not cfg.get("enabled", False):
+            continue
+        bbox = cfg.get("bbox") or {}
+        if not bbox or not all(k in bbox for k in ("lat_min", "lon_min", "lat_max", "lon_max")):
+            logger.warning("City %r missing bbox — skipping.", cid)
+            continue
+        display = cfg.get("display_name") or cid.title()
+        if display.endswith(_STRIP_SUFFIX):
+            display = display[: -len(_STRIP_SUFFIX)]
+        out[cid] = {
+            "display_name": display,
+            "cpcb_name":    _CPCB_NAME_OVERRIDES.get(cid, cid.title()),
+            "centre":       cfg.get("centre") or _bbox_centre(bbox),
+            "zoom":         cfg.get("zoom", _DEFAULT_ZOOM),
+            "bbox":         dict(bbox),   # copy so callers don't mutate the registry
+            "timezone":     cfg.get("timezone", "Asia/Kolkata"),
+        }
+    if not out:
+        logger.warning("No enabled cities loaded from %s", _CITIES_YML)
+    return out
+
+
+# Module-level dict consumed by the dashboard and ingestor. Loaded once at
+# import; restart the process (scheduler / dashboard) after editing YAML.
+CITIES: dict[str, dict[str, Any]] = _load_cities()
 
 
 def get_city(city_id: str) -> dict:
@@ -78,7 +104,7 @@ def get_centre(city_id: str) -> tuple[float, float]:
 
 
 def get_zoom(city_id: str) -> int:
-    return get_city(city_id).get("zoom", 11)
+    return get_city(city_id).get("zoom", _DEFAULT_ZOOM)
 
 
 def get_timezone(city_id: str) -> str:
@@ -95,10 +121,14 @@ def get_timezone(city_id: str) -> str:
 
 
 def get_cpcb_name(city_id: str) -> str:
-    return get_city(city_id).get("cpcb_name", city_id)
+    try:
+        return get_city(city_id).get("cpcb_name", city_id.title())
+    except KeyError:
+        return _CPCB_NAME_OVERRIDES.get(city_id.lower(), city_id.title())
 
 
-# Panel-ready list: display_name → city_id (for Streamlit selectbox)
+# Panel-ready list: display_name → city_id (for Streamlit selectbox).
+# Rebuilt from CITIES so adding a city only requires editing the YAML.
 PANEL_CITIES: dict[str, str] = {
     v["display_name"]: k for k, v in CITIES.items()
 }
