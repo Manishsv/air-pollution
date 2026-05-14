@@ -1001,7 +1001,12 @@ def render_inbox_panel() -> None:
                                      label_visibility="collapsed")
         outcome_filter = outcome_opts[outcome_label]
     with fc_doms:
-        all_domains = ["air","water","noise","fire","heat","flood","construction","green","waste"]
+        # Filter to the assessment domains — those whose drivers emit per-cell
+        # risk levels and trigger insights. Pulled from the driver registry so
+        # adding a domain to drivers_registry.yaml automatically updates this
+        # selector (no hardcoded list to keep in sync).
+        from airos.os.sdk.driver_loader import list_domains as _list_domains
+        all_domains = _list_domains("assessment")
         dom_filter  = st.multiselect("Domains", all_domains, key="ib_domains",
                                      placeholder="All domains", label_visibility="collapsed")
     with fc_sort:

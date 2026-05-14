@@ -1022,6 +1022,25 @@ Both are fetched at hourly resolution and aggregated into 6-hour buckets. No API
 
 This appendix describes, for every active domain, **what is fetched, how raw observations are transformed into per-cell signals, and the caveats a reviewer must hold in mind**. The catalog is the operational ground truth — driver class declarations (`signal_names`, `data_sources`) and ingestor source files are the authoritative implementation.
 
+### What is a "domain"?
+
+A domain is a coherent class of signals sharing one ingest function, one cadence, one provenance family, and one entry in `data/config/drivers_registry.yaml`. The registry is the **single source of truth**; the helper `airos.os.sdk.driver_loader.list_domains(kind=...)` is the only enumeration AirOS code reads from. Every other historical list (`ALL_DOMAINS` in the ingestor, the inbox UI filter, etc.) is now derived from the registry.
+
+Domains fall into two kinds, distinguished by each driver's `produces_assessments` class attribute:
+
+* **Assessment domains (`kind="assessment"`)** — drivers that emit per-cell `risk_level` rows into `h3_assessments`. These are the domains a sweep can produce an *insight* about. Currently 10: `air`, `construction`, `crowd`, `fire`, `flood`, `green`, `heat`, `noise`, `waste`, `water`. They show up in the inbox domain filter.
+* **Context domains (`kind="context"`)** — drivers that emit signals into `h3_signals` but do not produce assessments. They are the structural / static / city-broadcast layers the agent uses to reason about *why* an assessment domain is elevated, never the basis for an insight by themselves. Currently 8: `buildings`, `census`, `drains`, `nightlights`, `pois`, `roads`, `terrain`, `weather`. They never appear as a primary domain in `domains_involved`; the cause classifier and the agent prompt (v0.7) both enforce this.
+
+Adding a new domain is now a five-step workflow:
+
+1. Add the driver class somewhere under `airos/drivers/store/drivers/` with `domain`, `cadence_hours`, `produces_assessments`, and `signal_names`.
+2. Implement the ingest function and wire it into `_DOMAIN_FN` in `airos/drivers/store/ingestor.py`.
+3. Register the driver in `data/config/drivers_registry.yaml`.
+4. Add a per-domain Appendix D section here.
+5. (If it is an assessment domain) add cause-routing entries in `data/config/department_routing.yaml` per city you want it to dispatch in.
+
+Steps 4 and 5 are inherently per-domain; the other three are mechanical and could be wrapped in an onboarding CLI.
+
 ### D.1 air
 
 | Aspect | Detail |

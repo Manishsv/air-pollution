@@ -82,19 +82,16 @@ def _city_bboxes() -> dict[str, dict]:
     return {c.id: c.bbox for c in all_cities()}
 
 ALL_CITIES  = all_city_ids()
-ALL_DOMAINS = [
-    "air", "fire", "heat", "flood", "water", "waste", "construction", "green", "noise", "weather",
-    # Urban infrastructure — OSM-derived structural context (weekly cadence)
-    "buildings", "roads", "drains", "crowd",
-    # Terrain — DEM-derived static context (quarterly cadence)
-    "terrain",
-    # Night Lights — VIIRS monthly composite (30-day cadence)
-    "nightlights",
-    # POIs — OSM categorised points-of-interest (quarterly cadence)
-    "pois",
-    # Census — GHSL_POP residential population grid (yearly cadence)
-    "census",
-]
+# ALL_DOMAINS is derived from the active driver registry — the single
+# source of truth for "what is a domain?". Hardcoded list deleted; see
+# airos/os/sdk/driver_loader.list_domains(). Lazy-evaluated via __getattr__
+# so importing this module doesn't force the driver loader (and its
+# conformance checks) to run before they're actually needed.
+def __getattr__(name):
+    if name == "ALL_DOMAINS":
+        from airos.os.sdk.driver_loader import list_domains
+        return list_domains()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Siting is computed separately from regular domain ingest — monthly cadence.
 # Use run_siting_batch() directly rather than including "siting" in ALL_DOMAINS,
@@ -1548,8 +1545,10 @@ def run(
         set_current_ingest_run_id, reset_ingest_run_id,
     )
 
-    cities  = cities  or ALL_CITIES
-    domains = domains or ALL_DOMAINS
+    cities = cities or ALL_CITIES
+    if domains is None:
+        from airos.os.sdk.driver_loader import list_domains
+        domains = list_domains()
 
     ingest_run_id = f"ir_{_uuid.uuid4().hex[:14]}"
     _token = set_current_ingest_run_id(ingest_run_id)

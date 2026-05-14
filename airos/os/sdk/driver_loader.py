@@ -257,3 +257,34 @@ def get_active_drivers(*, reload: bool = False) -> dict[str, "H3DataSourceDriver
     if _active_drivers is None or reload:
         _active_drivers = load_drivers(_REGISTRY_PATH)
     return _active_drivers
+
+
+def list_domains(kind: str = "any") -> list[str]:
+    """Return the domain ids of currently-active drivers, optionally
+    filtered by kind. Single source of truth for "what is a domain?" —
+    replaces hardcoded enumerations scattered across ingestor.py and the
+    dashboard.
+
+    kind:
+      'any'        — every active driver (default).
+      'assessment' — drivers with produces_assessments=True; these emit
+                     per-cell risk levels and surface in the inbox.
+      'context'    — drivers with produces_assessments=False; structural
+                     / static signals (population, terrain, OSM
+                     infrastructure, weather) that inform reasoning but
+                     don't themselves trigger insights.
+
+    Returns a sorted list so callers get a stable, reproducible order.
+    """
+    drivers = get_active_drivers()
+    if kind == "any":
+        return sorted(drivers.keys())
+    if kind not in ("assessment", "context"):
+        raise ValueError(
+            f"list_domains: kind must be 'any' | 'assessment' | 'context', got {kind!r}"
+        )
+    want_assess = (kind == "assessment")
+    return sorted(
+        d for d, drv in drivers.items()
+        if bool(getattr(drv, "produces_assessments", False)) == want_assess
+    )
