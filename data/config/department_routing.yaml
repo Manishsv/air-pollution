@@ -137,6 +137,132 @@ cities:
         secondary: [imd_pune, mpcb]
         action_template: "Issue public health advisory; coordinate with facilities to reduce emissions"
 
+  lucknow:
+    departments:
+      lmc_solid_waste:
+        name: "Lucknow Municipal Corporation — Solid Waste"
+        causes: [waste_burning]
+        action_template: "Dispatch field team to suppress illegal waste burning"
+
+      lda_roads:
+        name: "Lucknow Development Authority — Roads & Infrastructure"
+        causes: [construction_dust, traffic_resuspension]
+        action_template: "Issue stop-work notice / water-spraying order for dust suppression"
+
+      lucknow_traffic_police:
+        name: "Lucknow Traffic Police"
+        causes: [traffic_resuspension]
+        action_template: "Deploy traffic management to reduce congestion and idling"
+
+      uppcb_lucknow:
+        name: "Uttar Pradesh Pollution Control Board (Lucknow)"
+        causes: [industrial_emission, regional_transport]
+        action_template: "Issue compliance notice to facility; schedule inspection"
+
+      lmc_health:
+        name: "LMC Public Health"
+        causes: [meteorological_trapping, construction_dust, waste_burning, industrial_emission]
+        action_template: "Issue public health advisory; prepare contingency for vulnerable populations"
+
+      imd_lucknow:
+        name: "IMD Lucknow (Meteorology)"
+        causes: [meteorological_trapping]
+        action_template: "Coordinate weather-based advisory; notify emergency services of trapping event"
+
+    cause_routing:
+      construction_dust:
+        primary: lda_roads
+        secondary: [lmc_health, uppcb_lucknow]
+        action_template: "Enforce dust suppression measures at active construction sites"
+
+      waste_burning:
+        primary: lmc_solid_waste
+        secondary: [lmc_health, uppcb_lucknow]
+        action_template: "Locate and extinguish illegal waste burning; issue penalties"
+
+      traffic_resuspension:
+        primary: lucknow_traffic_police
+        secondary: [lda_roads, lmc_health]
+        action_template: "Reduce vehicle idling and road dust via traffic flow management"
+
+      industrial_emission:
+        primary: uppcb_lucknow
+        secondary: [lmc_health]
+        action_template: "Inspect industrial facilities for emission violations"
+
+      meteorological_trapping:
+        primary: lmc_health
+        secondary: [imd_lucknow, uppcb_lucknow]
+        action_template: "Issue public health advisory; coordinate with facilities to reduce emissions"
+
+      regional_transport:
+        primary: uppcb_lucknow
+        secondary: [lmc_health, imd_lucknow]
+        action_template: "Pollution is transported from upwind sources outside this cell — coordinate with regional/airshed-level intervention; local enforcement unlikely to resolve. Issue advisory for vulnerable groups during peak hours."
+
+  kanpur:
+    departments:
+      kmc_solid_waste:
+        name: "Kanpur Municipal Corporation — Solid Waste"
+        causes: [waste_burning]
+        action_template: "Dispatch field team to suppress illegal waste burning"
+
+      kda_roads:
+        name: "Kanpur Development Authority — Roads & Infrastructure"
+        causes: [construction_dust, traffic_resuspension]
+        action_template: "Issue stop-work notice / water-spraying order for dust suppression"
+
+      kanpur_traffic_police:
+        name: "Kanpur Traffic Police"
+        causes: [traffic_resuspension]
+        action_template: "Deploy traffic management to reduce congestion and idling"
+
+      uppcb_kanpur:
+        name: "Uttar Pradesh Pollution Control Board (Kanpur)"
+        causes: [industrial_emission, regional_transport]
+        action_template: "Issue compliance notice to facility; schedule inspection. Kanpur has dense leather-tanning + chemical industry — prioritise river-adjacent units."
+
+      kmc_health:
+        name: "KMC Public Health"
+        causes: [meteorological_trapping, construction_dust, waste_burning, industrial_emission]
+        action_template: "Issue public health advisory; prepare contingency for vulnerable populations"
+
+      imd_kanpur:
+        name: "IMD Kanpur (Meteorology)"
+        causes: [meteorological_trapping]
+        action_template: "Coordinate weather-based advisory; notify emergency services of trapping event"
+
+    cause_routing:
+      construction_dust:
+        primary: kda_roads
+        secondary: [kmc_health, uppcb_kanpur]
+        action_template: "Enforce dust suppression measures at active construction sites"
+
+      waste_burning:
+        primary: kmc_solid_waste
+        secondary: [kmc_health, uppcb_kanpur]
+        action_template: "Locate and extinguish illegal waste burning; issue penalties"
+
+      traffic_resuspension:
+        primary: kanpur_traffic_police
+        secondary: [kda_roads, kmc_health]
+        action_template: "Reduce vehicle idling and road dust via traffic flow management"
+
+      industrial_emission:
+        primary: uppcb_kanpur
+        secondary: [kmc_health]
+        action_template: "Inspect industrial facilities for emission violations. Kanpur's leather-tanning belt along the Ganga is a known cluster — coordinate inspection with the CPCB Ganga Action Plan."
+
+      meteorological_trapping:
+        primary: kmc_health
+        secondary: [imd_kanpur, uppcb_kanpur]
+        action_template: "Issue public health advisory; coordinate with facilities to reduce emissions"
+
+      regional_transport:
+        primary: uppcb_kanpur
+        secondary: [kmc_health, imd_kanpur]
+        action_template: "Pollution is transported from upwind sources outside this cell — coordinate with regional/airshed-level intervention; local enforcement unlikely to resolve. Kanpur sits in the Indo-Gangetic Plain (high winter PM transport corridor); flag for inter-state coordination during November-January peak."
+
 # Fallback routing when no city-specific config exists
 default:
   cause_routing:

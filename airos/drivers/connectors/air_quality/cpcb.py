@@ -33,6 +33,8 @@ _CITY_ALIASES: dict[str, list[str]] = {
     "chennai":    ["Chennai"],
     "kolkata":    ["Kolkata"],
     "pune":       ["Pune"],
+    "lucknow":    ["Lucknow"],
+    "kanpur":     ["Kanpur"],
 }
 
 # Columns we emit (matches openmeteo_aq.py output)

@@ -90,6 +90,10 @@ ALL_DOMAINS = [
     "terrain",
     # Night Lights — VIIRS monthly composite (30-day cadence)
     "nightlights",
+    # POIs — OSM categorised points-of-interest (quarterly cadence)
+    "pois",
+    # Census — GHSL_POP residential population grid (yearly cadence)
+    "census",
 ]
 
 # Siting is computed separately from regular domain ingest — monthly cadence.

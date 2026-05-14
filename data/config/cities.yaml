@@ -124,12 +124,23 @@ cities:
     display_name: "Lucknow, India"
     country: IN
     timezone: Asia/Kolkata
-    enabled: false
+    enabled: true
     bbox:
       lat_min: 26.739
       lon_min: 80.840
       lat_max: 26.952
       lon_max: 81.072
+
+  kanpur:
+    display_name: "Kanpur, India"
+    country: IN
+    timezone: Asia/Kolkata
+    enabled: true
+    bbox:
+      lat_min: 26.350
+      lon_min: 80.200
+      lat_max: 26.550
+      lon_max: 80.450
 
   surat:
     display_name: "Surat, India"
