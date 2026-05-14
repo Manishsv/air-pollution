@@ -26,6 +26,7 @@ from airos.os.sdk.client import AirOSClient
 from airos.network.dashboard.components.overview_panel import render_overview_panel
 
 # ── Primary views ─────────────────────────────────────────────────────────
+from airos.network.dashboard.components.citymap_panel import render_citymap_panel
 from airos.network.dashboard.components.inbox_panel import render_inbox_panel
 
 # ── Raw Data Explorer (source-centric) ────────────────────────────────────
@@ -272,12 +273,21 @@ def main():
     _render_sidebar(audit=audit, metrics=metrics, base_path=base_path)
 
     # ── Primary navigation ────────────────────────────────────────────────
-    t_overview, t_inbox, t_domains, t_ops = st.tabs([
+    # 🗺️ Map is the default landing view (situational awareness — the
+    # full-screen H3 map with assessment-domain overlays, methodology
+    # §11 design principle of "see the place, then the alerts"). Inbox
+    # remains a sibling tab for operator triage.
+    t_map, t_overview, t_inbox, t_domains, t_ops = st.tabs([
+        "🗺️ Map",
         "🏙️ Overview",
         "📬 Inbox",
         "📊 Domains",
         "🔧 Operations",
     ])
+
+    # ── Map (full-screen situational awareness — default landing view) ────
+    with t_map:
+        render_citymap_panel()
 
     # ── Overview (stakeholder views) ──────────────────────────────────────
     with t_overview:
