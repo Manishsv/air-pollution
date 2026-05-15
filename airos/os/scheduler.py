@@ -95,6 +95,36 @@ def _run_ingest(cities: list[str], domains: list[str]) -> dict:
         return {}
 
 
+def _run_geocode_catchup(batch_size: int = 60) -> dict:
+    """Process a small batch of cells with missing area_name via Nominatim.
+
+    Lets newly onboarded cities get reverse-geocoded automatically over a
+    few hours of normal scheduler operation — no manual step.
+    Nominatim is rate-limited at 1.1s/call, so we cap the batch so it
+    never exceeds ~70s of wall time per sweep. Returns {"done", "cached",
+    "failed"} aggregated across whatever cities had pending cells.
+    """
+    from airos.drivers.store.geocoder import geocode_all_cells
+    try:
+        out = geocode_all_cells(limit=batch_size)
+    except Exception as exc:
+        logger.warning("[geocode] catch-up failed: %s", exc)
+        return {}
+    if not out:
+        return {}
+    total = {"done": 0, "cached": 0, "failed": 0}
+    for city, stats in out.items():
+        for k in total:
+            total[k] += int(stats.get(k, 0))
+    if total["done"] or total["cached"]:
+        logger.info(
+            "[geocode] catch-up: %d cell(s) named, %d cached, %d failed "
+            "across %d city(s)", total["done"], total["cached"],
+            total["failed"], len(out),
+        )
+    return total
+
+
 def _run_agent(cities: list[str], top_n: int) -> dict:
     """Run the H3 Expert Agent for each city. Returns {city: insights_count}."""
     from airos.agents.h3_expert import run_top_risk_cells
@@ -216,6 +246,11 @@ class Scheduler:
             for n in dm.values() if isinstance(n, int) and n > 0
         )
         logger.info("Sweep #%d ingest: %d rows written", self._sweep_count, total_rows)
+
+        # 1b — Reverse-geocode pending cells (newly onboarded cities get
+        # named automatically over a few hours of normal sweep operation).
+        # Capped at 60 cells/sweep (~66s at Nominatim's 1.1s rate limit).
+        _run_geocode_catchup(batch_size=60)
 
         # 2 — Agent (if enabled)
         agent_results: dict = {}

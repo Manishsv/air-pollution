@@ -123,12 +123,17 @@ def _nominatim_reverse(lat: float, lon: float, cache: dict) -> str:
 def geocode_all_cells(
     city_id: Optional[str] = None,
     overwrite: bool = False,
+    limit: Optional[int] = None,
 ) -> dict[str, dict[str, int]]:
     """Reverse-geocode H3 cell centroids for one or all cities.
 
     Args:
         city_id:   If given, process only this city.  Otherwise all cities.
         overwrite: If True, re-geocode cells that already have an area_name.
+        limit:     If given, process at most this many cells per call. Used
+                   by the scheduler's per-sweep catch-up step so newly
+                   onboarded cities get geocoded over a few hours without
+                   ever dominating sweep wall-clock.
 
     Returns:
         {city: {"done": N, "cached": C, "failed": K}}
@@ -151,11 +156,14 @@ def geocode_all_cells(
         where += " AND city_id = ?"
         params.append(city_id)
 
-    df = store.fetchdf(
+    sql = (
         f"SELECT h3_id, city_id, centroid_lat, centroid_lon "
-        f"FROM h3_metadata {where} ORDER BY city_id, centroid_lat, centroid_lon",
-        params if params else None,
+        f"FROM h3_metadata {where} ORDER BY city_id, centroid_lat, centroid_lon"
     )
+    if limit and limit > 0:
+        sql += f" LIMIT {int(limit)}"
+
+    df = store.fetchdf(sql, params if params else None)
 
     if df.empty:
         logger.info("No cells to geocode (all already named, or no metadata).")
