@@ -15,7 +15,7 @@
 # in the audit trail so historical packets can be reproduced against the
 # weights that were in force at the time.
 
-version: weights-v0.5-urban-canyon
+version: weights-v0.6-regional-upwind
 
 # ── Tie-breaker / routing margins ────────────────────────────────────────────
 margins:
@@ -108,8 +108,14 @@ causes:
 
   regional_transport:
     # Pollution arriving from upwind cells dominates over local emission.
-    # Triggers when UPWIND_PM25_LOAD exceeds the cell's own PM25.
-    upwind_dominates:      { weight: 0.45, band: recent }   # upwind PM > own PM
-    upwind_high:           { weight: 0.20, band: recent }   # upwind PM elevated absolutely
-    upwind_wind_moderate:  { weight: 0.15, band: forecast } # wind strong enough to transport
-    low_local_sources:     { weight: 0.10, band: static }   # few local POIs argues against local cause
+    # Two upwind scales now feed this cause:
+    #   UPWIND_PM25_LOAD (k≤2, ~1.5 km)   — neighbourhood-scale advection
+    #   UPWIND_PM25_LOAD_K10 (k≤10, ~7.5 km) — regional-scale, stronger
+    #     evidence that the cell is a true receptor of cross-district
+    #     transport (methodology §D.1).
+    upwind_dominates:           { weight: 0.35, band: recent }   # k=2 upwind PM > own PM
+    upwind_high:                { weight: 0.15, band: recent }   # k=2 upwind PM elevated
+    upwind_regional_dominates:  { weight: 0.50, band: recent }   # k=10 upwind PM > 1.5× own
+    upwind_regional_high:       { weight: 0.25, band: recent }   # k=10 upwind PM ≥ 100
+    upwind_wind_moderate:       { weight: 0.15, band: forecast } # wind strong enough
+    low_local_sources:          { weight: 0.10, band: static }   # few local POIs

@@ -181,6 +181,98 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
+def _load_source_receptor_ranking(
+    aoi_id: str, *, top_n: int = 8,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Identify top emission sources and top receptors inside an AOI.
+
+    Pulls the latest PM25 + UPWIND_PM25_LOAD_K10 (~7.5 km regional cone)
+    per cell inside the AOI bbox, then computes:
+
+      source_score   = max(PM25 - UPWIND_PM25_LOAD_K10, 0)
+                       Cells that generate more pollution than they receive
+                       — net contributors to the airshed.
+      receptor_score = UPWIND_PM25_LOAD_K10
+                       Cells receiving the most incoming pollution — net
+                       importers, regardless of local emission level.
+
+    Returns (sources_df, receptors_df), each with columns
+    (h3_id, pm25, upwind_k10, source_score | receptor_score, area_name).
+    Empty frames if the necessary signals haven't been ingested yet.
+    """
+    from airos.os.aoi_registry import bbox_of
+    bbox = bbox_of(aoi_id)
+    conn = sqlite3.connect(_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.h3_id, s.signal, s.value, m.area_name
+            FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+            INNER JOIN (
+                SELECT s2.h3_id, s2.signal, MAX(s2.hour_bucket) AS hb
+                FROM h3_signals s2
+                INNER JOIN h3_metadata m2 ON m2.h3_id = s2.h3_id
+                WHERE s2.signal IN ('PM25', 'UPWIND_PM25_LOAD_K10')
+                  AND s2.value IS NOT NULL
+                  AND m2.centroid_lat BETWEEN ? AND ?
+                  AND m2.centroid_lon BETWEEN ? AND ?
+                GROUP BY s2.h3_id, s2.signal
+            ) latest ON latest.h3_id = s.h3_id
+                    AND latest.signal = s.signal
+                    AND latest.hb = s.hour_bucket
+            WHERE s.value IS NOT NULL
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
+            """,
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"],
+             bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        empty = pd.DataFrame(columns=["h3_id", "pm25", "upwind_k10",
+                                      "score", "area_name"])
+        return empty, empty.copy()
+
+    df = pd.DataFrame([dict(r) for r in rows])
+    pivot = (df.pivot_table(index=["h3_id", "area_name"], columns="signal",
+                            values="value", aggfunc="first")
+               .reset_index()
+               .rename_axis(None, axis=1))
+    # Ensure both columns exist even if one signal is missing for all cells
+    for col in ("PM25", "UPWIND_PM25_LOAD_K10"):
+        if col not in pivot.columns:
+            pivot[col] = None
+    pivot = pivot.rename(columns={"PM25": "pm25",
+                                  "UPWIND_PM25_LOAD_K10": "upwind_k10"})
+
+    valid = pivot.dropna(subset=["pm25"]).copy()
+    valid["upwind_k10"] = valid["upwind_k10"].fillna(0.0)
+
+    valid["source_score"]   = (valid["pm25"] - valid["upwind_k10"]).clip(lower=0)
+    valid["receptor_score"] = valid["upwind_k10"]
+
+    sources = (valid.sort_values("source_score", ascending=False)
+                    .head(top_n)
+                    .loc[:, ["h3_id", "pm25", "upwind_k10",
+                             "source_score", "area_name"]]
+                    .rename(columns={"source_score": "score"})
+                    .reset_index(drop=True))
+    receptors = (valid.sort_values("receptor_score", ascending=False)
+                      .head(top_n)
+                      .loc[:, ["h3_id", "pm25", "upwind_k10",
+                               "receptor_score", "area_name"]]
+                      .rename(columns={"receptor_score": "score"})
+                      .reset_index(drop=True))
+    return sources, receptors
+
+
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_event_points(aoi_id: str) -> pd.DataFrame:
     """Active point-event signals inside the AOI bbox — fire FRP > 0,
     waste SITE = 1, crowd GATHERING_ALERT = 1, flood risk_level in
@@ -444,6 +536,53 @@ _AOI_KIND_ICON: dict[str, str] = {
 }
 
 
+def _render_source_receptor(aoi_id: str) -> None:
+    """Top-N source + receptor cells for non-city AOIs.
+
+    A "source" cell is a net emitter (local PM > regional upwind PM —
+    contributes more than it receives). A "receptor" cell is dominated
+    by incoming regional load (high UPWIND_PM25_LOAD_K10). The split
+    tells the airshed dispatcher who to enforce on (sources) versus
+    who needs cross-jurisdiction coordination (receptors).
+    """
+    sources, receptors = _load_source_receptor_ranking(aoi_id, top_n=8)
+    if sources.empty and receptors.empty:
+        st.caption(
+            "_No PM25 / UPWIND_PM25_LOAD_K10 yet — run an air ingest "
+            "sweep first._"
+        )
+        return
+
+    def _fmt_row(r: pd.Series, score_label: str) -> str:
+        area = r.get("area_name") or "—"
+        pm = r["pm25"] or 0
+        up = r["upwind_k10"] or 0
+        return (
+            f"<small><b>{area}</b> · {score_label} {r['score']:.1f}  "
+            f"<span style='color:#888;'>(PM25 {pm:.0f}, "
+            f"upwind-7km {up:.0f})</span></small>"
+        )
+
+    if not sources.empty:
+        st.markdown("**🏭 Top emission sources**")
+        st.caption(
+            "_Cells where local PM exceeds regional incoming — net "
+            "contributors to the airshed. Local enforcement targets._"
+        )
+        for _, r in sources.iterrows():
+            st.markdown(_fmt_row(r, "net+"), unsafe_allow_html=True)
+        st.markdown("")
+
+    if not receptors.empty:
+        st.markdown("**📥 Top receptors**")
+        st.caption(
+            "_Cells receiving the most incoming pollution from upwind "
+            "(~7 km cone). Need cross-jurisdiction coordination._"
+        )
+        for _, r in receptors.iterrows():
+            st.markdown(_fmt_row(r, "in"), unsafe_allow_html=True)
+
+
 def render_citymap_panel() -> None:
     """Full-screen AOI situational-awareness map. Registered as the
     default landing view in app.py. Selecting any AOI — city, airshed,
@@ -611,6 +750,13 @@ def render_citymap_panel() -> None:
                 f"{aoi_cfg['kind']} · H3 res {resolution_of(aoi_id)} · "
                 f"{n_cells:,} assessed cells"
             )
+
+            # Source/receptor ranking — only meaningful for AOIs that span
+            # multiple districts (airshed / watershed / corridor). Cities
+            # are usually a single emission/receiver zone so the split is
+            # noisier than it is useful.
+            if aoi_cfg["kind"] in ("airshed", "watershed", "corridor"):
+                _render_source_receptor(aoi_id)
             if n_insight:
                 tier_counts = insight_df["priority_tier"].value_counts().to_dict()
                 bits = []

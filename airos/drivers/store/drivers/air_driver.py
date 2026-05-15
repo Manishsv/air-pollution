@@ -15,9 +15,12 @@ class AirDriver(_InTreeDriver):
         "PM25", "PM10", "NO2", "SO2", "PM25_PM10_RATIO",
         "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
         # Wind-aware airborne aggregation (methodology §D.1)
-        "UPWIND_PM25_LOAD",      # sum of upwind k≤2 cells' PM25, distance- + angle-weighted
-        "UPWIND_PM10_LOAD",      # same aggregation applied to PM10 (used when CPCB has no PM2.5)
-        "VENTILATION_INDEX",     # wind speed dampened by topographic enclosure
+        "UPWIND_PM25_LOAD",       # k≤2 (~1.5 km) — neighbourhood-scale advection
+        "UPWIND_PM25_LOAD_K10",   # k≤10 (~7.5 km) — regional-scale advection;
+                                   # used for source/receptor attribution and
+                                   # airshed-level reasoning (methodology §D.1)
+        "UPWIND_PM10_LOAD",       # same neighbourhood aggregation applied to PM10
+        "VENTILATION_INDEX",      # wind speed dampened by topographic enclosure
     ]
     data_sources = ["AQICN API", "CPCB sensor network"]
     _required_env_vars = []       # AQICN_API_KEY is optional (degrades to mock)

@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 # packet so historical packets can be reproduced or stratified by version.
 # ---------------------------------------------------------------------------
 
-CLASSIFIER_VERSION    = "cause-classifier-v0.5"
-WEIGHT_CONFIG_VERSION = "weights-v0.5-urban-canyon"
+CLASSIFIER_VERSION    = "cause-classifier-v0.6"
+WEIGHT_CONFIG_VERSION = "weights-v0.6-regional-upwind"
 
 # Confidence margin for tie-breaker routing (§4.4). When top1 − top2 < this,
 # the packet is flagged `attribution_uncertain` and the second cause's
@@ -611,40 +611,59 @@ class CauseClassifier:
     def _regional_transport(self, sigs: dict) -> dict:
         """Cell PM2.5 is dominated by pollution arriving from upwind cells.
 
-        Triggers when UPWIND_PM25_LOAD is large relative to own PM2.5 AND
-        wind speed is enough to transport pollution. Methodology §D.1.
+        Triggers when UPWIND_PM25_LOAD (k≤2, neighbourhood) or
+        UPWIND_PM25_LOAD_K10 (k≤10, regional ~7.5 km) is large relative
+        to own PM2.5 AND wind speed is enough to transport pollution.
+        The K10 signal carries more weight because cross-district
+        transport is a stronger "this isn't local" signal than
+        neighbourhood-scale advection. Methodology §D.1.
         """
         out = {"score": 0.0, "evidence": []}
         cause = "regional_transport"
 
-        pm25     = sigs.get("PM25")
-        upwind   = sigs.get("UPWIND_PM25_LOAD")
-        wind     = sigs.get("WIND_SPEED_KMH")
-        poi_ind  = sigs.get("POI_INDUSTRIAL_COUNT") or 0
-        poi_con  = sigs.get("POI_CONSTRUCTION_COUNT") or 0
-        poi_kil  = sigs.get("POI_KILN_COUNT") or 0
-        poi_w    = sigs.get("POI_WASTE_FACILITY_COUNT") or 0
+        pm25       = sigs.get("PM25")
+        upwind     = sigs.get("UPWIND_PM25_LOAD")
+        upwind_r   = sigs.get("UPWIND_PM25_LOAD_K10")
+        wind       = sigs.get("WIND_SPEED_KMH")
+        poi_ind    = sigs.get("POI_INDUSTRIAL_COUNT") or 0
+        poi_con    = sigs.get("POI_CONSTRUCTION_COUNT") or 0
+        poi_kil    = sigs.get("POI_KILN_COUNT") or 0
+        poi_w      = sigs.get("POI_WASTE_FACILITY_COUNT") or 0
 
-        # Need both readings to evaluate this cause.
-        if upwind is None:
+        # Need at least one upwind reading to evaluate this cause.
+        if upwind is None and upwind_r is None:
             return {
                 "cause": cause, "confidence": 0.0, "evidence": [],
-                "signals": _pick(sigs, ["UPWIND_PM25_LOAD", "PM25",
-                                        "WIND_SPEED_KMH", "POI_INDUSTRIAL_COUNT"]),
+                "signals": _pick(sigs, ["UPWIND_PM25_LOAD",
+                                        "UPWIND_PM25_LOAD_K10", "PM25",
+                                        "WIND_SPEED_KMH",
+                                        "POI_INDUSTRIAL_COUNT"]),
             }
 
-        # Upwind PM dominates over local PM — strongest single signal
-        if pm25 is not None and pm25 > 0 and upwind > 1.5 * pm25:
-            self._bump(out, cause, "upwind_dominates",
-                       f"UPWIND_PM25_LOAD {upwind:.1f} > 1.5× own PM2.5 ({pm25:.1f})")
-        elif pm25 is not None and pm25 > 0 and upwind > pm25:
-            self._bump(out, cause, "upwind_dominates",
-                       f"UPWIND_PM25_LOAD {upwind:.1f} > own PM2.5 ({pm25:.1f})")
+        # Neighbourhood-scale (k=2) upwind dominates own PM
+        if upwind is not None:
+            if pm25 is not None and pm25 > 0 and upwind > 1.5 * pm25:
+                self._bump(out, cause, "upwind_dominates",
+                           f"UPWIND_PM25_LOAD {upwind:.1f} > 1.5× own PM2.5 ({pm25:.1f})")
+            elif pm25 is not None and pm25 > 0 and upwind > pm25:
+                self._bump(out, cause, "upwind_dominates",
+                           f"UPWIND_PM25_LOAD {upwind:.1f} > own PM2.5 ({pm25:.1f})")
+            if upwind >= 30.0:
+                self._bump(out, cause, "upwind_high",
+                           f"UPWIND_PM25_LOAD {upwind:.1f} µg/m³-equiv (high incoming, ~1.5 km)")
 
-        # Absolute upwind load high (matters when own PM2.5 is unknown)
-        if upwind >= 30.0:
-            self._bump(out, cause, "upwind_high",
-                       f"UPWIND_PM25_LOAD {upwind:.1f} µg/m³-equiv (high incoming)")
+        # Regional-scale (k=10) upwind — stronger evidence of cross-district
+        # transport (the cell is genuinely a receptor, not just inheriting
+        # from its block).
+        if upwind_r is not None:
+            if pm25 is not None and pm25 > 0 and upwind_r > 1.5 * pm25:
+                self._bump(out, cause, "upwind_regional_dominates",
+                           f"UPWIND_PM25_LOAD_K10 {upwind_r:.1f} > 1.5× own PM2.5 "
+                           f"({pm25:.1f}) — regional ~7.5 km source upwind")
+            if upwind_r >= 100.0:
+                self._bump(out, cause, "upwind_regional_high",
+                           f"UPWIND_PM25_LOAD_K10 {upwind_r:.1f} µg/m³-equiv "
+                           f"(high regional incoming, ~7.5 km cone)")
 
         # Wind moderate enough to actually transport
         if wind is not None and 5.0 <= wind <= 30.0:
@@ -663,7 +682,8 @@ class CauseClassifier:
             "confidence": round(min(out["score"], 1.0), 3),
             "evidence": out["evidence"],
             "signals": _pick(sigs, [
-                "UPWIND_PM25_LOAD", "PM25", "WIND_SPEED_KMH",
+                "UPWIND_PM25_LOAD", "UPWIND_PM25_LOAD_K10",
+                "PM25", "WIND_SPEED_KMH",
                 "POI_INDUSTRIAL_COUNT", "POI_CONSTRUCTION_COUNT",
                 "POI_KILN_COUNT", "POI_WASTE_FACILITY_COUNT",
             ]),

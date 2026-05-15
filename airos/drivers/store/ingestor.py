@@ -291,19 +291,26 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _compute_upwind_aggregation(
     city_id: str,
     pm25_by_cell: dict[str, float],
+    *,
+    k_radius: int = 2,
 ) -> tuple[dict[str, float], dict[str, float]]:
     """Return (UPWIND_PM25_LOAD, VENTILATION_INDEX) per cell.
 
     For each cell C with PM2.5 reading:
 
-    **UPWIND_PM25_LOAD** — sum over the cell's k≤2 H3 neighbours N that lie in
-    the upwind direction (the bearing from C to N is within ±45° of the
-    current `WIND_DIR_DEG`), each weighted by:
-        (a) `exp(-d_km / L)` where L = max(wind_speed_kmh, 1) × 0.5 hr is a
-            travel-distance scale — low wind → tight decay, high wind →
-            broader reach;
+    **UPWIND_PM25_LOAD** — sum over the cell's k≤`k_radius` H3 neighbours N
+    that lie in the upwind direction (bearing from C to N within ±45° of
+    `WIND_DIR_DEG`), each weighted by:
+        (a) `exp(-d_km / L)` where L = max(wind_speed_kmh, 1) × 0.5 hr;
         (b) `cos(angular_offset)` so neighbours exactly upwind contribute
             more than those at the edge of the ±45° cone.
+
+    k_radius=2 (default) → ~1.5 km neighbour cone — neighbourhood-scale
+                            advection within the same urban quarter.
+    k_radius=10           → ~7.5 km cone — regional-scale advection,
+                            captures cross-district transport (used as
+                            the basis for cell-level "source vs receptor"
+                            attribution in airshed analysis).
 
     **VENTILATION_INDEX** — `WIND_SPEED_KMH × exp(-(FLOW_ACCUMULATION-1)/50)`.
     Ridge cells (FA=1) get the full wind effect; basin-outlet cells (FA≥100)
@@ -387,9 +394,9 @@ def _compute_upwind_aggregation(
         # Travel-distance scale: 30-min transport at current wind speed.
         L_km = max(ws, 1.0) * 0.5
 
-        # Aggregate over k=1 and k=2 rings. h3.grid_disk returns either a
+        # Aggregate over k≤k_radius rings. h3.grid_disk returns either a
         # list or a set depending on the installed version — normalise.
-        ring = set(_h3.grid_disk(cell, 2))
+        ring = set(_h3.grid_disk(cell, k_radius))
         ring.discard(cell)
         total_load = 0.0
         for n in ring:
@@ -618,7 +625,11 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
     ventilation_published = False
 
     if pm25_by_cell:
-        upwind_pm25, ventilation = _compute_upwind_aggregation(city_id, pm25_by_cell)
+        # k=2 → neighbourhood-scale (~1.5 km cone). Backwards-compatible
+        # `UPWIND_PM25_LOAD` name. Also publishes VENTILATION_INDEX.
+        upwind_pm25, ventilation = _compute_upwind_aggregation(
+            city_id, pm25_by_cell, k_radius=2,
+        )
         for cell_id, load in upwind_pm25.items():
             signal_rows.append({
                 "h3_id": cell_id, "signal": "UPWIND_PM25_LOAD",
@@ -630,6 +641,19 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
                 "value": vent, "unit": "km/h-equiv",
             })
         ventilation_published = True
+
+        # k=10 → regional-scale (~7.5 km cone). Stored as separate signal
+        # `UPWIND_PM25_LOAD_K10` so the cause classifier and airshed
+        # source/receptor ranking can use a longer-range view without
+        # losing the existing neighbourhood-scale signal.
+        upwind_pm25_k10, _vent_unused = _compute_upwind_aggregation(
+            city_id, pm25_by_cell, k_radius=10,
+        )
+        for cell_id, load in upwind_pm25_k10.items():
+            signal_rows.append({
+                "h3_id": cell_id, "signal": "UPWIND_PM25_LOAD_K10",
+                "value": load, "unit": "µg/m³-equiv",
+            })
 
     if pm10_by_cell:
         upwind_pm10, vent_pm10 = _compute_upwind_aggregation(city_id, pm10_by_cell)

@@ -98,7 +98,14 @@ What follows from this:
 
 So an Indo-Gangetic-Plain AOI (~1.2 M km²) auto-resolves to res 5, giving ~4,800 cells — manageable. A small ward (~50 km²) auto-resolves to res 9, giving ~450 cells — also manageable. The system gracefully spans 4 orders of magnitude in AOI scale without operator tuning.
 
-**Migration status.** Phase 0 (this release) makes AOIs a *de facto* lens via spatial queries (`airos.os.aoi_registry`, `signals_for_aoi`). The `city_id` column on cell tables is preserved for back-compat but is no longer the canonical filter — query by AOI bbox instead. Phase 1 migrates the dashboard. Phase 2 drops the column. See `airos/os/aoi_registry.py` for the canonical API.
+**Migration status.**
+
+- **Phase 0** (cells AOI-agnostic): `aoi.yaml` registry, `airos.os.aoi_registry`, `signals_for_aoi` spatial query path. `city_id` column preserved for back-compat.
+- **Phase 1** (dashboard AOI-aware): citymap loads via spatial bbox not `city_id`. AOI dropdown shows kind icons. `department_routing.yaml` has parallel `airsheds:` / `watersheds:` / `corridors:` blocks; `_routing_for_cause` walks them in order.
+- **Phase 2** (per-AOI packets, airshed-scale upwind, source/receptor): cause classifier now consumes a regional-scale `UPWIND_PM25_LOAD_K10` (k≤10 ring, ~7.5 km cone) alongside the neighbourhood `UPWIND_PM25_LOAD` (k≤2, ~1.5 km). The packet generator emits one packet per `(insight, AOI)` tuple so a Delhi cell with `regional_transport` cause produces *both* a Delhi-routed packet (`kspcb`-equivalent) *and* an IGP-North-routed packet (CPCB Central). Dedup is now `(insight_id, aoi_id)`. The dashboard's airshed view surfaces top-N **emission sources** (high local PM, low upwind) vs top-N **receptors** (high incoming load) so dispatchers see who to enforce on versus who needs cross-jurisdiction coordination.
+- **Phase 3** (planned): drop the `city_id` column from cell tables once all readers have migrated. Cosmetic, ~3-5 days.
+
+See `airos/os/aoi_registry.py` for the canonical API.
 
 ### 1.4 Conceptual Object Model
 

@@ -196,18 +196,28 @@ class InsightPacketGenerator:
             out[h3_id] = pop * float(air)
         return out
 
-    def _promoted_insight_ids(self, conn) -> set[str]:
-        """Return insight_ids that already have a packet."""
+    def _promoted_insight_ids(self, conn) -> set[tuple[str, str]]:
+        """Return (insight_id, aoi_id) tuples that already have a packet.
+
+        Phase 2 — one packet per (cell, AOI) tuple: the same insight can
+        be promoted multiple times (once per AOI lens that contains the
+        cell). Dedup is therefore on the tuple, not on insight_id alone.
+
+        Legacy packets without an `aoi_id` in their JSON fall back to
+        their `city_id` (preserves existing dedup semantics — the city
+        AOI is the de-facto AOI for old rows).
+        """
         rows = conn.execute(
             "SELECT packet_json FROM h3_packets"
         ).fetchall()
-        ids: set[str] = set()
+        ids: set[tuple[str, str]] = set()
         for row in rows:
             try:
                 p = json.loads(row["packet_json"] or "{}")
                 iid = p.get("source_insight_id")
-                if iid:
-                    ids.add(iid)
+                aoi = p.get("aoi_id") or p.get("city_id")
+                if iid and aoi:
+                    ids.add((iid, aoi))
             except Exception:
                 pass
         return ids
@@ -286,10 +296,35 @@ class InsightPacketGenerator:
                 logger.warning("CauseClassifier batch failed: %s", exc)
 
         written = 0
+        # Phase 2: emit one packet per (insight, AOI) tuple. For city-only
+        # cells (the common case) this is identical to the prior behaviour
+        # — exactly one AOI (the city) contains the cell. For cells that
+        # also fall inside an airshed/watershed/corridor AOI, we emit an
+        # extra packet routed per AOI kind.
+        from airos.os.aoi_registry import aois_for_cell as _aois_for_cell, get_aoi as _get_aoi
+
         for ins in insights:
             iid = ins["insight_id"]
-            if iid in already_promoted:
-                continue
+            h3_id = ins["h3_id"]
+
+            # Enumerate every AOI whose bbox contains this cell. Order
+            # cities first (most specific), then larger AOIs.
+            try:
+                containing = _aois_for_cell(h3_id) if h3_id else []
+            except Exception:
+                containing = []
+            # Always include the cell's ingest-city (city_id) so we never
+            # lose the legacy packet path even if the registry is empty.
+            if city_id not in containing:
+                containing = [city_id] + containing
+            # Stable kind order: city > airshed > watershed > corridor > …
+            _kind_rank = {"city": 0, "airshed": 1, "watershed": 2, "corridor": 3}
+            def _rank(a: str) -> int:
+                try:
+                    return _kind_rank.get(_get_aoi(a)["kind"], 9)
+                except Exception:
+                    return 9
+            containing = sorted(set(containing), key=_rank)
 
             actions = []
             try:
@@ -303,115 +338,124 @@ class InsightPacketGenerator:
             domains = (ins["domains_involved"] or "").split(",")
             primary_domain = domains[0].strip() if domains else "cross_domain"
 
-            packet_id = f"pkt_ins_{uuid.uuid4().hex[:12]}"
+            exposure_score = float(exposure_by_cell.get(h3_id or "", 0.0))
 
-            exposure_score = float(exposure_by_cell.get(ins["h3_id"] or "", 0.0))
-            packet_payload: dict[str, Any] = {
-                "packet_id":         packet_id,
-                "source_insight_id": iid,
-                "source":            "insight",
-                "city_id":           city_id,
-                "h3_id":             ins["h3_id"],
-                "domain":            primary_domain,
-                "domains_involved":  ins["domains_involved"],
-                "priority_tier":     ins["priority_tier"],
-                "finding":           ins["finding"],
-                "confidence":        ins["confidence"],
-                "recommended_actions": actions,
-                "insight_created_at": ins["created_at"],
-                "urgency":           urgency,
-                # Exposure context (methodology §D.21 / §4.4) — drives within-tier
-                # ranking and is shown on the dashboard so dispatchers see *who*
-                # is hurt by the cell, not just *how bad* the air is.
-                "exposure_score":    round(exposure_score, 0) if exposure_score else 0,
-            }
+            # Cause classification (cell-resolved, same across AOIs)
+            cause_hypotheses = cause_by_cell.get(h3_id or "", [])
 
-            # Cause classification + department routing for air-domain packets
-            cause_hypotheses     = cause_by_cell.get(ins["h3_id"] or "", [])
-            attribution_uncertain = False
-            secondary_review_by  = None
-            if cause_hypotheses:
-                packet_payload["cause_hypotheses"] = cause_hypotheses
-                top_cause = cause_hypotheses[0]["cause"]
-                packet_payload["primary_cause"] = top_cause
-                routing = _routing_for_cause(routing_config, city_id, top_cause)
-                if routing:
-                    packet_payload["routed_to"]      = routing.get("primary", "")
-                    packet_payload["routing_cc"]     = routing.get("secondary", [])
-                    packet_payload["routing_action"] = routing.get("action_template", "")
+            for aoi_id in containing:
+                if (iid, aoi_id) in already_promoted:
+                    continue
+                try:
+                    aoi_cfg = _get_aoi(aoi_id)
+                    aoi_kind = aoi_cfg["kind"]
+                except Exception:
+                    aoi_kind = "city"
 
-                # ── Tie-breaker (methodology §4.4) ────────────────────────
-                # If the top two causes are within ATTRIBUTION_MARGIN, flag
-                # the packet as attribution_uncertain and emit the second
-                # cause's primary department as secondary_review_by so the
-                # GRS integration can decide on joint routing.
+                packet_id = f"pkt_ins_{uuid.uuid4().hex[:12]}"
+                packet_payload: dict[str, Any] = {
+                    "packet_id":         packet_id,
+                    "source_insight_id": iid,
+                    "source":            "insight",
+                    # city_id preserved for column writes and legacy reads
+                    "city_id":           city_id,
+                    # Phase 2 AOI scoping — the surfacing lens that owns
+                    # routing for this packet.
+                    "aoi_id":            aoi_id,
+                    "aoi_kind":          aoi_kind,
+                    "h3_id":             h3_id,
+                    "domain":            primary_domain,
+                    "domains_involved":  ins["domains_involved"],
+                    "priority_tier":     ins["priority_tier"],
+                    "finding":           ins["finding"],
+                    "confidence":        ins["confidence"],
+                    "recommended_actions": actions,
+                    "insight_created_at": ins["created_at"],
+                    "urgency":           urgency,
+                    "exposure_score":    round(exposure_score, 0) if exposure_score else 0,
+                }
+
+                # Cause classification + AOI-aware routing
+                attribution_uncertain = False
+                secondary_review_by  = None
+                if cause_hypotheses:
+                    packet_payload["cause_hypotheses"] = cause_hypotheses
+                    top_cause = cause_hypotheses[0]["cause"]
+                    packet_payload["primary_cause"] = top_cause
+                    routing = _routing_for_cause(routing_config, aoi_id, top_cause)
+                    if routing:
+                        packet_payload["routed_to"]      = routing.get("primary", "")
+                        packet_payload["routing_cc"]     = routing.get("secondary", [])
+                        packet_payload["routing_action"] = routing.get("action_template", "")
+
+                    # Tie-breaker (methodology §4.4)
+                    from airos.os.cause_classifier import (
+                        CLASSIFIER_VERSION, WEIGHT_CONFIG_VERSION, ATTRIBUTION_MARGIN,
+                    )
+                    if len(cause_hypotheses) >= 2:
+                        top_conf = float(cause_hypotheses[0].get("confidence", 0))
+                        sec_conf = float(cause_hypotheses[1].get("confidence", 0))
+                        if (top_conf - sec_conf) < ATTRIBUTION_MARGIN:
+                            attribution_uncertain = True
+                            second_cause = cause_hypotheses[1]["cause"]
+                            sec_routing  = _routing_for_cause(routing_config, aoi_id, second_cause)
+                            if sec_routing:
+                                secondary_review_by = sec_routing.get("primary", "")
+                                packet_payload["secondary_cause"]    = second_cause
+                                packet_payload["secondary_review_by"] = secondary_review_by
+                                packet_payload["attribution_uncertain"] = True
+
+                # Build structured evidence from hypothesis chain
+                evidence = []
+                try:
+                    hyp = json.loads(ins["hypothesis_chain_json"] or "[]")
+                    for h in hyp:
+                        evidence.append({
+                            "type":       "hypothesis",
+                            "statement":  h.get("proposition", ""),
+                            "testable_by": h.get("testable_by", ""),
+                            "confidence": h.get("confidence"),
+                        })
+                except Exception:
+                    pass
+
+                # Uncertainty notes → safety gates
+                safety_gates = []
+                try:
+                    notes = json.loads(ins["uncertainty_notes_json"] or "[]")
+                    for n in notes:
+                        safety_gates.append({
+                            "gate":   "uncertainty",
+                            "status": "requires_review",
+                            "note":   n.get("note", ""),
+                        })
+                except Exception:
+                    pass
+
+                # Lazy import — only needed when a packet actually gets written.
                 from airos.os.cause_classifier import (
-                    CLASSIFIER_VERSION, WEIGHT_CONFIG_VERSION, ATTRIBUTION_MARGIN,
+                    CLASSIFIER_VERSION as _CV,
+                    WEIGHT_CONFIG_VERSION as _WCV,
                 )
-                if len(cause_hypotheses) >= 2:
-                    top_conf = float(cause_hypotheses[0].get("confidence", 0))
-                    sec_conf = float(cause_hypotheses[1].get("confidence", 0))
-                    if (top_conf - sec_conf) < ATTRIBUTION_MARGIN:
-                        attribution_uncertain = True
-                        second_cause = cause_hypotheses[1]["cause"]
-                        sec_routing  = _routing_for_cause(routing_config, city_id, second_cause)
-                        if sec_routing:
-                            secondary_review_by = sec_routing.get("primary", "")
-                            packet_payload["secondary_cause"]    = second_cause
-                            packet_payload["secondary_review_by"] = secondary_review_by
-                            packet_payload["attribution_uncertain"] = True
-
-            # Build structured evidence from hypothesis chain
-            evidence = []
-            try:
-                hyp = json.loads(ins["hypothesis_chain_json"] or "[]")
-                for h in hyp:
-                    evidence.append({
-                        "type":       "hypothesis",
-                        "statement":  h.get("proposition", ""),
-                        "testable_by": h.get("testable_by", ""),
-                        "confidence": h.get("confidence"),
-                    })
-            except Exception:
-                pass
-
-            # Uncertainty notes → safety gates
-            safety_gates = []
-            try:
-                notes = json.loads(ins["uncertainty_notes_json"] or "[]")
-                for n in notes:
-                    safety_gates.append({
-                        "gate":   "uncertainty",
-                        "status": "requires_review",
-                        "note":   n.get("note", ""),
-                    })
-            except Exception:
-                pass
-
-            # Lazy import — only needed when a packet actually gets written.
-            from airos.os.cause_classifier import (
-                CLASSIFIER_VERSION as _CV,
-                WEIGHT_CONFIG_VERSION as _WCV,
-            )
-            write_packet(
-                packet_id=packet_id,
-                h3_id=ins["h3_id"],
-                city_id=city_id,
-                domain=primary_domain,
-                risk_level=risk_level,
-                confidence_score=float(ins["confidence"]) if ins["confidence"] else None,
-                field_verification_required=True,
-                packet=packet_payload,
-                evidence=evidence,
-                safety_gates=safety_gates,
-                # Tranche A: classifier reproducibility + tie-breaker (§4.4)
-                classifier_version=_CV if cause_hypotheses else None,
-                weight_config_version=_WCV if cause_hypotheses else None,
-                attribution_uncertain=attribution_uncertain,
-                secondary_review_by=secondary_review_by,
-            )
-            already_promoted.add(iid)
-            written += 1
+                write_packet(
+                    packet_id=packet_id,
+                    h3_id=h3_id,
+                    city_id=city_id,
+                    domain=primary_domain,
+                    risk_level=risk_level,
+                    confidence_score=float(ins["confidence"]) if ins["confidence"] else None,
+                    field_verification_required=True,
+                    packet=packet_payload,
+                    evidence=evidence,
+                    safety_gates=safety_gates,
+                    # Tranche A: classifier reproducibility + tie-breaker (§4.4)
+                    classifier_version=_CV if cause_hypotheses else None,
+                    weight_config_version=_WCV if cause_hypotheses else None,
+                    attribution_uncertain=attribution_uncertain,
+                    secondary_review_by=secondary_review_by,
+                )
+                already_promoted.add((iid, aoi_id))
+                written += 1
 
         return written
 
