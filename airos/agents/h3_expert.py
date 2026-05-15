@@ -295,7 +295,7 @@ AGENT_TOOLS = [
 # so historical insights can be reproduced or stratified by prompt version.
 # ---------------------------------------------------------------------------
 
-AGENT_PROMPT_VERSION = "h3-expert-v0.7-hard-constraint-first"
+AGENT_PROMPT_VERSION = "h3-expert-v0.8-quantify-persistence"
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -399,6 +399,26 @@ Your job is to go BEYOND single-domain rules and find:
 
 3. PERSISTENT vs TRANSIENT risks — is this a spike or a structural problem?
    Check signal history to distinguish.
+
+   When you use "persistent" or "transient" in a finding, ALWAYS state
+   the duration window you observed it over and the evidence you used:
+     ✓ "Persistent for 4 days (NDVI 12th pct over 30d)"
+     ✓ "Persistent for 2 weeks (PM2.5 above 7d avg every day)"
+     ✓ "Transient — peak within last 2 hours, resolving by +6h forecast"
+     ✗ "Persistent vegetation loss"   — duration missing
+     ✗ "Transient heat-wind suppression resolving"  — horizon missing
+
+   Guideline durations (use exact numbers when the history supports it):
+     transient   → hours to ~1 day
+     persistent  → multiple days for fast signals (air, heat),
+                   weeks for slow signals (NDVI / vegetation, water quality),
+                   months for structural signals (built volume, road density)
+
+   A dispatcher reading "Persistent" without a duration cannot decide
+   whether to act today or schedule a quarterly inspection. Make the
+   timescale explicit. The post-generation validator will inject a
+   duration if you forget, but a missing duration is treated as an
+   evidence gap and counts against your tool-policy compliance score.
 
 4. SPATIAL CONTEXT — is this cell an isolated hotspot or part of a cluster?
    Check neighbours before concluding a risk is localised.
@@ -1065,7 +1085,10 @@ class H3ExpertAgent:
             _dossier = build_cell_dossier(self.city_id, self.h3_id)
             _signals = _dossier.get("signals") if _dossier else None
             insight_payload = validate_post_generation(
-                insight_payload, dossier_signals=_signals,
+                insight_payload,
+                dossier_signals=_signals,
+                h3_id=self.h3_id,
+                city_id=self.city_id,
             )
         except Exception as exc:
             logger.warning("post_generation validator skipped: %s", exc)

@@ -21,7 +21,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-VALIDATOR_VERSION = "post-gen-v0.1"
+VALIDATOR_VERSION = "post-gen-v0.2-persistence-quantifier"
 
 # Domain tokens that are *always* city-broadcast at AirOS today
 _CITY_BROADCAST_DOMAINS = frozenset({"weather"})
@@ -109,6 +109,9 @@ def validate_post_generation(
     payload: dict[str, Any],
     *,
     dossier_signals: dict | None = None,
+    h3_id: str | None = None,
+    city_id: str | None = None,
+    db_path: str | None = None,
 ) -> dict[str, Any]:
     """Apply post-generation guards to a structured insight payload.
 
@@ -117,6 +120,8 @@ def validate_post_generation(
       - `post_validator_version`: the validator version
     Demotes `priority_tier` from "high" to "medium" if compound legitimacy
     collapses (fewer than _HIGH_REQUIRES_DOMAINS cell-resolved domains).
+    If `h3_id` + `city_id` are provided, also quantifies "persistent"
+    durations using h3_assessments history (post-gen-v0.2).
     """
     out = dict(payload)
     flags: list[str] = []
@@ -155,7 +160,20 @@ def validate_post_generation(
                 f"domain after strip; need ≥{_HIGH_REQUIRES_DOMAINS})"
             )
 
-    # ── Step 5: stamp audit trail ────────────────────────────────────────
+    # ── Step 5: persistence-duration quantifier (post-gen-v0.2) ──────────
+    # If the finding says "persistent" but doesn't state how long, count
+    # the recent elevated-assessment days for this cell and prepend a
+    # duration phrase. The agent prompt (v0.8) now asks for explicit
+    # durations; this guard catches cases where the LLM forgets.
+    if h3_id and city_id:
+        new_finding, persistence_note = _quantify_persistence(
+            out.get("finding") or "", h3_id, city_id, db_path,
+        )
+        if persistence_note:
+            out["finding"] = new_finding
+            flags.append(persistence_note)
+
+    # ── Step 6: stamp audit trail ────────────────────────────────────────
     if flags:
         out["post_validator_flags"] = flags
         out["post_validator_version"] = VALIDATOR_VERSION
@@ -164,3 +182,118 @@ def validate_post_generation(
             len(flags), "; ".join(flags),
         )
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Persistence quantifier (post-gen-v0.2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Regex: detect when the agent already included a duration phrase. If any of
+# these patterns matches, we leave the finding alone.
+_DURATION_PATTERNS = [
+    re.compile(r"\bfor\s+\d+\s*(?:hour|hr|h|day|d|week|wk|month|mo|year|yr)s?\b",
+               re.IGNORECASE),
+    re.compile(r"\b\d+[- ]?(?:hour|hr|day|week|wk|month|mo|year|yr)s?\s+(?:trend|run|streak|window|elevation|loss|spike)\b",
+               re.IGNORECASE),
+    re.compile(r"\b\d+[- ]day\s+trend\b", re.IGNORECASE),
+    re.compile(r"\bpast\s+\d+\s*(?:hour|hr|day|week)s?\b", re.IGNORECASE),
+    re.compile(r"\bover\s+(?:the\s+)?(?:last|past)\s+\d+\s*(?:hour|hr|day|week|month)s?\b",
+               re.IGNORECASE),
+    re.compile(r"\bpeak\s+within\s+(?:last\s+)?\d+\s*(?:hour|hr)s?\b", re.IGNORECASE),
+]
+
+# Words that signal "persistent" was used. Lowercase comparison.
+_PERSISTENT_TOKENS = ("persistent", "persisting", "persistently",
+                      "ongoing", "long-running", "long running", "structural")
+
+_ELEVATED_RISK_LEVELS = ("moderate", "high", "severe")
+
+
+def _has_explicit_duration(finding: str) -> bool:
+    return any(p.search(finding) for p in _DURATION_PATTERNS)
+
+
+def _has_persistent_claim(finding: str) -> bool:
+    low = finding.lower()
+    return any(tok in low for tok in _PERSISTENT_TOKENS)
+
+
+def _count_recent_elevated_days(
+    h3_id: str, city_id: str, db_path: str | None = None,
+) -> int:
+    """Return the number of distinct day_buckets in the last 30 days where
+    *any* assessment domain on this cell flagged risk_level in
+    {moderate, high, severe}. Domain-agnostic — works for vegetation
+    loss, PM2.5 spikes, heat, flood, etc.
+    """
+    if db_path is None:
+        try:
+            from airos.drivers.store.schema import DB_PATH
+            db_path = str(DB_PATH)
+        except Exception:
+            return 0
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        try:
+            placeholders = ",".join("?" * len(_ELEVATED_RISK_LEVELS))
+            row = conn.execute(
+                f"""
+                SELECT COUNT(DISTINCT day_bucket)
+                FROM h3_assessments
+                WHERE h3_id = ? AND city_id = ?
+                  AND risk_level IN ({placeholders})
+                  AND day_bucket >= date('now', '-30 days')
+                """,
+                (h3_id, city_id, *_ELEVATED_RISK_LEVELS),
+            ).fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.debug("persistence quantifier query failed: %s", exc)
+        return 0
+
+
+def _quantify_persistence(
+    finding: str, h3_id: str, city_id: str, db_path: str | None,
+) -> tuple[str, str | None]:
+    """If `finding` says "persistent" but doesn't state a duration,
+    inspect h3_assessments and prepend a duration phrase. Returns
+    (new_finding, audit_note_or_None).
+    """
+    if not finding or not _has_persistent_claim(finding):
+        return finding, None
+    if _has_explicit_duration(finding):
+        return finding, None
+    n_days = _count_recent_elevated_days(h3_id, city_id, db_path)
+    if n_days < 2:
+        # Not enough history to justify a "persistent" claim; leave alone
+        # — the post-validator only annotates, never demotes the finding.
+        return finding, None
+
+    # Prefer a more natural phrasing for longer durations.
+    if n_days >= 28:
+        duration = f"{n_days // 7} weeks"
+    elif n_days >= 7:
+        duration = f"{n_days} days"
+    else:
+        duration = f"{n_days} days"
+
+    # Replace the first occurrence of "persistent" with "Persistent for X days,"
+    # if it's at the start of the sentence; otherwise just prepend a phrase.
+    pattern = re.compile(r"\b(?P<tok>persistent|persisting|persistently)\b",
+                         re.IGNORECASE)
+    m = pattern.search(finding)
+    if not m:
+        return finding, None
+    # Capitalisation: keep whatever case the agent used.
+    tok = m.group("tok")
+    cap = tok[0].isupper()
+    replacement = f"{'P' if cap else 'p'}ersistent for {duration}"
+    new_finding = pattern.sub(replacement, finding, count=1)
+    note = (
+        f"quantified_persistence:{tok}→persistent for {duration} "
+        f"({n_days} elevated-assessment days in last 30d)"
+    )
+    return new_finding, note
