@@ -80,53 +80,25 @@ def _db_path() -> str:
     return str(DB_PATH)
 
 
-def _filter_by_city_bbox(df: pd.DataFrame, city_id: str, *, label: str) -> pd.DataFrame:
-    """Drop rows whose H3 cell centroid falls outside the city's bbox.
-
-    Defensive guard: some ingestors (notably FIRMS fire) over-attribute
-    rows to a city by tagging city_id="kanpur" on hotspots that are
-    geographically 30-80 km outside the Kanpur urban bbox. The proper
-    fix is upstream in the ingestor, but until that lands the citymap
-    must not render stray hexes / icons in neighbouring districts.
-
-    Expects a 'h3_id' column. Logs how many rows were dropped.
-    """
-    if df.empty or "h3_id" not in df.columns:
-        return df
-    try:
-        from airos.os.city_config import get_bbox
-        bbox = get_bbox(city_id)
-    except (ImportError, KeyError):
-        return df
-    lat_min, lat_max = bbox["lat_min"], bbox["lat_max"]
-    lon_min, lon_max = bbox["lon_min"], bbox["lon_max"]
-
-    def _inside(cell: str) -> bool:
-        lat, lon = h3.cell_to_latlng(cell)
-        return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
-
-    mask = df["h3_id"].apply(_inside)
-    dropped = int((~mask).sum())
-    if dropped:
-        logger.info(
-            "[citymap/%s] %s: dropped %d cell(s) outside bbox "
-            "(upstream city_id mis-attribution).",
-            city_id, label, dropped,
-        )
-    return df[mask].copy()
+# _filter_by_city_bbox removed — the spatial JOINs in the loaders above
+# (h3_metadata.centroid_lat/lon BETWEEN bbox) make this defensive guard
+# redundant. Out-of-bbox cells are now excluded at the query level.
 
 
 # ── Data loaders (cached) ────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_worst_risk_per_cell(city_id: str) -> pd.DataFrame:
-    """Per-cell worst risk_level across all assessment domains.
+def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
+    """Per-cell worst risk_level across all assessment domains, filtered
+    spatially to the AOI's bbox (city_id-agnostic — Phase 1 AOI lens).
 
-    Reads the latest row per (h3_id, domain) from h3_assessments, then
-    keeps the row whose risk_level has the highest severity per cell.
-    Result: one row per cell with (h3_id, risk_level, primary_index,
-    primary_value, dominant_issue, dominant_domain).
+    Reads the latest row per (h3_id, domain) from h3_assessments joined
+    to h3_metadata for the centroid, and keeps the row whose risk_level
+    has the highest severity per cell. Works identically for city,
+    airshed, watershed and other AOI kinds — the bbox does the work.
     """
+    from airos.os.aoi_registry import bbox_of
+    bbox = bbox_of(aoi_id)
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
@@ -135,17 +107,20 @@ def _load_worst_risk_per_cell(city_id: str) -> pd.DataFrame:
             SELECT a.h3_id, a.domain, a.risk_level, a.primary_index,
                    a.primary_value, a.dominant_issue
             FROM h3_assessments a
+            INNER JOIN h3_metadata m ON m.h3_id = a.h3_id
             INNER JOIN (
                 SELECT h3_id, domain, MAX(day_bucket) AS db
                 FROM h3_assessments
-                WHERE city_id = ?
                 GROUP BY h3_id, domain
             ) latest ON latest.h3_id = a.h3_id
                     AND latest.domain = a.domain
                     AND latest.db = a.day_bucket
-            WHERE a.city_id = ? AND a.risk_level IS NOT NULL
+            WHERE a.risk_level IS NOT NULL
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
             """,
-            (city_id, city_id),
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
         ).fetchall()
     finally:
         conn.close()
@@ -159,35 +134,39 @@ def _load_worst_risk_per_cell(city_id: str) -> pd.DataFrame:
     # Keep the highest-severity domain per cell.
     df = df.sort_values("risk_rank", ascending=False).drop_duplicates("h3_id")
     df = df.rename(columns={"domain": "dominant_domain"})
-    df = _filter_by_city_bbox(df, city_id, label="risk_shade")
     return df.drop(columns=["risk_rank"]).reset_index(drop=True)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_open_insights_by_cell(city_id: str) -> pd.DataFrame:
-    """One row per cell that has at least one open insight with tier in
-    {critical, high, medium}. Returns the highest-tier insight per cell
-    so we can colour the border by tier.
+def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
+    """One row per cell inside the AOI bbox with an open insight at tier
+    ∈ {critical, high, medium}. Spatial filter (Phase 1 lens model).
     """
+    from airos.os.aoi_registry import bbox_of
+    bbox = bbox_of(aoi_id)
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
             """
-            SELECT insight_id, h3_id, priority_tier, finding, confidence,
-                   created_at
-            FROM h3_insights
-            WHERE city_id = ? AND outcome_status = 'open'
-              AND priority_tier IN ('critical', 'high', 'medium')
-            ORDER BY h3_id,
-                CASE priority_tier
+            SELECT i.insight_id, i.h3_id, i.priority_tier, i.finding,
+                   i.confidence, i.created_at
+            FROM h3_insights i
+            INNER JOIN h3_metadata m ON m.h3_id = i.h3_id
+            WHERE i.outcome_status = 'open'
+              AND i.priority_tier IN ('critical', 'high', 'medium')
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
+            ORDER BY i.h3_id,
+                CASE i.priority_tier
                     WHEN 'critical' THEN 0
                     WHEN 'high'     THEN 1
                     WHEN 'medium'   THEN 2
                 END,
-                created_at DESC
+                i.created_at DESC
             """,
-            (city_id,),
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
         ).fetchall()
     finally:
         conn.close()
@@ -198,91 +177,79 @@ def _load_open_insights_by_cell(city_id: str) -> pd.DataFrame:
         )
     df = pd.DataFrame([dict(r) for r in rows])
     df = df.drop_duplicates("h3_id")
-    df = _filter_by_city_bbox(df, city_id, label="insight_border")
     return df.reset_index(drop=True)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_event_points(city_id: str) -> pd.DataFrame:
-    """Active point-event signals — fire FRP > 0, waste SITE = 1,
-    crowd GATHERING_ALERT = 1, flood risk_level in (high, severe).
-
-    Filters to cells whose centroid falls inside the city's bbox. Some
-    upstream ingestors (notably FIRMS fire) tag a wide regional area
-    with city_id="kanpur" even for hotspots 50+ km outside — we don't
-    want those rendered on the city map. See follow-up task for the
-    proper upstream fix.
+def _load_event_points(aoi_id: str) -> pd.DataFrame:
+    """Active point-event signals inside the AOI bbox — fire FRP > 0,
+    waste SITE = 1, crowd GATHERING_ALERT = 1, flood risk_level in
+    (high, severe). Spatial filter (Phase 1 lens model) replaces the
+    earlier defensive city_id bbox guard.
 
     Returns (h3_id, domain, lat, lon, magnitude_label) for IconLayer.
     """
-    from airos.os.city_config import get_bbox
-    try:
-        bbox = get_bbox(city_id)
-        lat_min, lat_max = bbox["lat_min"], bbox["lat_max"]
-        lon_min, lon_max = bbox["lon_min"], bbox["lon_max"]
-    except KeyError:
-        lat_min = lat_max = lon_min = lon_max = None
-
-    def _in_bbox(lat: float, lon: float) -> bool:
-        if lat_min is None:
-            return True
-        return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
-
+    from airos.os.aoi_registry import bbox_of
+    bbox = bbox_of(aoi_id)
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
-        # Latest per (h3_id, signal) within the last 24h to keep the icon set fresh
+        # Latest per (h3_id, signal) within the last 24h, spatially scoped.
         rows = conn.execute(
             """
             SELECT s.h3_id, s.signal, s.value, m.centroid_lat, m.centroid_lon
             FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
             INNER JOIN (
-                SELECT h3_id, signal, MAX(hour_bucket) AS hb
-                FROM h3_signals
-                WHERE city_id = ?
-                  AND signal IN ('FRP', 'SITE', 'GATHERING_ALERT')
-                  AND hour_bucket >= datetime('now', '-24 hours')
-                GROUP BY h3_id, signal
+                SELECT s2.h3_id, s2.signal, MAX(s2.hour_bucket) AS hb
+                FROM h3_signals s2
+                INNER JOIN h3_metadata m2 ON m2.h3_id = s2.h3_id
+                WHERE s2.signal IN ('FRP', 'SITE', 'GATHERING_ALERT')
+                  AND s2.hour_bucket >= datetime('now', '-24 hours')
+                  AND m2.centroid_lat BETWEEN ? AND ?
+                  AND m2.centroid_lon BETWEEN ? AND ?
+                GROUP BY s2.h3_id, s2.signal
             ) latest ON latest.h3_id = s.h3_id
                     AND latest.signal = s.signal
                     AND latest.hb = s.hour_bucket
-            LEFT JOIN h3_metadata m ON m.h3_id = s.h3_id AND m.city_id = s.city_id
-            WHERE s.city_id = ? AND s.value > 0
+            WHERE s.value > 0
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
             """,
-            (city_id, city_id),
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"],
+             bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
         ).fetchall()
-        # Flood: pulled from assessments (high/severe risk_level), not from a
-        # single boolean signal.
         flood_rows = conn.execute(
             """
             SELECT a.h3_id, m.centroid_lat, m.centroid_lon
             FROM h3_assessments a
+            INNER JOIN h3_metadata m ON m.h3_id = a.h3_id
             INNER JOIN (
                 SELECT h3_id, MAX(day_bucket) AS db
                 FROM h3_assessments
-                WHERE city_id = ? AND domain = 'flood'
+                WHERE domain = 'flood'
                 GROUP BY h3_id
             ) latest ON latest.h3_id = a.h3_id AND latest.db = a.day_bucket
-            LEFT JOIN h3_metadata m ON m.h3_id = a.h3_id AND m.city_id = a.city_id
-            WHERE a.city_id = ? AND a.domain = 'flood'
+            WHERE a.domain = 'flood'
               AND a.risk_level IN ('high', 'severe')
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
             """,
-            (city_id, city_id),
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
         ).fetchall()
     finally:
         conn.close()
 
     out: list[dict] = []
-    dropped = 0
     sig_to_domain = {"FRP": "fire", "SITE": "waste", "GATHERING_ALERT": "crowd"}
     for r in rows:
         d = dict(r)
         lat, lon = d.get("centroid_lat"), d.get("centroid_lon")
         if lat is None or lon is None:
             lat, lon = h3.cell_to_latlng(d["h3_id"])
-        if not _in_bbox(float(lat), float(lon)):
-            dropped += 1
-            continue
         out.append({
             "h3_id":    d["h3_id"],
             "domain":   sig_to_domain.get(d["signal"], d["signal"].lower()),
@@ -295,9 +262,6 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
         lat, lon = d.get("centroid_lat"), d.get("centroid_lon")
         if lat is None or lon is None:
             lat, lon = h3.cell_to_latlng(d["h3_id"])
-        if not _in_bbox(float(lat), float(lon)):
-            dropped += 1
-            continue
         out.append({
             "h3_id":    d["h3_id"],
             "domain":   "flood",
@@ -305,12 +269,6 @@ def _load_event_points(city_id: str) -> pd.DataFrame:
             "lon":      float(lon),
             "magnitude": "high flood risk",
         })
-    if dropped:
-        logger.info(
-            "[citymap/%s] event-points: filtered %d row(s) outside bbox "
-            "(upstream city_id mis-attribution; see follow-up task).",
-            city_id, dropped,
-        )
     return pd.DataFrame(out)
 
 
@@ -396,10 +354,27 @@ def _build_layers(
 
 # ── Cell detail side-panel ───────────────────────────────────────────────────
 
-def _render_cell_detail(h3_id: str, city_id: str) -> None:
-    """Right-side panel content for a clicked cell. Shows the cell dossier
-    (signals by domain, cause hypotheses, POI summary) + any open insight."""
+def _render_cell_detail(h3_id: str, aoi_id: str) -> None:
+    """Right-side panel content for a clicked cell. The dossier needs a
+    `city_id` (it joins to h3_metadata + h3_signals which still carry
+    that column); we resolve the cell's primary city by spatial lookup
+    when the parent AOI isn't itself a city kind.
+
+    Shows the cell dossier (signals by domain, cause hypotheses, POI
+    summary) + any open insight."""
     from airos.os.cell_dossier import build_cell_dossier
+    from airos.os.aoi_registry import get_aoi, aois_for_cell
+
+    aoi_cfg = get_aoi(aoi_id)
+    if aoi_cfg["kind"] == "city":
+        # When viewing a city AOI, that's the dossier's reference city.
+        city_id = aoi_id
+    else:
+        # For airshed / watershed / corridor AOIs the cell belongs to
+        # some underlying city; pick the first city-kind AOI that
+        # contains it. Falls back to the parent AOI if none found.
+        city_containers = aois_for_cell(h3_id, kind="city")
+        city_id = city_containers[0] if city_containers else aoi_id
 
     try:
         dossier = build_cell_dossier(city_id, h3_id)
@@ -423,7 +398,9 @@ def _render_cell_detail(h3_id: str, city_id: str) -> None:
         for h in hyps[:3]:
             st.caption(f"`{h['cause']}` — confidence {h.get('confidence', 0):.2f}")
 
-    # Latest open insight on this cell (if any)
+    # Latest open insight on this cell (if any). Spatial cell lookup by
+    # h3_id alone — no city_id filter, so an airshed-AOI click still
+    # surfaces insights tagged with any constituent city's id.
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
@@ -431,10 +408,10 @@ def _render_cell_detail(h3_id: str, city_id: str) -> None:
             """
             SELECT insight_id, finding, priority_tier, confidence, created_at
             FROM h3_insights
-            WHERE h3_id = ? AND city_id = ? AND outcome_status = 'open'
+            WHERE h3_id = ? AND outcome_status = 'open'
             ORDER BY created_at DESC LIMIT 1
             """,
-            (h3_id, city_id),
+            (h3_id,),
         ).fetchone()
     finally:
         conn.close()
@@ -457,10 +434,24 @@ def _render_cell_detail(h3_id: str, city_id: str) -> None:
 
 # ── Main entry ───────────────────────────────────────────────────────────────
 
+_AOI_KIND_ICON: dict[str, str] = {
+    "city":      "🏙️",
+    "airshed":   "🌫️",
+    "watershed": "💧",
+    "corridor":  "🛣️",
+    "port":      "⚓",
+    "airport":   "✈️",
+}
+
+
 def render_citymap_panel() -> None:
-    """Full-screen city situational-awareness map. Registered as the
-    default landing view in app.py."""
-    from airos.os.city_config import CITIES, get_centre, get_zoom
+    """Full-screen AOI situational-awareness map. Registered as the
+    default landing view in app.py. Selecting any AOI — city, airshed,
+    watershed, corridor — renders the same overlays at the AOI's
+    auto-derived resolution."""
+    from airos.os.aoi_registry import (
+        list_aois, get_aoi, bbox_of, resolution_of,
+    )
 
     # Inject a small bit of CSS so the map feels full-bleed and the
     # selectbox overlay floats over the deck.
@@ -476,24 +467,31 @@ def render_citymap_panel() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Floating overlay row: city dropdown + layer toggles popover ──────
-    col_city, col_layers, _spacer = st.columns([2.0, 1.6, 6.0])
+    # ── Floating overlay row: AOI dropdown + layer toggles popover ───────
+    col_aoi, col_layers, _spacer = st.columns([2.4, 1.6, 6.0])
 
-    with col_city:
-        city_labels  = {v["display_name"]: k for k, v in CITIES.items()}
-        if not city_labels:
-            st.error("No cities configured — add one to data/config/cities.yaml.")
+    with col_aoi:
+        aoi_ids = list_aois()
+        if not aoi_ids:
+            st.error("No AOIs configured — add one to data/config/aoi.yaml.")
             return
-        default_label = next(iter(city_labels.keys()))
+        # Build display label "<icon> <display_name>" per AOI; selector
+        # value is the AOI id.
+        def _aoi_label(aoi_id: str) -> str:
+            cfg = get_aoi(aoi_id)
+            return f"{_AOI_KIND_ICON.get(cfg['kind'], '📍')} {cfg['display_name']}"
+        label_to_id = {_aoi_label(a): a for a in aoi_ids}
+        labels = list(label_to_id.keys())
+        # Restore previous selection if still valid
+        prev = st.session_state.get("citymap_aoi_label")
+        idx = labels.index(prev) if prev in label_to_id else 0
         label = st.selectbox(
-            "City", list(city_labels.keys()),
-            index=list(city_labels.keys()).index(
-                st.session_state.get("citymap_city_label", default_label)
-            ) if st.session_state.get("citymap_city_label") in city_labels else 0,
-            key="citymap_city_selector", label_visibility="collapsed",
+            "AOI", labels, index=idx,
+            key="citymap_aoi_selector", label_visibility="collapsed",
         )
-        st.session_state["citymap_city_label"] = label
-        city_id = city_labels[label]
+        st.session_state["citymap_aoi_label"] = label
+        aoi_id = label_to_id[label]
+        aoi_cfg = get_aoi(aoi_id)
 
     with col_layers:
         with st.popover("🧭 Layers", use_container_width=True):
@@ -524,10 +522,10 @@ def render_citymap_panel() -> None:
                     unsafe_allow_html=True,
                 )
 
-    # ── Load data ────────────────────────────────────────────────────────
-    risk_df    = _load_worst_risk_per_cell(city_id)
-    insight_df = _load_open_insights_by_cell(city_id)
-    event_df   = _load_event_points(city_id)
+    # ── Load data (spatial — Phase 1 AOI lens) ────────────────────────────
+    risk_df    = _load_worst_risk_per_cell(aoi_id)
+    insight_df = _load_open_insights_by_cell(aoi_id)
+    event_df   = _load_event_points(aoi_id)
 
     layers = _build_layers(
         risk_df, insight_df, event_df,
@@ -536,12 +534,18 @@ def render_citymap_panel() -> None:
         show_event_icons=show_icons,
     )
 
-    # ── Initial viewport: city centre + sensible zoom ────────────────────
-    centre = get_centre(city_id)
+    # ── Initial viewport: AOI bbox centroid + zoom derived from area ─────
+    bbox = bbox_of(aoi_id)
+    centre_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
+    centre_lon = (bbox["lon_min"] + bbox["lon_max"]) / 2.0
+    # Map the AOI's H3 resolution to a sensible default zoom (smaller
+    # AOIs → finer res → higher zoom).
+    zoom_by_resolution = {9: 13, 8: 11, 7: 9, 6: 7, 5: 5}
+    zoom = zoom_by_resolution.get(resolution_of(aoi_id), 11)
     view_state = pdk.ViewState(
-        latitude=centre[0],
-        longitude=centre[1],
-        zoom=get_zoom(city_id),
+        latitude=centre_lat,
+        longitude=centre_lon,
+        zoom=zoom,
         pitch=0,
         bearing=0,
     )
@@ -596,13 +600,17 @@ def render_citymap_panel() -> None:
 
     with side_col:
         if clicked_h3:
-            _render_cell_detail(clicked_h3, city_id)
+            _render_cell_detail(clicked_h3, aoi_id)
         else:
             n_cells   = len(risk_df)
             n_insight = len(insight_df)
             n_events  = len(event_df)
-            st.markdown(f"#### {city_id.title()}")
-            st.caption(f"{n_cells:,} assessed cells")
+            kind_icon = _AOI_KIND_ICON.get(aoi_cfg["kind"], "📍")
+            st.markdown(f"#### {kind_icon} {aoi_cfg['display_name']}")
+            st.caption(
+                f"{aoi_cfg['kind']} · H3 res {resolution_of(aoi_id)} · "
+                f"{n_cells:,} assessed cells"
+            )
             if n_insight:
                 tier_counts = insight_df["priority_tier"].value_counts().to_dict()
                 bits = []

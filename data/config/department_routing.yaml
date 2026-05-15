@@ -263,7 +263,51 @@ cities:
         secondary: [kmc_health, imd_kanpur]
         action_template: "Pollution is transported from upwind sources outside this cell — coordinate with regional/airshed-level intervention; local enforcement unlikely to resolve. Kanpur sits in the Indo-Gangetic Plain (high winter PM transport corridor); flag for inter-state coordination during November-January peak."
 
-# Fallback routing when no city-specific config exists
+# ── Non-city AOI routing ────────────────────────────────────────────────────
+# Airsheds, watersheds, corridors etc. have their own routing because the
+# responsible body is regional/national, not municipal. The router falls
+# back to cities[...] for member-AOI specific actions when needed.
+airsheds:
+
+  igp_north:
+    departments:
+      cpcb_central:
+        name: "Central Pollution Control Board (Delhi HQ)"
+        causes: [regional_transport, industrial_emission]
+        action_template: "Inter-state coordination notice; multi-state task force review"
+
+      ncap_directorate:
+        name: "National Clean Air Programme (NCAP) directorate"
+        causes: [regional_transport, meteorological_trapping]
+        action_template: "NCAP regional advisory; coordinate non-attainment-city action plans"
+
+      moefcc_climate:
+        name: "Ministry of Environment, Forest & Climate Change — Climate Cell"
+        causes: [meteorological_trapping]
+        action_template: "Inter-state weather-driven advisory; cross-state coordination"
+
+      imd_regional:
+        name: "IMD Regional Meteorology (New Delhi)"
+        causes: [meteorological_trapping, regional_transport]
+        action_template: "Issue trajectory-based advisory; coordinate with state IMDs"
+
+    cause_routing:
+      regional_transport:
+        primary: cpcb_central
+        secondary: [ncap_directorate, imd_regional]
+        action_template: "Trans-boundary PM transport detected — IGP-scale event. Coordinate non-attainment-city action plans; advise state PCBs in upwind states (Punjab/Haryana for stubble-burning season, Oct-Jan). Local enforcement insufficient — escalate to airshed-level intervention."
+
+      meteorological_trapping:
+        primary: ncap_directorate
+        secondary: [cpcb_central, moefcc_climate, imd_regional]
+        action_template: "Regional inversion / low-mixing event affecting multiple cities in the IGP. Issue coordinated health advisory; pre-position vulnerable-population resources; pause non-essential emission-intensive activities across member cities."
+
+      industrial_emission:
+        primary: cpcb_central
+        secondary: [ncap_directorate]
+        action_template: "Industrial cluster contributing to airshed-scale pollution. Coordinate inspection with member-city PCBs (state-level enforcement) and CPCB Central for trans-state coordination."
+
+# Fallback routing when no AOI-specific config exists
 default:
   cause_routing:
     construction_dust:

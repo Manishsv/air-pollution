@@ -191,7 +191,10 @@ aois:
     kind: airshed
     country: IN
     timezone: Asia/Kolkata
-    enabled: false                  # Phase 0: declared but inert
+    enabled: true                   # Phase 1: visible in dashboard. Aggregates
+                                    # cells already ingested under member
+                                    # cities via spatial lens — does not
+                                    # trigger its own bbox-wide ingest sweep
     # Resolution auto-derived from bbox area (~1.2M km² → res 5).
     # Override here if you want finer detail at higher compute cost.
     # resolution: 6

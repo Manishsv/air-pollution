@@ -57,13 +57,30 @@ def _load_routing_config() -> dict:
         return {}
 
 
-def _routing_for_cause(config: dict, city_id: str, cause: str) -> dict[str, Any]:
-    """Return routing block for a cause. Falls back to default if city not configured."""
-    city_block = config.get("cities", {}).get(city_id, {})
-    routing = city_block.get("cause_routing", {}).get(cause)
-    if routing is None:
-        routing = config.get("default", {}).get("cause_routing", {}).get(cause, {})
-    return routing or {}
+def _routing_for_cause(config: dict, aoi_id: str, cause: str) -> dict[str, Any]:
+    """Return routing block for a cause given the AOI it surfaced under.
+
+    Lookup order (Phase 1 AOI-aware routing):
+      1. cities[<aoi_id>]    — city-AOI routing (municipal + state PCB)
+      2. airsheds[<aoi_id>]  — airshed-AOI routing (CPCB Central + NCAP)
+      3. watersheds[<aoi_id>] — watershed-AOI routing (CWC + state irrigation)
+      4. corridors[<aoi_id>] — corridor-AOI routing
+      5. default             — schema-level fallback
+
+    Today the param is named `aoi_id` for clarity; callers still pass
+    the `city_id` of the insight, which (in Phase 0 / 1) is the city
+    the cell was ingested under, not the airshed lens that surfaced it.
+    Phase 2 will refactor packet generation to emit one packet per
+    (cell, AOI) tuple — at which point this function gets called with
+    the surfacing AOI's id explicitly.
+    """
+    for section_key in ("cities", "airsheds", "watersheds", "corridors", "ports", "airports"):
+        block = config.get(section_key, {}) or {}
+        if aoi_id in block:
+            routing = block[aoi_id].get("cause_routing", {}).get(cause)
+            if routing:
+                return routing
+    return config.get("default", {}).get("cause_routing", {}).get(cause, {}) or {}
 
 
 class InsightPacketGenerator:

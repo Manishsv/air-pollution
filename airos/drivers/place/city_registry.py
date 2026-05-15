@@ -29,8 +29,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Location of the YAML file — relative to this module's package root
-_YAML_PATH = Path(__file__).resolve().parents[3] / "data" / "config" / "cities.yaml"
+# Location of the YAML file — relative to this module's package root.
+# The registry was renamed cities.yaml -> aoi.yaml in Phase 0 of the AOI
+# generalisation; this module preserves city-only semantics by reading
+# from aoi.yaml when present and falling back to cities.yaml otherwise.
+_AOI_PATH    = Path(__file__).resolve().parents[3] / "data" / "config" / "aoi.yaml"
+_LEGACY_PATH = Path(__file__).resolve().parents[3] / "data" / "config" / "cities.yaml"
+_YAML_PATH   = _AOI_PATH if _AOI_PATH.exists() else _LEGACY_PATH
 
 
 @dataclass(frozen=True)
@@ -71,8 +76,16 @@ def _load() -> dict[str, CityConfig]:
     with open(_YAML_PATH) as fh:
         raw: dict[str, Any] = yaml.safe_load(fh) or {}
 
+    # Support both schemas: legacy "cities:" and new "aois:" (Phase 0).
+    blocks = raw.get("aois") or raw.get("cities", {}) or {}
+
     cities: dict[str, CityConfig] = {}
-    for city_id, cfg in (raw.get("cities") or {}).items():
+    for city_id, cfg in blocks.items():
+        # Only city-kind AOIs are exposed via the legacy CityConfig.
+        # Non-city AOIs (airshed, watershed, …) are consumed via
+        # airos.os.aoi_registry directly.
+        if cfg.get("kind", "city") != "city":
+            continue
         try:
             cities[city_id] = CityConfig(
                 id=city_id,
