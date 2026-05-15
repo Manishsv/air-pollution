@@ -1,9 +1,12 @@
 """
-City registry for the AIR Climate Suite.
+Legacy city registry for the AIR Climate Suite.
 
-Loads from `data/config/cities.yaml` at import time so the ingestor and
-dashboard share a single source of truth. Adding a new city is a YAML
-edit + restart — no Python changes needed.
+Loads from `data/config/aoi.yaml` at import time (renamed from
+cities.yaml in Phase 0 of the AOI generalisation). Existing call
+sites that import `CITIES` / `PANEL_CITIES` / `get_bbox` / `get_centre`
+etc. continue to work — only `kind: city` entries from the AOI registry
+are exposed here. For multi-kind AOI logic (airshed / watershed /
+corridor), use `airos.os.aoi_registry` instead.
 
 Connector selection is driven by environment variables (not per-city config):
   CPCB_API_KEY    — if set, CPCB is used for air quality
@@ -21,9 +24,13 @@ import yaml
 logger = logging.getLogger(__name__)
 
 # Path resolution: this file is at airos/os/city_config.py, so the repo
-# root is parents[2]. The YAML lives at data/config/cities.yaml.
+# root is parents[2]. The YAML was renamed cities.yaml -> aoi.yaml in
+# Phase 0; we still fall back to cities.yaml for back-compat during the
+# transition window.
 _REPO_ROOT  = Path(__file__).resolve().parents[2]
-_CITIES_YML = _REPO_ROOT / "data" / "config" / "cities.yaml"
+_AOI_YML    = _REPO_ROOT / "data" / "config" / "aoi.yaml"
+_LEGACY_YML = _REPO_ROOT / "data" / "config" / "cities.yaml"
+_CITIES_YML = _AOI_YML if _AOI_YML.exists() else _LEGACY_YML
 
 # CPCB API uses inconsistent city spellings — these overrides map our
 # canonical city_id to the spelling the CPCB feed expects. Only listed
@@ -51,18 +58,23 @@ def _bbox_centre(bbox: dict) -> tuple[float, float]:
 
 
 def _load_cities() -> dict[str, dict]:
-    """Parse cities.yaml and return only enabled cities, in YAML order."""
+    """Parse aoi.yaml (or legacy cities.yaml) and return only enabled
+    AOIs of kind 'city'. Other kinds (airshed / watershed / corridor)
+    are filtered out here and consumed via aoi_registry instead."""
     if not _CITIES_YML.exists():
         logger.warning(
-            "cities.yaml not found at %s — city registry will be empty.",
-            _CITIES_YML,
+            "AOI registry not found at %s — empty.", _CITIES_YML,
         )
         return {}
     raw = yaml.safe_load(_CITIES_YML.read_text()) or {}
-    cities_raw = raw.get("cities", {}) or {}
+    # Support both "cities:" (legacy) and "aois:" (new) top-level keys.
+    cities_raw = raw.get("aois") or raw.get("cities", {}) or {}
     out: dict[str, dict] = {}
     for cid, cfg in cities_raw.items():
         if not cfg.get("enabled", False):
+            continue
+        # Filter to city-kind only; AOIs of other kinds use aoi_registry.
+        if cfg.get("kind", "city") != "city":
             continue
         bbox = cfg.get("bbox") or {}
         if not bbox or not all(k in bbox for k in ("lat_min", "lon_min", "lat_max", "lon_max")):

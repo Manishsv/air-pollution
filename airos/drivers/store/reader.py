@@ -446,6 +446,82 @@ def get_h3_context(
 # Signals history
 # ---------------------------------------------------------------------------
 
+def signals_for_aoi(
+    aoi_id: str,
+    *,
+    signal: str | None = None,
+    domain: str | None = None,
+    hour_bucket_after: str | None = None,
+    only_latest_per_cell: bool = False,
+) -> pd.DataFrame:
+    """Spatial-filter query over `h3_signals` — Phase 0 of the AOI lens.
+
+    Returns signal rows for every H3 cell whose centroid sits inside
+    the AOI's bbox, regardless of the row's `city_id` column. This is
+    the query path that makes AOIs into lenses over a single global
+    cell space; the same cell shows up in any AOI whose bbox contains
+    it, without re-ingestion.
+
+    Args
+    ----
+    aoi_id              The AOI to query. See airos.os.aoi_registry.
+    signal              Optional signal name filter ("PM25", etc).
+    domain              Optional domain filter ("air", etc).
+    hour_bucket_after   Optional ISO-8601 lower bound on hour_bucket.
+    only_latest_per_cell If True, returns only the most-recent row per
+                        (h3_id, signal) — equivalent to a "current
+                        state" snapshot.
+
+    Notes
+    -----
+    Joins to h3_metadata for the centroid coordinates. Cells without
+    centroid metadata (extremely rare today) are excluded.
+    """
+    from airos.os.aoi_registry import bbox_of
+    bbox = bbox_of(aoi_id)
+    filters = [
+        "m.centroid_lat BETWEEN ? AND ?",
+        "m.centroid_lon BETWEEN ? AND ?",
+    ]
+    params: list = [bbox["lat_min"], bbox["lat_max"],
+                    bbox["lon_min"], bbox["lon_max"]]
+    if signal:
+        filters.append("s.signal = ?")
+        params.append(signal)
+    if domain:
+        filters.append("s.domain = ?")
+        params.append(domain)
+    if hour_bucket_after:
+        filters.append("s.hour_bucket >= ?")
+        params.append(hour_bucket_after)
+    where = " AND ".join(filters)
+    if only_latest_per_cell:
+        sql = f"""
+            SELECT s.* FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+            INNER JOIN (
+                SELECT s2.h3_id, s2.signal, MAX(s2.hour_bucket) AS hb
+                FROM h3_signals s2
+                INNER JOIN h3_metadata m2 ON m2.h3_id = s2.h3_id
+                WHERE {where.replace('s.', 's2.').replace('m.', 'm2.')}
+                GROUP BY s2.h3_id, s2.signal
+            ) latest ON latest.h3_id = s.h3_id
+                    AND latest.signal = s.signal
+                    AND latest.hb = s.hour_bucket
+            WHERE {where}
+        """
+        # The inner query needs the same params duplicated:
+        params = params + params
+    else:
+        sql = f"""
+            SELECT s.* FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+            WHERE {where}
+            ORDER BY s.hour_bucket
+        """
+    return _store().fetchdf(sql, params)
+
+
 def get_signals_history(
     h3_id: str,
     city_id: str,

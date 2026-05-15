@@ -60,7 +60,47 @@ Used for OpenStreetMap points-of-interest. Each candidate OSM feature is run thr
 
 *Caveat — single-category collapse:* a hospital with an eatery, a market that doubles as a transit terminal, or a waste facility on industrial land fits multiple categories. The per-cell `POI_*_COUNT` aggregate uses only the **primary** (most-specific) category for back-compat. The full tag set is preserved in `poi_points.secondary_tags_json` so the cause classifier and dossier **can** reason over feature multiplicity when needed; the aggregate count is the conservative single-tag view.
 
-### 1.3 Conceptual Object Model
+### 1.3 AOIs are query lenses, not storage partitions
+
+An **Area of Interest (AOI)** is any spatial region we want to monitor — a city, an airshed, a watershed, a regional economic corridor, a port, an airport. AOIs are declared in `data/config/aoi.yaml` with a `kind`, a bbox, an optional explicit `resolution`, optional `member_aois`, and routing/topography hints.
+
+The architectural principle: **cells are AOI-agnostic at storage time.** A given H3 cell at (28.61°N, 77.21°E) represents the same square kilometre of central Delhi whether you view it as part of:
+
+- the **city** AOI `delhi` (res 8, ~0.74 km² cells),
+- the **airshed** AOI `igp_north` (res 5, ~250 km² cells, covering Delhi + Lucknow + Kanpur + adjacent regions),
+- a **watershed** AOI covering the Yamuna basin,
+- or a **corridor** AOI for Delhi-Mumbai industrial belt.
+
+The PM2.5 reading in that cell at a given hour is one value, full stop. There is no "PM2.5-as-seen-from-Delhi" vs "PM2.5-as-seen-from-IGP-North" — that would be an ontological confusion. **An AOI is a query lens that selects + aggregates cells; it does not own them.** The same cell appears in any AOI whose bbox contains its centroid, with no re-ingestion required.
+
+What follows from this:
+
+| What | AOI-scoped or cell-scoped? |
+|---|---|
+| Time-series signal data (`h3_signals`) | **Cell-scoped** — one row per (h3_id, signal, hour_bucket) regardless of AOI |
+| Static metadata (`h3_metadata`, centroid, area_name, terrain class) | **Cell-scoped** |
+| Risk assessment (`h3_assessments`) | **Cell-scoped** — same risk tier whatever AOI is observing |
+| Aggregation radius signals (`UPWIND_PM25_LOAD_K2` vs `..._K10`) | **Cell-scoped**, but emitted as separate named signals per radius — consumer AOIs pick which to read |
+| City-relative anomaly annotation (`"+353pp vs city median"`) | **AOI-scoped at query time** — the same cell is +353pp vs Delhi median *and* +50pp vs IGP-North median simultaneously |
+| Insight (`h3_insights`) | **AOI-scoped** — the same cell can produce one insight for the city dispatcher (low priority, "moderate PM in your ward") *and* one for the airshed coordinator (high priority, "top-10 receptor of regional transport"). Acts of interpretation are AOI-bound; underlying data isn't |
+| Decision packet (`h3_packets`) | **AOI-scoped** — routing differs by AOI kind: city → municipal+state PCB; airshed → CPCB Central + NCAP; watershed → CWC + state irrigation |
+| Outcome (`h3_outcomes`) | **AOI-scoped** — verdicts close the loop on a specific packet, which is AOI-bound |
+
+**Resolution auto-derivation.** AOIs can declare an explicit `resolution: 5-9`; if omitted, the registry derives one from bbox area to keep total cells per AOI in the ~500–3000 range:
+
+| Area | Default H3 resolution | Avg cell size | Typical use |
+|---|---|---|---|
+| < 200 km² | 9 | ~0.11 km² | Ward / sub-district |
+| 200–2,500 km² | 8 | ~0.74 km² | City |
+| 2,500–25,000 km² | 7 | ~5.2 km² | Metro region |
+| 25,000–250,000 km² | 6 | ~36 km² | Airshed |
+| > 250,000 km² | 5 | ~252 km² | Country-scale |
+
+So an Indo-Gangetic-Plain AOI (~1.2 M km²) auto-resolves to res 5, giving ~4,800 cells — manageable. A small ward (~50 km²) auto-resolves to res 9, giving ~450 cells — also manageable. The system gracefully spans 4 orders of magnitude in AOI scale without operator tuning.
+
+**Migration status.** Phase 0 (this release) makes AOIs a *de facto* lens via spatial queries (`airos.os.aoi_registry`, `signals_for_aoi`). The `city_id` column on cell tables is preserved for back-compat but is no longer the canonical filter — query by AOI bbox instead. Phase 1 migrates the dashboard. Phase 2 drops the column. See `airos/os/aoi_registry.py` for the canonical API.
+
+### 1.4 Conceptual Object Model
 
 The system makes a deliberate distinction between several related but distinct objects. Conflating them is the most common source of overclaiming in urban analytics. Each row downstream depends on the rows above:
 
