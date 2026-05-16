@@ -57,7 +57,7 @@ aois:
     kind: city
     country: IN
     timezone: Asia/Kolkata
-    enabled: true
+    enabled: false                  # paused while we focus on IGP airshed
     bbox:
       lat_min: 12.834
       lon_min: 77.461
@@ -69,7 +69,7 @@ aois:
     kind: city
     country: IN
     timezone: Asia/Kolkata
-    enabled: true
+    enabled: false                  # paused while we focus on IGP airshed
     bbox:
       lat_min: 17.287
       lon_min: 78.270
@@ -81,7 +81,7 @@ aois:
     kind: city
     country: IN
     timezone: Asia/Kolkata
-    enabled: true
+    enabled: false                  # paused while we focus on IGP airshed
     bbox:
       lat_min: 18.890
       lon_min: 72.776
@@ -105,7 +105,7 @@ aois:
     kind: city
     country: IN
     timezone: Asia/Kolkata
-    enabled: true
+    enabled: false                  # paused while we focus on IGP airshed
     bbox:
       lat_min: 12.878
       lon_min: 80.179
@@ -117,7 +117,7 @@ aois:
     kind: city
     country: IN
     timezone: Asia/Kolkata
-    enabled: true
+    enabled: false                  # paused while we focus on IGP airshed
     bbox:
       lat_min: 18.421
       lon_min: 73.735

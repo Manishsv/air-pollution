@@ -78,6 +78,8 @@ _ICON_ATLAS = {
                      "label": "Construction"},
     "industrial":   {"url": "https://img.icons8.com/color/48/000000/factory.png",
                      "label": "Industrial cluster"},
+    "mobility":     {"url": "https://img.icons8.com/color/48/000000/car--v2.png",
+                     "label": "Major road / transit hub"},
     "wind":         {"url": "https://img.icons8.com/ios-filled/50/0e62b8/up--v1.png",
                      "label": "Wind direction"},
 }
@@ -393,13 +395,23 @@ def _load_event_points(aoi_id: str) -> pd.DataFrame:
 
 
 def _poi_hotspot_points(bbox: dict, *, threshold: int = 3) -> list[dict]:
-    """Return construction + industrial icon points where POI counts
-    exceed `threshold` in any cell inside the bbox. Helps the airshed
-    view show structural emission sources alongside fires."""
+    """Pollution-source icon points inside `bbox`. Three signal families
+    are surfaced as map icons:
+
+      - POI_CONSTRUCTION_COUNT  →  🚧 construction
+      - POI_INDUSTRIAL_COUNT    →  🏭 industrial
+      - mobility: any cell with MAJOR_ROAD_RATIO ≥ 0.5 OR
+        POI_TRANSIT_TERMINAL_COUNT ≥ 2 →  🚗 mobility hub
+
+    Thresholds keep the icon density readable at airshed zoom. Returns
+    one row per (cell, hotspot-kind) — a cell with both industrial AND
+    mobility hubs gets two icons stacked on its centroid.
+    """
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
+        # Construction + industrial — straight POI count thresholds.
+        poi_rows = conn.execute(
             """
             SELECT s.h3_id, s.signal, s.value,
                    m.centroid_lat, m.centroid_lon
@@ -421,15 +433,43 @@ def _poi_hotspot_points(bbox: dict, *, threshold: int = 3) -> list[dict]:
              bbox["lat_min"], bbox["lat_max"],
              bbox["lon_min"], bbox["lon_max"]),
         ).fetchall()
+
+        # Mobility — high major-road share OR transit terminals. Both
+        # are vehicle emission proxies; the union covers highway
+        # corridors AND urban transit hubs.
+        mob_rows = conn.execute(
+            """
+            SELECT s.h3_id, s.signal, s.value,
+                   m.centroid_lat, m.centroid_lon
+            FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+            INNER JOIN (
+                SELECT h3_id, signal, MAX(hour_bucket) AS hb
+                FROM h3_signals
+                WHERE signal IN ('MAJOR_ROAD_RATIO', 'POI_TRANSIT_TERMINAL_COUNT')
+                GROUP BY h3_id, signal
+            ) latest ON latest.h3_id = s.h3_id
+                    AND latest.signal = s.signal
+                    AND latest.hb = s.hour_bucket
+            WHERE (
+                (s.signal = 'MAJOR_ROAD_RATIO' AND s.value >= 0.5)
+                OR (s.signal = 'POI_TRANSIT_TERMINAL_COUNT' AND s.value >= 2)
+            )
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
+            """,
+            (bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
+        ).fetchall()
     finally:
         conn.close()
 
     out: list[dict] = []
-    for r in rows:
-        sig_to_domain = {
-            "POI_CONSTRUCTION_COUNT": "construction",
-            "POI_INDUSTRIAL_COUNT":   "industrial",
-        }
+    sig_to_domain = {
+        "POI_CONSTRUCTION_COUNT": "construction",
+        "POI_INDUSTRIAL_COUNT":   "industrial",
+    }
+    for r in poi_rows:
         domain = sig_to_domain.get(r["signal"])
         if domain is None:
             continue
@@ -439,6 +479,25 @@ def _poi_hotspot_points(bbox: dict, *, threshold: int = 3) -> list[dict]:
             "lat":      float(r["centroid_lat"]),
             "lon":      float(r["centroid_lon"]),
             "magnitude": f"{r['signal']}={r['value']:.0f}",
+        })
+    # Dedup mobility hits — a cell can fire on both signals; show one
+    # mobility icon per cell with whichever signal triggered first.
+    seen_mob: set[str] = set()
+    for r in mob_rows:
+        if r["h3_id"] in seen_mob:
+            continue
+        seen_mob.add(r["h3_id"])
+        v = r["value"]
+        if r["signal"] == "MAJOR_ROAD_RATIO":
+            label = f"major-road share {v:.0%}"
+        else:
+            label = f"{int(v)} transit terminals"
+        out.append({
+            "h3_id":    r["h3_id"],
+            "domain":   "mobility",
+            "lat":      float(r["centroid_lat"]),
+            "lon":      float(r["centroid_lon"]),
+            "magnitude": label,
         })
     return out
 
