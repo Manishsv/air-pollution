@@ -197,6 +197,7 @@ def write_signals(
     level: int = 1,
     source: str = "pipeline",
     skip_conformance: bool = False,
+    expected_resolution: int | None = None,
     # ── Tranche A reproducibility (methodology §14) ────────────────────────
     # Optional kwargs — populate progressively from ingestor code. Each row
     # may also override these via r["..."] keys for per-row granularity.
@@ -225,7 +226,10 @@ def write_signals(
         try:
             from airos.os.sdk.conformance import validate_and_log
             driver = _get_active_driver(domain)
-            result = validate_and_log(rows, driver=driver, domain=domain)
+            result = validate_and_log(
+                rows, driver=driver, domain=domain,
+                expected_resolution=expected_resolution,
+            )
             if not result.ok:
                 _record_conformance(city_id, domain, ok=False, failures=result.failures)
                 return 0

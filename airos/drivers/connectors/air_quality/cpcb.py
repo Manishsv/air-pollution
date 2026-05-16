@@ -85,9 +85,22 @@ def _fetch_page(offset: int, api_key: str) -> dict:
     })
 
 
-def _fetch_all_records(city_name: str, api_key: str, session=None) -> list[dict]:
-    """Fetch all CPCB records via curl (bypasses IPv6 timeout), filter client-side."""
-    aliases = {a.lower() for a in _CITY_ALIASES.get(city_name.lower(), [city_name])}
+def _fetch_all_records(
+    city_name: str | None, api_key: str, session=None,
+) -> list[dict]:
+    """Fetch all CPCB records via curl (bypasses IPv6 timeout), filter client-side.
+
+    `city_name` semantics:
+      - A registered city id (e.g. 'bangalore') → filter records to that
+        city's name aliases. Standard per-city ingest path.
+      - None or '*' → no city-name filter; return every station record.
+        Used by the airshed-scale ingest path, which then filters by
+        bbox in the caller (so we get every station across the airshed,
+        not just the ones whose CPCB city tag matches a known alias).
+    """
+    bbox_only = (city_name is None) or (city_name == "*")
+    aliases = (None if bbox_only
+               else {a.lower() for a in _CITY_ALIASES.get(city_name.lower(), [city_name])})
 
     try:
         first = _fetch_page(0, api_key)
@@ -100,8 +113,13 @@ def _fetch_all_records(city_name: str, api_key: str, session=None) -> list[dict]
             records.extend(page.get("records", []))
             offset += _PAGE_LIMIT
 
-        matched = [r for r in records if (r.get("city") or "").strip().lower() in aliases]
-        logger.info("CPCB: fetched %d total, %d matched for city '%s'", len(records), len(matched), city_name)
+        if bbox_only:
+            matched = records
+            logger.info("CPCB: fetched %d total, bbox-only mode (no city filter)", len(records))
+        else:
+            matched = [r for r in records if (r.get("city") or "").strip().lower() in aliases]
+            logger.info("CPCB: fetched %d total, %d matched for city '%s'",
+                        len(records), len(matched), city_name)
         return matched
 
     except Exception as exc:
@@ -172,7 +190,7 @@ def _pivot_to_stations(records: list[dict]) -> pd.DataFrame:
 
 
 def fetch_air_quality_observations(
-    city_name: str,
+    city_name: str | None,
     lat_min: float,
     lon_min: float,
     lat_max: float,
@@ -182,24 +200,19 @@ def fetch_air_quality_observations(
     api_key: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Fetch real-time AQI observations from CPCB for a city.
+    Fetch real-time AQI observations from CPCB.
 
-    Stations outside the bounding box are filtered out. Returns a DataFrame
-    with columns matching the air_quality_observation_feed contract. Returns
-    an empty DataFrame (correct columns) on any failure.
+    Two modes:
+      - city_name registered in _CITY_ALIASES → filter records to that
+        city's aliases first, then to bbox.
+      - city_name=None or '*' → bbox-only mode. Every station whose
+        lat/lon falls inside the bbox is returned, regardless of CPCB's
+        city tag. Used by the airshed-scale ingest path so we get
+        Punjab/Haryana/UP stations in IGP-North without needing each
+        member city in the alias table.
 
-    Parameters
-    ----------
-    city_name : str
-        Canonical city name — see _CITY_ALIASES for supported values.
-    lat_min, lon_min, lat_max, lon_max : float
-        Bounding box; stations outside are dropped.
-    lookback_hours : int
-        Accepted for API compatibility; CPCB returns current snapshot only.
-    session : requests.Session, optional
-        Injectable for testing.
-    api_key : str, optional
-        Override; defaults to CPCB_API_KEY environment variable.
+    Returns a DataFrame with columns matching the
+    air_quality_observation_feed contract. Empty DataFrame on failure.
     """
     empty = pd.DataFrame(columns=_COLUMNS)
 

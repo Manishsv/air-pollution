@@ -104,6 +104,7 @@ def validate_signal_rows(
     *,
     driver: "H3DataSourceDriver | None" = None,
     domain: str | None = None,
+    expected_resolution: int | None = None,
 ) -> ConformanceResult:
     """Check a list of signal rows (as passed to write_signals) for conformance.
 
@@ -173,18 +174,23 @@ def validate_signal_rows(
                 "or a driver bug."
             )
 
-    # ── BLOCKING RULE 3: H3 resolution must be 8 ─────────────────────────
+    # ── BLOCKING RULE 3: H3 resolution must match the caller's expectation
+    # Default expectation is res 8 (city ingest), but airshed / watershed
+    # / corridor ingest paths declare a coarser resolution per AOI — pass
+    # `expected_resolution=5` (or whatever) and that becomes the required
+    # value for this write batch.
+    expected = expected_resolution if expected_resolution is not None else _EXPECTED_H3_RES
     wrong_res: list[str] = []
     for h3_id in h3_ids_present:
         res = _h3_resolution(h3_id)
-        if res is not None and res != _EXPECTED_H3_RES:
+        if res is not None and res != expected:
             wrong_res.append(h3_id)
     if wrong_res:
         sample = wrong_res[:3]
         failures.append(
             f"[FAIL] [{domain_tag}] {len(wrong_res)} h3_id(s) are not resolution "
-            f"{_EXPECTED_H3_RES} (sample: {sample}). "
-            "All signals must be written at H3 resolution 8."
+            f"{expected} (sample: {sample}). "
+            f"All signals in this batch must be written at H3 resolution {expected}."
         )
 
     # ── NON-BLOCKING RULE 4: null values ─────────────────────────────────
@@ -225,12 +231,16 @@ def validate_and_log(
     *,
     driver: "H3DataSourceDriver | None" = None,
     domain: str | None = None,
+    expected_resolution: int | None = None,
 ) -> ConformanceResult:
     """Run validation and emit log entries for failures and warnings.
 
     Returns the ConformanceResult so the caller can decide whether to block.
     """
-    result = validate_signal_rows(rows, driver=driver, domain=domain)
+    result = validate_signal_rows(
+        rows, driver=driver, domain=domain,
+        expected_resolution=expected_resolution,
+    )
 
     for msg in result.failures:
         logger.error("Conformance FAIL: %s", msg)

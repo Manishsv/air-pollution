@@ -247,6 +247,24 @@ class Scheduler:
         )
         logger.info("Sweep #%d ingest: %d rows written", self._sweep_count, total_rows)
 
+        # 1a' — Airshed-scale ingest. For every enabled non-city AOI
+        # (kind ∈ airshed/watershed/corridor/...), runs the AOI's
+        # declared domain subset at the AOI's H3 resolution across
+        # its full bbox. Currently supports air + fire; weather/heat/
+        # water still tracked as TBD (need bbox-grid connector mode).
+        try:
+            from airos.drivers.store.airshed_ingestor import run_airshed_ingest_sweep
+            ai_results = run_airshed_ingest_sweep()
+            ai_rows = sum(n for dm in ai_results.values() for n in dm.values()
+                          if isinstance(n, int) and n > 0)
+            if ai_rows:
+                logger.info(
+                    "Sweep #%d airshed ingest: %d rows across %d AOI(s)",
+                    self._sweep_count, ai_rows, len(ai_results),
+                )
+        except Exception as exc:
+            logger.warning("[airshed-ingest] step failed: %s", exc)
+
         # 1b — Reverse-geocode pending cells (newly onboarded cities get
         # named automatically over a few hours of normal sweep operation).
         # Capped at 60 cells/sweep (~66s at Nominatim's 1.1s rate limit).

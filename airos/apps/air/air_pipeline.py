@@ -220,7 +220,21 @@ def run_air_quality_pipeline(
         clat, clon = cell["centroid_lat"], cell["centroid_lon"]
 
         if has_aq:
-            pm25_val = _idw_interpolate(clat, clon, obs_lats, obs_lons, obs_pm25)
+            # IDW on PM25 with NaN-filtered station set — same protection
+            # the other pollutants already had via _idw_or_none. Without
+            # this, a single NaN station propagates through the dot product
+            # and every cell's PM25 becomes NaN — which is why earlier
+            # airshed-scale sweeps with 204 stations (a few NaN) produced
+            # zero PM25 rows.
+            pm25_valid = ~np.isnan(obs_pm25.astype(float))
+            if pm25_valid.any():
+                pm25_val = _idw_interpolate(
+                    clat, clon,
+                    obs_lats[pm25_valid], obs_lons[pm25_valid],
+                    obs_pm25[pm25_valid].astype(float),
+                )
+            else:
+                pm25_val = float("nan")
             score = min(pm25_val / _rules.get("air", "pm25_score_saturation_ug_m3", default=120.0), 1.0)
             dists = np.array([_haversine_km(clat, clon, la, lo)
                               for la, lo in zip(obs_lats, obs_lons)])

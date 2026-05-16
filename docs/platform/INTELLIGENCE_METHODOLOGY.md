@@ -107,6 +107,15 @@ So an Indo-Gangetic-Plain AOI (~1.2 M km²) auto-resolves to res 5, giving ~4,80
 - **Phase 3 item 1** (deferred): drop the `city_id` column from cell tables. Multi-week refactor; column has been semantically dead since Phase 0 but the migration risk doesn't justify the storage win today.
 - **Phase 3 item 4** (deferred): per-`(cell, AOI)` agent runs (one *finding text* tailored per AOI lens). Doubles LLM cost; today the same cell can already be routed to different bodies via per-AOI packets sharing one finding.
 
+- **Phase 4** (airshed-scale ingest): non-city AOIs now run their own ingest sweep at their declared H3 resolution across their full bbox. New module `airos.drivers.store.airshed_ingestor` orchestrates; new scheduler step 1a' triggers it after the per-city sweep. Domain subset is configurable per AOI via the `domains:` YAML field; defaults per kind live in `aoi_registry._KIND_DEFAULT_DOMAINS` (airshed → air/weather/fire/heat/water; watershed → water/weather/flood/fire/terrain; etc). Currently the ingest path supports `air` and `fire` end-to-end — they read every CPCB station / FIRMS hotspot in the AOI bbox (no city-name filter), IDW or point-aggregate to the AOI's resolution. **Weather, heat, water** still pending — they use city-centroid broadcast connectors today that can't fill an airshed-scale grid without re-engineering. Supporting bug fixes in this phase: (a) PM25 IDW now NaN-filters its station set the same way PM10/NO2/SO2 already did — without this, a single NaN station at airshed scale (4-5 of 204 IGP stations have null PM25 at any given hour) propagates through the dot product and kills every cell's value. (b) Conformance gate now accepts an `expected_resolution` per write batch instead of hardcoding res 8; airshed writes at res 5 pass; city writes still default to res 8.
+
+Verification (IGP-North, post-Phase-4 first sweep):
+- 204 CPCB stations across the airshed bbox (vs ~5-10 per individual city).
+- 4,704 cells with real PM25 values at H3 res 5, lat 24.5°-32.0° / lon 72.5°-89.0° — the entire IGP plain, not just three city clusters.
+- PM25 range 17-193 µg/m³, mean 99 µg/m³ — heat-dominated airshed-wide elevation captured.
+- 142 cells with active FRP > 0 — FIRMS hotspots across UP/Bihar.
+- 547 fire detections returned by FIRMS within bbox.
+
 See `airos/os/aoi_registry.py` for the canonical API.
 
 ### 1.4 Conceptual Object Model

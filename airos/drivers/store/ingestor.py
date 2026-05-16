@@ -475,7 +475,23 @@ def _tier_water(val: float | None) -> str:
 # Per-domain ingest functions
 # ---------------------------------------------------------------------------
 
-def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
+def _ingest_air(
+    city_id: str, bbox: dict, *,
+    force: bool = False,
+    resolution: int | None = None,
+    bbox_only: bool = False,
+) -> int:
+    """Ingest air-quality data for a city or airshed.
+
+    `city_id` is the AOI id under which signals are tagged (still named
+    city_id for back-compat with the existing column).
+    `resolution` overrides DEFAULT_H3_RES when set — used by the airshed
+    ingest path (res 5 hexes for airsheds, res 8 for cities).
+    `bbox_only` skips the CPCB city-name filter so we collect every
+    station whose lat/lon is in the bbox — used by airshed ingest so
+    Punjab/Haryana/UP stations land for IGP-North without each needing
+    an alias entry.
+    """
     _check_interval("air", city_id, force)
     from airos.apps.air.air_pipeline import (
         run_air_quality_pipeline, build_air_quality_decision_packets,
@@ -484,21 +500,26 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
     from airos.drivers.store.writer import write_signals, write_assessment, upsert_metadata
     from airos.drivers.store.coverage import coverage_signals
 
+    h3_res = int(resolution) if resolution is not None else DEFAULT_H3_RES
+
     # Fetch AQ observations — check observation store cache first, then live API.
-    # Direct connector calls; no @st.cache_data needed in the background ingestor.
     aq_df = None
-    try:
-        from airos.drivers.observation_store import ObservationStoreReader, to_wide
-        cached = ObservationStoreReader().read_recent("air", city_id, max_age_hours=1)
-        if not cached.empty:
-            aq_df = to_wide(cached)
-    except Exception:
-        pass
+    if not bbox_only:
+        try:
+            from airos.drivers.observation_store import ObservationStoreReader, to_wide
+            cached = ObservationStoreReader().read_recent("air", city_id, max_age_hours=1)
+            if not cached.empty:
+                aq_df = to_wide(cached)
+        except Exception:
+            pass
     if aq_df is None or (hasattr(aq_df, "empty") and aq_df.empty):
         try:
             from airos.drivers.connectors.air_quality import fetch_air_quality_observations
+            # airshed-mode: pass city_name=None so every station in the
+            # bbox is returned regardless of CPCB's city tag.
+            cpcb_city = None if bbox_only else city_id
             aq_df = fetch_air_quality_observations(
-                city_name=city_id,
+                city_name=cpcb_city,
                 lat_min=bbox["lat_min"], lon_min=bbox["lon_min"],
                 lat_max=bbox["lat_max"], lon_max=bbox["lon_max"],
                 lookback_hours=2,
@@ -515,13 +536,13 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
     # Use run_air_quality_pipeline directly — gets the full DataFrame including
     # nearest_obs_km, centroid_lat/lon that build_air_quality_dashboard strips out.
     pipeline = run_air_quality_pipeline(
-        aq_df, DEFAULT_H3_RES, city_id,
+        aq_df, h3_res, city_id,
         bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"],
     )
     risk_cells_df = pipeline["risk_cells"]
 
     packets = build_air_quality_decision_packets(
-        aq_df=aq_df, h3_resolution=DEFAULT_H3_RES, city_id=city_id, **bbox, top_n=20,
+        aq_df=aq_df, h3_resolution=h3_res, city_id=city_id, **bbox, top_n=20,
     )
 
     # AQI category → canonical risk_level
@@ -552,7 +573,7 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
             continue
         clat = cell.get("centroid_lat")
         clon = cell.get("centroid_lon")
-        upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=DEFAULT_H3_RES,
+        upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res,
                         centroid_lat=clat, centroid_lon=clon)
 
         import pandas as _pd
@@ -675,6 +696,7 @@ def _ingest_air(city_id: str, bbox: dict, *, force: bool = False) -> int:
     written = write_signals(
         signal_rows, city_id=city_id, domain="air", source="cpcb",
         geometry_assignment_method="idw",
+        expected_resolution=h3_res,
     )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""),
@@ -890,22 +912,29 @@ def _ingest_noise(city_id: str, bbox: dict, *, force: bool = False) -> int:
     return written
 
 
-def _ingest_fire(city_id: str, bbox: dict, *, force: bool = False) -> int:
+def _ingest_fire(
+    city_id: str, bbox: dict, *,
+    force: bool = False,
+    resolution: int | None = None,
+    bbox_only: bool = False,   # accepted for signature parity; FIRMS is
+                               # already bbox-only by nature
+) -> int:
     _check_interval("fire", city_id, force)
     from airos.drivers.connectors.satellite.firms import fetch_firms_fires
     from airos.apps.fire.fire_pipeline import (
         build_fire_dashboard, build_fire_decision_packets,
     )
     from airos.drivers.store.writer import write_signals, write_assessment, upsert_metadata
+    h3_res = int(resolution) if resolution is not None else DEFAULT_H3_RES
     fire_df = fetch_firms_fires(bbox["lat_min"], bbox["lon_min"], bbox["lat_max"], bbox["lon_max"], day_range=2)
     if fire_df is None or (hasattr(fire_df, "empty") and fire_df.empty):
         logger.info("[%s/fire] No live FIRMS data — skipping.", city_id)
         record_ingest(city_id=city_id, domain="fire", rows_written=0, status="partial",
                       error_msg="no live FIRMS data")
         return 0
-    dashboard = build_fire_dashboard(fire_df=fire_df, h3_resolution=DEFAULT_H3_RES,
+    dashboard = build_fire_dashboard(fire_df=fire_df, h3_resolution=h3_res,
                                      city_id=city_id, **bbox)
-    packets   = build_fire_decision_packets(fire_df=fire_df, h3_resolution=DEFAULT_H3_RES,
+    packets   = build_fire_decision_packets(fire_df=fire_df, h3_resolution=h3_res,
                                             city_id=city_id, **bbox, top_n=20)
     from airos.drivers.store.coverage import coverage_signals
     signal_rows = []
@@ -913,7 +942,7 @@ def _ingest_fire(city_id: str, bbox: dict, *, force: bool = False) -> int:
         h3_id = cell.get("h3_id")
         if not h3_id:
             continue
-        upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=DEFAULT_H3_RES)
+        upsert_metadata(h3_id=h3_id, city_id=city_id, resolution=h3_res)
         frp = cell.get("max_frp_mw") or cell.get("frp")
         if frp is not None:
             signal_rows.append({"h3_id": h3_id, "signal": "FRP", "value": frp, "unit": "MW"})
@@ -931,6 +960,7 @@ def _ingest_fire(city_id: str, bbox: dict, *, force: bool = False) -> int:
     written = write_signals(
         signal_rows, city_id=city_id, domain="fire", source="firms",
         geometry_assignment_method="point",
+        expected_resolution=h3_res,
     )
     for pkt in packets:
         write_packet(packet_id=pkt.get("packet_id", ""), h3_id=pkt.get("spatial_unit_id", ""),
