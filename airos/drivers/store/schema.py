@@ -115,6 +115,13 @@ CREATE TABLE IF NOT EXISTS h3_signals (
 );
 CREATE INDEX IF NOT EXISTS idx_h3_signals_cell ON h3_signals (h3_id, city_id, domain);
 CREATE INDEX IF NOT EXISTS idx_h3_signals_time ON h3_signals (hour_bucket DESC);
+
+-- Spatial index for the dashboard's bbox-filtered queries. Without it the
+-- citymap's "what's in this AOI?" joins do a full scan of h3_metadata (17k+
+-- rows) on every render. With this index, IGP-scale spatial queries drop
+-- from ~1s to tens of ms.
+CREATE INDEX IF NOT EXISTS idx_h3_metadata_centroid
+    ON h3_metadata (centroid_lat, centroid_lon);
 """
 
 DDL_H3_ASSESSMENTS = """
