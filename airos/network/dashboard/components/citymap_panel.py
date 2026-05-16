@@ -101,7 +101,7 @@ def _db_path() -> str:
 
 # ── Data loaders (cached) ────────────────────────────────────────────────────
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
     """Per-cell worst risk_level across all assessment domains, filtered
     spatially to the AOI's bbox (city_id-agnostic — Phase 1 AOI lens).
@@ -153,7 +153,7 @@ def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
     return df.drop(columns=["risk_rank"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
     """One row per cell inside the AOI bbox with an open insight at tier
     ∈ {critical, high, medium}. Spatial filter (Phase 1 lens model).
@@ -197,7 +197,7 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_source_receptor_ranking(
     aoi_id: str, *, top_n: int = 8,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str]:
@@ -296,7 +296,7 @@ def _load_source_receptor_ranking(
     return sources, receptors, scale
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_event_points(aoi_id: str) -> pd.DataFrame:
     """Active point-event signals inside the AOI bbox — fire FRP > 0,
     waste SITE = 1, crowd GATHERING_ALERT = 1, flood risk_level in
@@ -628,7 +628,13 @@ def _rollup_cells_to_resolution(
     import h3
 
     df = df.copy()
-    df["_native_res"] = df["h3_id"].apply(h3.get_resolution)
+    # Vectorised native-resolution + parent lookup via list comprehension
+    # over `.values`. The previous df.apply(..., axis=1) path was O(N)
+    # Python calls with ~5000 rows on the IGP-North view; this halves
+    # per-render time on the citymap.
+    h3_vals = df["h3_id"].values.tolist()
+    native_res = [h3.get_resolution(c) for c in h3_vals]
+    df["_native_res"] = native_res
 
     # Drop rows that are already coarser than target (they have no
     # res-`target_res` parent — they'd be the "children" of the target).
@@ -636,13 +642,11 @@ def _rollup_cells_to_resolution(
     if df.empty:
         return df.drop(columns=["_native_res"])
 
-    # For rows at exactly target_res, parent == self.
-    def _parent(row):
-        if row["_native_res"] == target_res:
-            return row["h3_id"]
-        return h3.cell_to_parent(row["h3_id"], target_res)
-
-    df["_parent"] = df.apply(_parent, axis=1)
+    parents = [
+        c if r == target_res else h3.cell_to_parent(c, target_res)
+        for c, r in zip(df["h3_id"].values, df["_native_res"].values)
+    ]
+    df["_parent"] = parents
 
     if severity_col and severity_col in df.columns and severity_rank:
         df["_rank"] = df[severity_col].map(severity_rank).fillna(0)
@@ -662,22 +666,21 @@ def _rollup_icons_to_resolution(
     """One icon per (parent_cell, domain) instead of one per native-res
     cell. Handles mixed-resolution input (some res-5, some res-8) the
     same way _rollup_cells_to_resolution does: aggregate up, drop
-    rows already coarser than target."""
+    rows already coarser than target. Vectorised — same speed-up
+    motivation as the cell roll-up."""
     if df.empty or "h3_id" not in df.columns:
         return df
     import h3
     df = df.copy()
-    df["_native_res"] = df["h3_id"].apply(h3.get_resolution)
+    df["_native_res"] = [h3.get_resolution(c) for c in df["h3_id"].values]
     df = df[df["_native_res"] >= target_res]
     if df.empty:
         return df.drop(columns=["_native_res"])
 
-    def _parent(row):
-        if row["_native_res"] == target_res:
-            return row["h3_id"]
-        return h3.cell_to_parent(row["h3_id"], target_res)
-
-    df["_parent"] = df.apply(_parent, axis=1)
+    df["_parent"] = [
+        c if r == target_res else h3.cell_to_parent(c, target_res)
+        for c, r in zip(df["h3_id"].values, df["_native_res"].values)
+    ]
     df = df.drop_duplicates(subset=["_parent", "domain"], keep="first")
     df["h3_id"] = df["_parent"]
     return df.drop(columns=["_parent", "_native_res"]).reset_index(drop=True)
@@ -927,7 +930,7 @@ _AOI_KIND_ICON: dict[str, str] = {
 }
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _airshed_summary(aoi_id: str) -> dict:
     """Thin cached wrapper around airshed_compositor.airshed_summary_stats."""
     from airos.os.airshed_compositor import airshed_summary_stats
@@ -1049,9 +1052,22 @@ def render_citymap_panel() -> None:
         def _aoi_label(aoi_id: str) -> str:
             cfg = get_aoi(aoi_id)
             return f"{_AOI_KIND_ICON.get(cfg['kind'], '📍')} {cfg['display_name']}"
+
+        # Sort: non-city AOIs (airshed/watershed/corridor) first, then
+        # cities — the biggest-picture view is the most useful default
+        # for a "what's going on" map. Within each group, alphabetical
+        # by display name.
+        _kind_rank = {"airshed": 0, "watershed": 1, "corridor": 2,
+                      "port": 3, "airport": 4, "city": 5}
+        def _sort_key(aoi_id: str) -> tuple:
+            cfg = get_aoi(aoi_id)
+            return (_kind_rank.get(cfg["kind"], 9), cfg["display_name"])
+        aoi_ids = sorted(aoi_ids, key=_sort_key)
+
         label_to_id = {_aoi_label(a): a for a in aoi_ids}
         labels = list(label_to_id.keys())
-        # Restore previous selection if still valid
+        # Restore previous selection if still valid; otherwise default
+        # to the first AOI which is now the biggest non-city scope.
         prev = st.session_state.get("citymap_aoi_label")
         idx = labels.index(prev) if prev in label_to_id else 0
         label = st.selectbox(
