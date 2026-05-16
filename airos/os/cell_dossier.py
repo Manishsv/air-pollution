@@ -61,12 +61,10 @@ def build_cell_dossier(
     db_path: str | None = None,
 ) -> dict[str, Any]:
     """Assemble a structured dossier for one cell."""
-    if db_path is None:
-        from airos.drivers.store.schema import DB_PATH
-        db_path = str(DB_PATH)
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    # Open read-only — the dossier is a pure read path and shouldn't
+    # compete with the scheduler's write transactions.
+    from airos.drivers.store.schema import ro_connect
+    conn = ro_connect(db_path)
     try:
         meta    = _load_metadata(conn, city_id, h3_id)
         signals = _load_latest_signals(conn, city_id, h3_id)

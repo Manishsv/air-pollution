@@ -99,8 +99,10 @@ class InsightPacketGenerator:
         min_confidence: float = _MIN_CONFIDENCE,
     ) -> int:
         """Promote open insights to packets. Returns number of new packets written."""
-        conn = sqlite3.connect(self._db)
-        conn.row_factory = sqlite3.Row
+        # Read-only — write_packet/write_insight use the H3KnowledgeStore
+        # singleton, not this connection, so opening RO is safe.
+        from airos.drivers.store.schema import ro_connect
+        conn = ro_connect(self._db)
         try:
             if city_ids is None:
                 city_ids = [r[0] for r in conn.execute(

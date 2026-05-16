@@ -243,7 +243,8 @@ class CauseClassifier:
     # ── Signal loading ──────────────────────────────────────────────────────
 
     def _load_signals(self, city_id: str, h3_id: str) -> dict[str, float | None]:
-        conn = sqlite3.connect(self._db)
+        from airos.drivers.store.schema import ro_connect
+        conn = ro_connect(self._db)
         try:
             # Pick the most recent value for each signal independently —
             # different domains have different ingestion cadences.
@@ -269,7 +270,8 @@ class CauseClassifier:
         self, city_id: str, h3_ids: list[str]
     ) -> dict[str, dict[str, float | None]]:
         placeholders = ",".join("?" * len(h3_ids))
-        conn = sqlite3.connect(self._db)
+        from airos.drivers.store.schema import ro_connect
+        conn = ro_connect(self._db)
         try:
             # Per-cell, per-signal latest value (domains update at different cadences).
             rows = conn.execute(

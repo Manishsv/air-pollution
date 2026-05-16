@@ -33,6 +33,34 @@ _HERE = Path(__file__).resolve()
 PROJECT_ROOT = _HERE.parents[3]  # airos/drivers/store/schema.py → parents[3] == repo root
 DB_PATH = PROJECT_ROOT / "data" / "h3" / "knowledge.sqlite"
 
+
+def ro_connect(db_path=None, *, timeout: float = 5.0):
+    """Open the knowledge store **read-only** for dashboard / agent reads.
+
+    SQLite in WAL mode lets read-only connections take a consistent
+    snapshot without blocking on the scheduler's write transactions —
+    so any dashboard query (citymap, cell dossier, cause classifier,
+    insight packets, airshed compositor's stat reads) immediately
+    proceeds even while the writer is mid-commit.
+
+    Use this everywhere the caller only needs to read. Write paths
+    must continue using `sqlite3.connect(db_path)` directly so they
+    can mutate state.
+
+    Returns a connection with row_factory set to sqlite3.Row.
+    """
+    import sqlite3
+    path = str(db_path) if db_path is not None else str(DB_PATH)
+    uri = f"file:{path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, timeout=timeout)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA query_only = ON")
+    except sqlite3.DatabaseError:
+        pass
+    return conn
+
+
 # ---------------------------------------------------------------------------
 # Time-bucket helpers (Python-side; SQLite does not have date_trunc)
 # ---------------------------------------------------------------------------

@@ -95,29 +95,11 @@ def _db_path() -> str:
 
 
 def _ro_conn() -> sqlite3.Connection:
-    """Open the knowledge store **read-only** for dashboard queries.
-
-    SQLite in WAL mode lets read-only connections see a consistent
-    snapshot without ever blocking on the scheduler's write
-    transactions. The dashboard previously opened the DB read-write
-    via `sqlite3.connect(path)`, which exposed it to brief lock waits
-    every time ingest committed; under the active scheduler that
-    accumulated into multi-second cold-render latency for the citymap.
-
-    Using `mode=ro&immutable=0` via URI keeps WAL semantics so we
-    still see recent commits (vs `immutable=1` which would pin us to
-    the file at open time).
+    """Thin wrapper around airos.drivers.store.schema.ro_connect — kept
+    here so existing citymap-only call sites don't need to change.
     """
-    path = _db_path()
-    uri = f"file:{path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    # Defence-in-depth: even if a query did try to mutate, fail loudly.
-    try:
-        conn.execute("PRAGMA query_only = ON")
-    except sqlite3.DatabaseError:
-        pass
-    return conn
+    from airos.drivers.store.schema import ro_connect
+    return ro_connect()
 
 
 # _filter_by_city_bbox removed — the spatial JOINs in the loaders above

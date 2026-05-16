@@ -132,8 +132,8 @@ def _airshed_cells_with_signals(
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    from airos.drivers.store.schema import ro_connect
+    conn = ro_connect(db_path)
     try:
         rows = conn.execute(
             """
@@ -269,8 +269,8 @@ def airshed_summary_stats(
     bbox = bbox_of(aoi_id)
     p = (bbox["lat_min"], bbox["lat_max"], bbox["lon_min"], bbox["lon_max"])
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    from airos.drivers.store.schema import ro_connect
+    conn = ro_connect(db_path)
     try:
         pm = conn.execute(
             """
