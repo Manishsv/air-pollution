@@ -115,6 +115,16 @@ def _load_registry() -> dict[str, dict[str, Any]]:
             "member_aois":  list(cfg.get("member_aois") or []),
             "topography":   cfg.get("topography"),
             "enabled":      bool(cfg.get("enabled", False)),
+            # Ingest domains for this AOI. Cities default to "every loaded
+            # driver"; non-city AOIs (airshed/watershed/corridor) must
+            # explicitly opt in to the subset that makes sense at their
+            # spatial scale — fine-grained OSM signals (buildings, roads,
+            # POIs) are inappropriate at res-5 hexes, so they stay as
+            # composition from member-AOI roll-up rather than direct
+            # ingest. `None` means "use the kind's default" — currently
+            # all-domains for cities, none-for-now for non-cities until
+            # the airshed ingest path lands.
+            "domains":      list(cfg.get("domains") or []) or None,
             # Pass-through for any other fields callers might add
             # (e.g. routing hints) without forcing schema knowledge here.
             "_raw":         dict(cfg),
@@ -217,6 +227,50 @@ def aois_for_cell(h3_id: str, *, kind: str | None = None) -> list[str]:
 def bbox_of(aoi_id: str) -> dict[str, float]:
     """Return the AOI's WGS84 bbox dict."""
     return _REGISTRY[aoi_id]["bbox"]
+
+
+# Default domain subset per AOI kind. Cities run the full driver set;
+# non-city AOIs explicitly declare a relevant subset in YAML (signals
+# that make sense at the AOI's resolution and don't drown in coarsening).
+# Used by domains_for_aoi() when the YAML doesn't specify an explicit
+# `domains:` list.
+_KIND_DEFAULT_DOMAINS: dict[str, list[str] | None] = {
+    "city":      None,   # None → "every loaded driver"
+    "airshed":   ["air", "weather", "fire", "heat", "water"],
+    "watershed": ["water", "weather", "flood", "fire", "terrain"],
+    "corridor":  ["air", "weather", "fire", "construction"],
+    "port":      ["air", "weather", "water", "noise"],
+    "airport":   ["air", "weather", "noise"],
+}
+
+
+def domains_for_aoi(aoi_id: str, all_domains: list[str] | None = None) -> list[str]:
+    """Return the ingest-domain subset for an AOI.
+
+    Lookup order:
+      1. Explicit `domains:` list in the AOI's YAML block.
+      2. Kind-specific default (_KIND_DEFAULT_DOMAINS).
+      3. Full driver set (passed as `all_domains`) — the city default.
+
+    `all_domains` should be the system's loaded-driver list (typically
+    `airos.os.sdk.driver_loader.list_domains()`); used only when the
+    AOI's explicit + kind-default both yield None.
+    """
+    cfg = _REGISTRY.get(aoi_id, {})
+    explicit = cfg.get("domains")
+    if explicit:
+        return list(explicit)
+    default = _KIND_DEFAULT_DOMAINS.get(cfg.get("kind", "city"))
+    if default is not None:
+        return list(default)
+    if all_domains is not None:
+        return list(all_domains)
+    # Fallback — caller didn't supply all_domains; load lazily.
+    try:
+        from airos.os.sdk.driver_loader import list_domains as _list_domains
+        return _list_domains()
+    except Exception:
+        return []
 
 
 def reload_registry() -> None:

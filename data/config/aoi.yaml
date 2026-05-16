@@ -26,6 +26,20 @@
 # member_aois   (optional) list of AOI ids this one composes; the
 #               aggregator can roll up member-AOI data instead of
 #               re-ingesting (Phase 2 — composition).
+# domains       (optional) explicit list of ingest domains for this AOI.
+#               Cities default to every loaded driver; non-city AOIs
+#               default to a kind-appropriate subset (see
+#               aoi_registry._KIND_DEFAULT_DOMAINS):
+#                 airshed   → [air, weather, fire, heat, water]
+#                 watershed → [water, weather, flood, fire, terrain]
+#                 corridor  → [air, weather, fire, construction]
+#                 port      → [air, weather, water, noise]
+#                 airport   → [air, weather, noise]
+#               Fine-grain OSM signals (buildings, roads, POIs) at
+#               res 5/6 hexes are inappropriate; those come via
+#               composition from member-AOI roll-up instead of direct
+#               ingest. Override here when needed (e.g. to add
+#               nightlights to a corridor view).
 # enabled       Set to false to disable an AOI without removing it.
 #
 # Adding an AOI
@@ -195,6 +209,12 @@ aois:
                                     # cells already ingested under member
                                     # cities via spatial lens — does not
                                     # trigger its own bbox-wide ingest sweep
+                                    # (next session: AOI-resolution ingest
+                                    # will use the `domains:` subset below
+                                    # to fill the IGP-wide bbox at res 5).
+    domains: [air, weather, fire, heat, water]   # consumed by the
+                                    # forthcoming airshed-ingest pass; see
+                                    # methodology §1.3 (domains-by-kind).
     # Resolution auto-derived from bbox area (~1.2M km² → res 5).
     # Override here if you want finer detail at higher compute cost.
     # resolution: 6

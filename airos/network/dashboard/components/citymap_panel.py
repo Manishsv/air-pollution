@@ -513,16 +513,85 @@ def _build_layers(
 
 # ── Cell detail side-panel ───────────────────────────────────────────────────
 
-def _render_cell_detail(h3_id: str, aoi_id: str) -> None:
-    """Right-side panel content for a clicked cell. The dossier needs a
-    `city_id` (it joins to h3_metadata + h3_signals which still carry
-    that column); we resolve the cell's primary city by spatial lookup
-    when the parent AOI isn't itself a city kind.
+def _resolve_clicked_cell(h3_id: str, target_native_res: int = 8) -> tuple[str, str | None]:
+    """When the user clicks a parent hex on a rolled-up airshed view,
+    resolve it down to a single representative res-8 child for the
+    dossier path.
 
-    Shows the cell dossier (signals by domain, cause hypotheses, POI
-    summary) + any open insight."""
+    Strategy: among descendants at `target_native_res`, find the one
+    that has the worst-priority open insight (critical > high > medium).
+    If no descendants have insights, just pick the first descendant —
+    the dossier still shows that cell's signals.
+
+    Returns (effective_cell, originating_parent_or_None). When the
+    clicked cell is already at target_native_res, returns (cell, None)
+    so the existing single-cell path runs unchanged.
+    """
+    import h3
+    clicked_res = h3.get_resolution(h3_id)
+    if clicked_res >= target_native_res:
+        return h3_id, None
+
+    # Enumerate children at the target resolution
+    try:
+        children = list(h3.cell_to_children(h3_id, target_native_res))
+    except Exception:
+        return h3_id, None
+    if not children:
+        return h3_id, None
+
+    # Query insights for any child; pick worst-priority + most-recent
+    conn = sqlite3.connect(_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        placeholders = ",".join("?" * len(children))
+        row = conn.execute(
+            f"""
+            SELECT h3_id, priority_tier, created_at FROM h3_insights
+            WHERE outcome_status = 'open'
+              AND h3_id IN ({placeholders})
+            ORDER BY
+                CASE priority_tier
+                    WHEN 'critical' THEN 0
+                    WHEN 'high'     THEN 1
+                    WHEN 'medium'   THEN 2
+                    WHEN 'low'      THEN 3
+                    ELSE 4 END,
+                created_at DESC
+            LIMIT 1
+            """,
+            children,
+        ).fetchone()
+    finally:
+        conn.close()
+    if row:
+        return row["h3_id"], h3_id
+    # No insight on any child — pick the first child (just so the dossier
+    # has something to show; the parent context is preserved separately).
+    return children[0], h3_id
+
+
+def _render_cell_detail(h3_id: str, aoi_id: str) -> None:
+    """Right-side panel content for a clicked cell. Resolves rolled-up
+    parent hexes (airshed res-5 view) down to a representative res-8
+    child so the dossier + insight panel show meaningful signals.
+
+    The dossier needs a `city_id` (it joins to h3_metadata + h3_signals
+    which still carry that column); we resolve the cell's primary city
+    by spatial lookup when the parent AOI isn't itself a city kind.
+    """
     from airos.os.cell_dossier import build_cell_dossier
     from airos.os.aoi_registry import get_aoi, aois_for_cell
+
+    # If the user clicked a coarser parent hex (airshed view at res 5),
+    # drill down to the worst-priority res-8 child for dossier context.
+    effective_cell, clicked_parent = _resolve_clicked_cell(h3_id, target_native_res=8)
+
+    if clicked_parent:
+        st.caption(
+            f"_Rolled-up view: showing the most-elevated descendant "
+            f"`{effective_cell[:10]}…` of parent `{clicked_parent[:10]}…`._"
+        )
 
     aoi_cfg = get_aoi(aoi_id)
     if aoi_cfg["kind"] == "city":
@@ -532,14 +601,17 @@ def _render_cell_detail(h3_id: str, aoi_id: str) -> None:
         # For airshed / watershed / corridor AOIs the cell belongs to
         # some underlying city; pick the first city-kind AOI that
         # contains it. Falls back to the parent AOI if none found.
-        city_containers = aois_for_cell(h3_id, kind="city")
+        city_containers = aois_for_cell(effective_cell, kind="city")
         city_id = city_containers[0] if city_containers else aoi_id
 
     try:
-        dossier = build_cell_dossier(city_id, h3_id)
+        dossier = build_cell_dossier(city_id, effective_cell)
     except Exception as exc:
         st.error(f"Failed to load cell dossier: {exc}")
         return
+
+    # Replace h3_id with the effective one for the rest of this function
+    h3_id = effective_cell
 
     meta = dossier.get("metadata") or {}
     st.markdown(f"#### {meta.get('area_name') or 'Cell'} · `{h3_id[:10]}…`")
