@@ -94,6 +94,32 @@ def _db_path() -> str:
     return str(DB_PATH)
 
 
+def _ro_conn() -> sqlite3.Connection:
+    """Open the knowledge store **read-only** for dashboard queries.
+
+    SQLite in WAL mode lets read-only connections see a consistent
+    snapshot without ever blocking on the scheduler's write
+    transactions. The dashboard previously opened the DB read-write
+    via `sqlite3.connect(path)`, which exposed it to brief lock waits
+    every time ingest committed; under the active scheduler that
+    accumulated into multi-second cold-render latency for the citymap.
+
+    Using `mode=ro&immutable=0` via URI keeps WAL semantics so we
+    still see recent commits (vs `immutable=1` which would pin us to
+    the file at open time).
+    """
+    path = _db_path()
+    uri = f"file:{path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    # Defence-in-depth: even if a query did try to mutate, fail loudly.
+    try:
+        conn.execute("PRAGMA query_only = ON")
+    except sqlite3.DatabaseError:
+        pass
+    return conn
+
+
 # _filter_by_city_bbox removed — the spatial JOINs in the loaders above
 # (h3_metadata.centroid_lat/lon BETWEEN bbox) make this defensive guard
 # redundant. Out-of-bbox cells are now excluded at the query level.
@@ -113,8 +139,7 @@ def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
     """
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         rows = conn.execute(
             """
@@ -160,8 +185,7 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
     """
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         rows = conn.execute(
             """
@@ -217,8 +241,7 @@ def _load_source_receptor_ranking(
     """
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         rows = conn.execute(
             """
@@ -307,8 +330,7 @@ def _load_event_points(aoi_id: str) -> pd.DataFrame:
     """
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         # Latest per (h3_id, signal) within the last 24h, spatially scoped.
         rows = conn.execute(
@@ -410,8 +432,7 @@ def _poi_hotspot_points(bbox: dict, *, threshold: int = 3) -> list[dict]:
     one row per (cell, hotspot-kind) — a cell with both industrial AND
     mobility hubs gets two icons stacked on its centroid.
     """
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         # Construction + industrial — straight POI count thresholds.
         poi_rows = conn.execute(
@@ -529,8 +550,7 @@ def _wind_arrow_points(aoi_id: str, bbox: dict) -> list[dict]:
     if not city_aois:
         return []
 
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     out: list[dict] = []
     try:
         for cid in city_aois:
@@ -796,8 +816,7 @@ def _resolve_clicked_cell(h3_id: str, target_native_res: int = 8) -> tuple[str, 
         return h3_id, None
 
     # Query insights for any child; pick worst-priority + most-recent
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         placeholders = ",".join("?" * len(children))
         row = conn.execute(
@@ -887,8 +906,7 @@ def _render_cell_detail(h3_id: str, aoi_id: str) -> None:
     # Latest open insight on this cell (if any). Spatial cell lookup by
     # h3_id alone — no city_id filter, so an airshed-AOI click still
     # surfaces insights tagged with any constituent city's id.
-    conn = sqlite3.connect(_db_path())
-    conn.row_factory = sqlite3.Row
+    conn = _ro_conn()
     try:
         row = conn.execute(
             """
