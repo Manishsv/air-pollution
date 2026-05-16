@@ -119,7 +119,8 @@ def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
         rows = conn.execute(
             """
             SELECT a.h3_id, a.domain, a.risk_level, a.primary_index,
-                   a.primary_value, a.dominant_issue
+                   a.primary_value, a.dominant_issue,
+                   COALESCE(m.area_name, '') AS area_name
             FROM h3_assessments a
             INNER JOIN h3_metadata m ON m.h3_id = a.h3_id
             INNER JOIN (
@@ -141,7 +142,8 @@ def _load_worst_risk_per_cell(aoi_id: str) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(
             columns=["h3_id", "risk_level", "dominant_domain",
-                     "primary_index", "primary_value", "dominant_issue"]
+                     "primary_index", "primary_value", "dominant_issue",
+                     "area_name"]
         )
     df = pd.DataFrame([dict(r) for r in rows])
     df["risk_rank"] = df["risk_level"].map(_RISK_RANK).fillna(0)
@@ -164,7 +166,8 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
         rows = conn.execute(
             """
             SELECT i.insight_id, i.h3_id, i.priority_tier, i.finding,
-                   i.confidence, i.created_at
+                   i.confidence, i.created_at,
+                   COALESCE(m.area_name, '') AS area_name
             FROM h3_insights i
             INNER JOIN h3_metadata m ON m.h3_id = i.h3_id
             WHERE i.outcome_status = 'open'
@@ -187,7 +190,7 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(
             columns=["insight_id", "h3_id", "priority_tier", "finding",
-                     "confidence", "created_at"]
+                     "confidence", "created_at", "area_name"]
         )
     df = pd.DataFrame([dict(r) for r in rows])
     df = df.drop_duplicates("h3_id")
@@ -1157,8 +1160,16 @@ def render_citymap_panel() -> None:
         bearing=0,
     )
 
+    # Tooltip: name first (when available), then domain + risk. The
+    # area_name comes from Nominatim reverse-geocoding of the cell
+    # centroid; res-5 airshed cells get district / town-level names
+    # ("Bilhaur", "Saharsa, Bihar"), res-8 city cells get
+    # neighbourhood names ("Anand Vihar", "Indiranagar"). When the
+    # geocoder hasn't run yet for a cell, area_name is "" and the
+    # tooltip falls back to the H3 id alone.
     tooltip = {
         "html": (
+            "<b>{area_name}</b><br/>"
             "<b>{dominant_domain}</b> &middot; risk: <b>{risk_level}</b>"
             "<br/>{dominant_issue}"
             "<br/><small>{h3_id}</small>"

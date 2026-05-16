@@ -265,10 +265,13 @@ class Scheduler:
         except Exception as exc:
             logger.warning("[airshed-ingest] step failed: %s", exc)
 
-        # 1b — Reverse-geocode pending cells (newly onboarded cities get
-        # named automatically over a few hours of normal sweep operation).
-        # Capped at 60 cells/sweep (~66s at Nominatim's 1.1s rate limit).
-        _run_geocode_catchup(batch_size=60)
+        # 1b — Reverse-geocode pending cells (newly onboarded cities AND
+        # airshed res-5 cells get named automatically over a few hours
+        # of normal sweep operation). Capped at 120 cells/sweep
+        # (~132 s at Nominatim's 1.1 s rate limit). Resolution-agnostic:
+        # picks up any centroid with NULL area_name regardless of native
+        # H3 resolution.
+        _run_geocode_catchup(batch_size=120)
 
         # 1c — Airshed-scale composition (Phase 3 items 2+3). Reads cells
         # already ingested by the per-city sweeps above and computes
