@@ -247,6 +247,7 @@ def _load_source_receptor_ranking(
                                     'UPWIND_PM25_LOAD_K10',
                                     'UPWIND_PM25_LOAD_REGIONAL')
                   AND s2.value IS NOT NULL
+                  AND s2.hour_bucket >= datetime('now', '-6 hours')
                   AND m2.centroid_lat BETWEEN ? AND ?
                   AND m2.centroid_lon BETWEEN ? AND ?
                 GROUP BY s2.h3_id, s2.signal

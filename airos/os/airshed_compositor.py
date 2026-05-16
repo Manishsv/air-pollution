@@ -281,6 +281,7 @@ def airshed_summary_stats(
                 SELECT s2.h3_id, MAX(s2.hour_bucket) AS hb
                 FROM h3_signals s2 INNER JOIN h3_metadata m2 ON m2.h3_id = s2.h3_id
                 WHERE s2.signal = 'PM25' AND s2.value IS NOT NULL
+                  AND s2.hour_bucket >= datetime('now', '-6 hours')
                   AND m2.centroid_lat BETWEEN ? AND ?
                   AND m2.centroid_lon BETWEEN ? AND ?
                 GROUP BY s2.h3_id
@@ -325,9 +326,12 @@ def airshed_summary_stats(
             FROM h3_assessments a
             INNER JOIN h3_metadata m ON m.h3_id = a.h3_id
             INNER JOIN (
-                SELECT h3_id, domain, MAX(day_bucket) AS db
-                FROM h3_assessments
-                GROUP BY h3_id, domain
+                SELECT a2.h3_id, a2.domain, MAX(a2.day_bucket) AS db
+                FROM h3_assessments a2
+                INNER JOIN h3_metadata m2 ON m2.h3_id = a2.h3_id
+                WHERE m2.centroid_lat BETWEEN ? AND ?
+                  AND m2.centroid_lon BETWEEN ? AND ?
+                GROUP BY a2.h3_id, a2.domain
             ) latest ON latest.h3_id = a.h3_id
                     AND latest.domain = a.domain
                     AND latest.db = a.day_bucket
@@ -336,7 +340,7 @@ def airshed_summary_stats(
               AND m.centroid_lon BETWEEN ? AND ?
             GROUP BY a.h3_id
             """,
-            p,
+            (*p, *p),
         ).fetchall()
 
         # Population exposed to high or severe risk — count each cell once,
