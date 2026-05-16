@@ -604,26 +604,42 @@ def _rollup_cells_to_resolution(
     """Aggregate per-cell rows from their native H3 resolution to a coarser
     target resolution, keeping the worst-severity child per parent.
 
-    df:            DataFrame with an `h3_id` column.
+    df:            DataFrame with an `h3_id` column. May contain mixed
+                   resolutions (e.g. res-5 airshed cells alongside res-8
+                   city cells inside an AOI's spatial query).
     target_res:    H3 resolution to aggregate to (e.g. 5 for airshed view).
     severity_col:  Column whose value drives "worst child wins". If None,
                    any-child-wins (the first row per parent is kept).
     severity_rank: Map from severity_col value → integer rank (higher = worse).
 
-    Returns a copy of `df` with `h3_id` replaced by parent ids and one row
-    per parent. If every cell is already at or below target_res, returns
-    the input unchanged.
+    Per-row handling:
+      native_res >  target_res → aggregate up to parent at target_res
+      native_res == target_res → keep as-is
+      native_res <  target_res → drop (coarser than target; no honest
+                                 way to refine it without fabricating data)
+
+    Returns one row per parent at target_res.
     """
     if df.empty or "h3_id" not in df.columns:
         return df
     import h3
-    # Skip if cells are already coarser than target
-    sample_res = h3.get_resolution(df["h3_id"].iloc[0])
-    if sample_res <= target_res:
-        return df
 
     df = df.copy()
-    df["_parent"] = df["h3_id"].apply(lambda c: h3.cell_to_parent(c, target_res))
+    df["_native_res"] = df["h3_id"].apply(h3.get_resolution)
+
+    # Drop rows that are already coarser than target (they have no
+    # res-`target_res` parent — they'd be the "children" of the target).
+    df = df[df["_native_res"] >= target_res]
+    if df.empty:
+        return df.drop(columns=["_native_res"])
+
+    # For rows at exactly target_res, parent == self.
+    def _parent(row):
+        if row["_native_res"] == target_res:
+            return row["h3_id"]
+        return h3.cell_to_parent(row["h3_id"], target_res)
+
+    df["_parent"] = df.apply(_parent, axis=1)
 
     if severity_col and severity_col in df.columns and severity_rank:
         df["_rank"] = df[severity_col].map(severity_rank).fillna(0)
@@ -634,26 +650,34 @@ def _rollup_cells_to_resolution(
         df = df.drop_duplicates("_parent")
 
     df["h3_id"] = df["_parent"]
-    return df.drop(columns=["_parent"]).reset_index(drop=True)
+    return df.drop(columns=["_parent", "_native_res"]).reset_index(drop=True)
 
 
 def _rollup_icons_to_resolution(
     df: pd.DataFrame, target_res: int,
 ) -> pd.DataFrame:
     """One icon per (parent_cell, domain) instead of one per native-res
-    cell. Keeps the highest-magnitude row per group so the icon's tooltip
-    surfaces the worst contributor."""
+    cell. Handles mixed-resolution input (some res-5, some res-8) the
+    same way _rollup_cells_to_resolution does: aggregate up, drop
+    rows already coarser than target."""
     if df.empty or "h3_id" not in df.columns:
         return df
     import h3
-    sample_res = h3.get_resolution(df["h3_id"].iloc[0])
-    if sample_res <= target_res:
-        return df
     df = df.copy()
-    df["_parent"] = df["h3_id"].apply(lambda c: h3.cell_to_parent(c, target_res))
+    df["_native_res"] = df["h3_id"].apply(h3.get_resolution)
+    df = df[df["_native_res"] >= target_res]
+    if df.empty:
+        return df.drop(columns=["_native_res"])
+
+    def _parent(row):
+        if row["_native_res"] == target_res:
+            return row["h3_id"]
+        return h3.cell_to_parent(row["h3_id"], target_res)
+
+    df["_parent"] = df.apply(_parent, axis=1)
     df = df.drop_duplicates(subset=["_parent", "domain"], keep="first")
     df["h3_id"] = df["_parent"]
-    return df.drop(columns=["_parent"]).reset_index(drop=True)
+    return df.drop(columns=["_parent", "_native_res"]).reset_index(drop=True)
 
 
 def _build_layers(
@@ -1044,6 +1068,20 @@ def render_citymap_panel() -> None:
             show_icons   = st.checkbox("Event icons (fire/waste/crowd/flood)",
                                        value=True, key="citymap_show_icons")
             st.divider()
+            # Hex resolution override. "Auto" uses the AOI's declared
+            # resolution (res 5 for IGP-North airshed, res 8 for cities).
+            # Manual values let the operator pull more detail into the
+            # airshed view, or zoom out a city to neighbourhood-scale
+            # parents. Coarser = fewer hexes / more aggregation.
+            st.caption("**Hex resolution**")
+            _res_choices = ["Auto", "5 (~250 km²)", "6 (~36 km²)",
+                            "7 (~5 km²)", "8 (~0.7 km²)"]
+            res_label = st.selectbox(
+                "Hex resolution", _res_choices,
+                key="citymap_resolution_choice",
+                label_visibility="collapsed",
+            )
+            st.divider()
             st.caption("**Risk shade legend**")
             for tier in ("severe", "high", "moderate", "low", "good"):
                 r, g, b, a = _RISK_FILL_RGBA[tier]
@@ -1069,13 +1107,22 @@ def render_citymap_panel() -> None:
     insight_df = _load_open_insights_by_cell(aoi_id)
     event_df   = _load_event_points(aoi_id)
 
-    # ── Roll cells up to the AOI's declared resolution ────────────────────
+    # ── Roll cells up to the chosen H3 resolution ─────────────────────────
     # Cells ingest at H3 res 8 (~0.74 km²); an airshed view declares res 5
     # (~252 km²) so the operator can actually see the data at zoom 5.
-    # Aggregate each layer to parent cells at the AOI resolution, keeping
-    # the worst-severity child per parent (so a single hot res-8 cell makes
-    # its res-5 parent hot).
-    aoi_res = resolution_of(aoi_id)
+    # Aggregate each layer to parent cells at the chosen resolution,
+    # keeping the worst-severity child per parent (so a single hot res-8
+    # cell makes its res-5 parent hot).
+    #
+    # Resolution choice:
+    #   - "Auto" (default)  → use the AOI's declared resolution.
+    #   - "5 / 6 / 7 / 8"   → manual override; lets the operator drill
+    #                          into an airshed at res 8 or zoom out a
+    #                          city to res 6. Coarser = fewer hexes.
+    if res_label.startswith("Auto"):
+        aoi_res = resolution_of(aoi_id)
+    else:
+        aoi_res = int(res_label.split()[0])
     insight_tier_rank = {"critical": 3, "high": 2, "medium": 1}
     risk_df    = _rollup_cells_to_resolution(
         risk_df, aoi_res,
@@ -1167,9 +1214,13 @@ def render_citymap_panel() -> None:
             n_events  = len(event_df)
             kind_icon = _AOI_KIND_ICON.get(aoi_cfg["kind"], "📍")
             st.markdown(f"#### {kind_icon} {aoi_cfg['display_name']}")
+            declared_res = resolution_of(aoi_id)
+            res_note = (f"H3 res {aoi_res}"
+                        + (f" (override; declared {declared_res})"
+                           if aoi_res != declared_res else ""))
             st.caption(
-                f"{aoi_cfg['kind']} · H3 res {resolution_of(aoi_id)} · "
-                f"{n_cells:,} assessed cells"
+                f"{aoi_cfg['kind']} · {res_note} · "
+                f"{n_cells:,} hexes"
             )
 
             # Source/receptor ranking — only meaningful for AOIs that span
