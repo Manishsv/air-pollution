@@ -183,22 +183,20 @@ def _load_open_insights_by_cell(aoi_id: str) -> pd.DataFrame:
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_source_receptor_ranking(
     aoi_id: str, *, top_n: int = 8,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """Identify top emission sources and top receptors inside an AOI.
 
-    Pulls the latest PM25 + UPWIND_PM25_LOAD_K10 (~7.5 km regional cone)
-    per cell inside the AOI bbox, then computes:
+    Prefers UPWIND_PM25_LOAD_REGIONAL (airshed-scale, ~100-300 km cone
+    produced by the airshed compositor) when present; falls back to
+    UPWIND_PM25_LOAD_K10 (metro-scale, ~7.5 km cone) when not. The
+    third return value indicates which signal was used so the UI can
+    label the scale honestly.
 
-      source_score   = max(PM25 - UPWIND_PM25_LOAD_K10, 0)
-                       Cells that generate more pollution than they receive
-                       — net contributors to the airshed.
-      receptor_score = UPWIND_PM25_LOAD_K10
-                       Cells receiving the most incoming pollution — net
-                       importers, regardless of local emission level.
+      source_score   = max(PM25 - upwind, 0)   — net contributor
+      receptor_score = upwind                  — net importer
 
-    Returns (sources_df, receptors_df), each with columns
-    (h3_id, pm25, upwind_k10, source_score | receptor_score, area_name).
-    Empty frames if the necessary signals haven't been ingested yet.
+    Returns (sources_df, receptors_df, scale_label). Empty frames when
+    no PM25 has been ingested yet.
     """
     from airos.os.aoi_registry import bbox_of
     bbox = bbox_of(aoi_id)
@@ -214,7 +212,9 @@ def _load_source_receptor_ranking(
                 SELECT s2.h3_id, s2.signal, MAX(s2.hour_bucket) AS hb
                 FROM h3_signals s2
                 INNER JOIN h3_metadata m2 ON m2.h3_id = s2.h3_id
-                WHERE s2.signal IN ('PM25', 'UPWIND_PM25_LOAD_K10')
+                WHERE s2.signal IN ('PM25',
+                                    'UPWIND_PM25_LOAD_K10',
+                                    'UPWIND_PM25_LOAD_REGIONAL')
                   AND s2.value IS NOT NULL
                   AND m2.centroid_lat BETWEEN ? AND ?
                   AND m2.centroid_lon BETWEEN ? AND ?
@@ -235,41 +235,48 @@ def _load_source_receptor_ranking(
         conn.close()
 
     if not rows:
-        empty = pd.DataFrame(columns=["h3_id", "pm25", "upwind_k10",
+        empty = pd.DataFrame(columns=["h3_id", "pm25", "upwind",
                                       "score", "area_name"])
-        return empty, empty.copy()
+        return empty, empty.copy(), "—"
 
     df = pd.DataFrame([dict(r) for r in rows])
     pivot = (df.pivot_table(index=["h3_id", "area_name"], columns="signal",
                             values="value", aggfunc="first")
                .reset_index()
                .rename_axis(None, axis=1))
-    # Ensure both columns exist even if one signal is missing for all cells
-    for col in ("PM25", "UPWIND_PM25_LOAD_K10"):
+    for col in ("PM25", "UPWIND_PM25_LOAD_K10", "UPWIND_PM25_LOAD_REGIONAL"):
         if col not in pivot.columns:
             pivot[col] = None
-    pivot = pivot.rename(columns={"PM25": "pm25",
-                                  "UPWIND_PM25_LOAD_K10": "upwind_k10"})
+    pivot = pivot.rename(columns={"PM25": "pm25"})
+
+    # Prefer regional (~200 km, airshed-scale) when present.
+    has_regional = pivot["UPWIND_PM25_LOAD_REGIONAL"].notna().any()
+    if has_regional:
+        pivot["upwind"] = pivot["UPWIND_PM25_LOAD_REGIONAL"]
+        scale = "airshed ~100-300 km"
+    else:
+        pivot["upwind"] = pivot["UPWIND_PM25_LOAD_K10"]
+        scale = "metro ~7.5 km"
 
     valid = pivot.dropna(subset=["pm25"]).copy()
-    valid["upwind_k10"] = valid["upwind_k10"].fillna(0.0)
+    valid["upwind"] = valid["upwind"].fillna(0.0)
 
-    valid["source_score"]   = (valid["pm25"] - valid["upwind_k10"]).clip(lower=0)
-    valid["receptor_score"] = valid["upwind_k10"]
+    valid["source_score"]   = (valid["pm25"] - valid["upwind"]).clip(lower=0)
+    valid["receptor_score"] = valid["upwind"]
 
     sources = (valid.sort_values("source_score", ascending=False)
                     .head(top_n)
-                    .loc[:, ["h3_id", "pm25", "upwind_k10",
+                    .loc[:, ["h3_id", "pm25", "upwind",
                              "source_score", "area_name"]]
                     .rename(columns={"source_score": "score"})
                     .reset_index(drop=True))
     receptors = (valid.sort_values("receptor_score", ascending=False)
                       .head(top_n)
-                      .loc[:, ["h3_id", "pm25", "upwind_k10",
+                      .loc[:, ["h3_id", "pm25", "upwind",
                                "receptor_score", "area_name"]]
                       .rename(columns={"receptor_score": "score"})
                       .reset_index(drop=True))
-    return sources, receptors
+    return sources, receptors, scale
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -536,6 +543,47 @@ _AOI_KIND_ICON: dict[str, str] = {
 }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _airshed_summary(aoi_id: str) -> dict:
+    """Thin cached wrapper around airshed_compositor.airshed_summary_stats."""
+    from airos.os.airshed_compositor import airshed_summary_stats
+    return airshed_summary_stats(aoi_id)
+
+
+def _render_airshed_summary(aoi_id: str) -> None:
+    """Compact airshed-level stats header (Phase 3 item 2 — composition).
+
+    Surfaces aggregate signals you can't see in a per-cell view: avg PM2.5
+    across the whole airshed, fire count over 24h, % cells at high/severe
+    risk, and total exposed population. Computed on demand from the
+    spatial lens — no airshed-level table, no extra storage.
+    """
+    s = _airshed_summary(aoi_id)
+    if not s:
+        return
+
+    rows = []
+    if s.get("avg_pm25") is not None:
+        rows.append(f"PM2.5 avg **{s['avg_pm25']:.0f}** · "
+                    f"max {s.get('max_pm25', 0):.0f} · "
+                    f"p95 {s.get('p95_pm25', 0):.0f}")
+    if s.get("fire_count_24h"):
+        rows.append(f"🔥 **{s['fire_count_24h']}** fires 24h · "
+                    f"ΣFRP {s.get('frp_total_24h', 0):.0f}")
+    if s.get("high_risk_cells_pct") is not None:
+        rows.append(f"**{s['high_risk_cells_pct']:.0f}%** cells "
+                    f"at high/severe risk")
+    if s.get("population_exposed_high"):
+        rows.append(f"**{s['population_exposed_high']:,}** people in "
+                    f"high-risk cells")
+    if not rows:
+        return
+    st.markdown("**Airshed summary**")
+    for line in rows:
+        st.markdown(f"<small>{line}</small>", unsafe_allow_html=True)
+    st.markdown("")
+
+
 def _render_source_receptor(aoi_id: str) -> None:
     """Top-N source + receptor cells for non-city AOIs.
 
@@ -545,29 +593,27 @@ def _render_source_receptor(aoi_id: str) -> None:
     tells the airshed dispatcher who to enforce on (sources) versus
     who needs cross-jurisdiction coordination (receptors).
     """
-    sources, receptors = _load_source_receptor_ranking(aoi_id, top_n=8)
+    sources, receptors, scale = _load_source_receptor_ranking(aoi_id, top_n=8)
     if sources.empty and receptors.empty:
         st.caption(
-            "_No PM25 / UPWIND_PM25_LOAD_K10 yet — run an air ingest "
-            "sweep first._"
+            "_No PM25 / upwind signals yet — run an air ingest sweep first._"
         )
         return
 
     def _fmt_row(r: pd.Series, score_label: str) -> str:
         area = r.get("area_name") or "—"
         pm = r["pm25"] or 0
-        up = r["upwind_k10"] or 0
+        up = r["upwind"] or 0
         return (
             f"<small><b>{area}</b> · {score_label} {r['score']:.1f}  "
-            f"<span style='color:#888;'>(PM25 {pm:.0f}, "
-            f"upwind-7km {up:.0f})</span></small>"
+            f"<span style='color:#888;'>(PM25 {pm:.0f}, upwind {up:.0f})</span></small>"
         )
 
     if not sources.empty:
         st.markdown("**🏭 Top emission sources**")
         st.caption(
-            "_Cells where local PM exceeds regional incoming — net "
-            "contributors to the airshed. Local enforcement targets._"
+            f"_Cells where local PM exceeds upwind incoming ({scale}) — "
+            f"net contributors. Local enforcement targets._"
         )
         for _, r in sources.iterrows():
             st.markdown(_fmt_row(r, "net+"), unsafe_allow_html=True)
@@ -576,8 +622,8 @@ def _render_source_receptor(aoi_id: str) -> None:
     if not receptors.empty:
         st.markdown("**📥 Top receptors**")
         st.caption(
-            "_Cells receiving the most incoming pollution from upwind "
-            "(~7 km cone). Need cross-jurisdiction coordination._"
+            f"_Cells receiving the most incoming pollution from upwind "
+            f"({scale}). Need cross-jurisdiction coordination._"
         )
         for _, r in receptors.iterrows():
             st.markdown(_fmt_row(r, "in"), unsafe_allow_html=True)
@@ -756,6 +802,7 @@ def render_citymap_panel() -> None:
             # are usually a single emission/receiver zone so the split is
             # noisier than it is useful.
             if aoi_cfg["kind"] in ("airshed", "watershed", "corridor"):
+                _render_airshed_summary(aoi_id)
                 _render_source_receptor(aoi_id)
             if n_insight:
                 tier_counts = insight_df["priority_tier"].value_counts().to_dict()

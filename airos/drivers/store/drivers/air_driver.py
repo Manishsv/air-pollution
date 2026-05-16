@@ -15,10 +15,12 @@ class AirDriver(_InTreeDriver):
         "PM25", "PM10", "NO2", "SO2", "PM25_PM10_RATIO",
         "AQI", "DATA_CONFIDENCE", "NEAREST_OBS_KM",
         # Wind-aware airborne aggregation (methodology §D.1)
-        "UPWIND_PM25_LOAD",       # k≤2 (~1.5 km) — neighbourhood-scale advection
-        "UPWIND_PM25_LOAD_K10",   # k≤10 (~7.5 km) — regional-scale advection;
-                                   # used for source/receptor attribution and
-                                   # airshed-level reasoning (methodology §D.1)
+        "UPWIND_PM25_LOAD",         # k≤2 (~1.5 km) — neighbourhood-scale advection
+        "UPWIND_PM25_LOAD_K10",     # k≤10 (~7.5 km) — metro-scale advection
+        "UPWIND_PM25_LOAD_REGIONAL",# bearing-based bbox aggregate (~100-300 km,
+                                   # scales with wind speed) — airshed-scale
+                                   # transport. Produced by the airshed
+                                   # compositor (Phase 3), not by air ingest.
         "UPWIND_PM10_LOAD",       # same neighbourhood aggregation applied to PM10
         "VENTILATION_INDEX",      # wind speed dampened by topographic enclosure
     ]

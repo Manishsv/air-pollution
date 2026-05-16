@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 # packet so historical packets can be reproduced or stratified by version.
 # ---------------------------------------------------------------------------
 
-CLASSIFIER_VERSION    = "cause-classifier-v0.6"
-WEIGHT_CONFIG_VERSION = "weights-v0.6-regional-upwind"
+CLASSIFIER_VERSION    = "cause-classifier-v0.7"
+WEIGHT_CONFIG_VERSION = "weights-v0.7-airshed-upwind"
 
 # Confidence margin for tie-breaker routing (§4.4). When top1 − top2 < this,
 # the packet is flagged `attribution_uncertain` and the second cause's
@@ -624,6 +624,7 @@ class CauseClassifier:
         pm25       = sigs.get("PM25")
         upwind     = sigs.get("UPWIND_PM25_LOAD")
         upwind_r   = sigs.get("UPWIND_PM25_LOAD_K10")
+        upwind_ar  = sigs.get("UPWIND_PM25_LOAD_REGIONAL")
         wind       = sigs.get("WIND_SPEED_KMH")
         poi_ind    = sigs.get("POI_INDUSTRIAL_COUNT") or 0
         poi_con    = sigs.get("POI_CONSTRUCTION_COUNT") or 0
@@ -631,11 +632,12 @@ class CauseClassifier:
         poi_w      = sigs.get("POI_WASTE_FACILITY_COUNT") or 0
 
         # Need at least one upwind reading to evaluate this cause.
-        if upwind is None and upwind_r is None:
+        if upwind is None and upwind_r is None and upwind_ar is None:
             return {
                 "cause": cause, "confidence": 0.0, "evidence": [],
                 "signals": _pick(sigs, ["UPWIND_PM25_LOAD",
-                                        "UPWIND_PM25_LOAD_K10", "PM25",
+                                        "UPWIND_PM25_LOAD_K10",
+                                        "UPWIND_PM25_LOAD_REGIONAL", "PM25",
                                         "WIND_SPEED_KMH",
                                         "POI_INDUSTRIAL_COUNT"]),
             }
@@ -652,7 +654,7 @@ class CauseClassifier:
                 self._bump(out, cause, "upwind_high",
                            f"UPWIND_PM25_LOAD {upwind:.1f} µg/m³-equiv (high incoming, ~1.5 km)")
 
-        # Regional-scale (k=10) upwind — stronger evidence of cross-district
+        # Metro-scale (k=10) upwind — stronger evidence of cross-district
         # transport (the cell is genuinely a receptor, not just inheriting
         # from its block).
         if upwind_r is not None:
@@ -664,6 +666,20 @@ class CauseClassifier:
                 self._bump(out, cause, "upwind_regional_high",
                            f"UPWIND_PM25_LOAD_K10 {upwind_r:.1f} µg/m³-equiv "
                            f"(high regional incoming, ~7.5 km cone)")
+
+        # Airshed-scale (~100-300 km) upwind — strongest single signal that
+        # the source is trans-boundary (e.g., Punjab → Delhi during stubble
+        # burning). Produced by the airshed compositor, present only for
+        # cells inside an enabled airshed/watershed/corridor AOI.
+        if upwind_ar is not None:
+            if pm25 is not None and pm25 > 0 and upwind_ar > 2.0 * pm25:
+                self._bump(out, cause, "upwind_airshed_dominates",
+                           f"UPWIND_PM25_LOAD_REGIONAL {upwind_ar:.1f} > 2× own "
+                           f"PM2.5 ({pm25:.1f}) — trans-boundary advection")
+            if upwind_ar >= 250.0:
+                self._bump(out, cause, "upwind_airshed_high",
+                           f"UPWIND_PM25_LOAD_REGIONAL {upwind_ar:.1f} µg/m³-equiv "
+                           f"(airshed-scale source upwind, ~100-300 km)")
 
         # Wind moderate enough to actually transport
         if wind is not None and 5.0 <= wind <= 30.0:
@@ -683,6 +699,7 @@ class CauseClassifier:
             "evidence": out["evidence"],
             "signals": _pick(sigs, [
                 "UPWIND_PM25_LOAD", "UPWIND_PM25_LOAD_K10",
+                "UPWIND_PM25_LOAD_REGIONAL",
                 "PM25", "WIND_SPEED_KMH",
                 "POI_INDUSTRIAL_COUNT", "POI_CONSTRUCTION_COUNT",
                 "POI_KILN_COUNT", "POI_WASTE_FACILITY_COUNT",

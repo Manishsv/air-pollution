@@ -252,6 +252,17 @@ class Scheduler:
         # Capped at 60 cells/sweep (~66s at Nominatim's 1.1s rate limit).
         _run_geocode_catchup(batch_size=60)
 
+        # 1c — Airshed-scale composition (Phase 3 items 2+3). Reads cells
+        # already ingested by the per-city sweeps above and computes
+        # UPWIND_PM25_LOAD_REGIONAL (~200 km, bearing-based) for every cell
+        # inside any enabled airshed/watershed/corridor AOI. Cheap (<1s
+        # for ~5k cells) and no-op when no non-city AOIs are enabled.
+        try:
+            from airos.os.airshed_compositor import run_airshed_composition
+            run_airshed_composition()
+        except Exception as exc:
+            logger.warning("[airshed] composition step failed: %s", exc)
+
         # 2 — Agent (if enabled)
         agent_results: dict = {}
         if self.run_agent:

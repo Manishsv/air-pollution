@@ -15,7 +15,7 @@
 # in the audit trail so historical packets can be reproduced against the
 # weights that were in force at the time.
 
-version: weights-v0.6-regional-upwind
+version: weights-v0.7-airshed-upwind
 
 # ── Tie-breaker / routing margins ────────────────────────────────────────────
 margins:
@@ -113,9 +113,14 @@ causes:
     #   UPWIND_PM25_LOAD_K10 (k≤10, ~7.5 km) — regional-scale, stronger
     #     evidence that the cell is a true receptor of cross-district
     #     transport (methodology §D.1).
-    upwind_dominates:           { weight: 0.35, band: recent }   # k=2 upwind PM > own PM
-    upwind_high:                { weight: 0.15, band: recent }   # k=2 upwind PM elevated
-    upwind_regional_dominates:  { weight: 0.50, band: recent }   # k=10 upwind PM > 1.5× own
-    upwind_regional_high:       { weight: 0.25, band: recent }   # k=10 upwind PM ≥ 100
+    upwind_dominates:           { weight: 0.25, band: recent }   # k=2 upwind PM > own PM
+    upwind_high:                { weight: 0.10, band: recent }   # k=2 upwind PM elevated
+    upwind_regional_dominates:  { weight: 0.40, band: recent }   # k=10 upwind PM > 1.5× own
+    upwind_regional_high:       { weight: 0.20, band: recent }   # k=10 upwind PM ≥ 100
+    # Airshed-scale evidence — strongest single signal for trans-boundary
+    # transport (Punjab stubble burning → Delhi receptors etc.). Only fires
+    # for cells inside an enabled airshed/watershed/corridor AOI.
+    upwind_airshed_dominates:   { weight: 0.55, band: recent }   # k≈airshed > 2× own
+    upwind_airshed_high:        { weight: 0.30, band: recent }   # k≈airshed ≥ 250
     upwind_wind_moderate:       { weight: 0.15, band: forecast } # wind strong enough
     low_local_sources:          { weight: 0.10, band: static }   # few local POIs
