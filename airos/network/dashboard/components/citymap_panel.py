@@ -380,6 +380,66 @@ def _hex_to_rgba_array(s: pd.Series, table: dict) -> list[list[int]]:
     return [list(table.get(v, default)) for v in s.fillna("unknown")]
 
 
+def _rollup_cells_to_resolution(
+    df: pd.DataFrame, target_res: int, *,
+    severity_col: str | None = None,
+    severity_rank: dict[str, int] | None = None,
+) -> pd.DataFrame:
+    """Aggregate per-cell rows from their native H3 resolution to a coarser
+    target resolution, keeping the worst-severity child per parent.
+
+    df:            DataFrame with an `h3_id` column.
+    target_res:    H3 resolution to aggregate to (e.g. 5 for airshed view).
+    severity_col:  Column whose value drives "worst child wins". If None,
+                   any-child-wins (the first row per parent is kept).
+    severity_rank: Map from severity_col value → integer rank (higher = worse).
+
+    Returns a copy of `df` with `h3_id` replaced by parent ids and one row
+    per parent. If every cell is already at or below target_res, returns
+    the input unchanged.
+    """
+    if df.empty or "h3_id" not in df.columns:
+        return df
+    import h3
+    # Skip if cells are already coarser than target
+    sample_res = h3.get_resolution(df["h3_id"].iloc[0])
+    if sample_res <= target_res:
+        return df
+
+    df = df.copy()
+    df["_parent"] = df["h3_id"].apply(lambda c: h3.cell_to_parent(c, target_res))
+
+    if severity_col and severity_col in df.columns and severity_rank:
+        df["_rank"] = df[severity_col].map(severity_rank).fillna(0)
+        df = (df.sort_values("_rank", ascending=False)
+                .drop_duplicates("_parent")
+                .drop(columns=["_rank"]))
+    else:
+        df = df.drop_duplicates("_parent")
+
+    df["h3_id"] = df["_parent"]
+    return df.drop(columns=["_parent"]).reset_index(drop=True)
+
+
+def _rollup_icons_to_resolution(
+    df: pd.DataFrame, target_res: int,
+) -> pd.DataFrame:
+    """One icon per (parent_cell, domain) instead of one per native-res
+    cell. Keeps the highest-magnitude row per group so the icon's tooltip
+    surfaces the worst contributor."""
+    if df.empty or "h3_id" not in df.columns:
+        return df
+    import h3
+    sample_res = h3.get_resolution(df["h3_id"].iloc[0])
+    if sample_res <= target_res:
+        return df
+    df = df.copy()
+    df["_parent"] = df["h3_id"].apply(lambda c: h3.cell_to_parent(c, target_res))
+    df = df.drop_duplicates(subset=["_parent", "domain"], keep="first")
+    df["h3_id"] = df["_parent"]
+    return df.drop(columns=["_parent"]).reset_index(drop=True)
+
+
 def _build_layers(
     risk_df: pd.DataFrame,
     insight_df: pd.DataFrame,
@@ -711,6 +771,24 @@ def render_citymap_panel() -> None:
     risk_df    = _load_worst_risk_per_cell(aoi_id)
     insight_df = _load_open_insights_by_cell(aoi_id)
     event_df   = _load_event_points(aoi_id)
+
+    # ── Roll cells up to the AOI's declared resolution ────────────────────
+    # Cells ingest at H3 res 8 (~0.74 km²); an airshed view declares res 5
+    # (~252 km²) so the operator can actually see the data at zoom 5.
+    # Aggregate each layer to parent cells at the AOI resolution, keeping
+    # the worst-severity child per parent (so a single hot res-8 cell makes
+    # its res-5 parent hot).
+    aoi_res = resolution_of(aoi_id)
+    insight_tier_rank = {"critical": 3, "high": 2, "medium": 1}
+    risk_df    = _rollup_cells_to_resolution(
+        risk_df, aoi_res,
+        severity_col="risk_level", severity_rank=_RISK_RANK,
+    )
+    insight_df = _rollup_cells_to_resolution(
+        insight_df, aoi_res,
+        severity_col="priority_tier", severity_rank=insight_tier_rank,
+    )
+    event_df   = _rollup_icons_to_resolution(event_df, aoi_res)
 
     layers = _build_layers(
         risk_df, insight_df, event_df,
