@@ -289,6 +289,25 @@ class Scheduler:
             if total_insights:
                 logger.info("Sweep #%d agent: %d new insight(s)", self._sweep_count, total_insights)
 
+        # 2c — Airshed agent (Phase 4+). For every enabled non-city AOI,
+        # runs the airshed-expert agent on its top-N res-`AOI` parent
+        # cells (default 10, override via AIRSHED_INSIGHTS_TOP_N env var
+        # or disable entirely via AIRSHED_INSIGHTS_DISABLED=1). One LLM
+        # call per parent; produces regional-scale insights routed to
+        # airshed bodies (CPCB Central / NCAP).
+        if self.run_agent:
+            try:
+                from airos.agents.airshed_expert import run_airshed_insights
+                airshed_results = run_airshed_insights()
+                total_airshed = sum(airshed_results.values())
+                if total_airshed:
+                    logger.info(
+                        "Sweep #%d airshed agent: %d insight(s) across %d AOI(s)",
+                        self._sweep_count, total_airshed, len(airshed_results),
+                    )
+            except Exception as exc:
+                logger.warning("[airshed-agent] step failed: %s", exc)
+
         # 2b — Process on-demand analysis requests (max 3 per sweep)
         analysis_completed = 0
         try:
