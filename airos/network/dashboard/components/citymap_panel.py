@@ -61,18 +61,30 @@ _RISK_RANK: dict[str, int] = {
     "good": 0, "low": 1, "unknown": 1, "moderate": 2, "high": 3, "severe": 4,
 }
 
-# Icon mapping for point-event domains. Uses public Maki icons via CDN —
-# no auth, simple PNGs. Width/height enforced in IconLayer.
+# Icon mapping for point-event domains. Uses public icons8 PNGs via CDN —
+# no auth. Sizes are normalised in the IconLayer (size_units='pixels',
+# get_size=18) so every icon renders at the same on-screen footprint
+# regardless of map zoom, instead of fire icons dominating the view.
 _ICON_ATLAS = {
-    "fire":  {"url": "https://img.icons8.com/color/48/000000/fire-element.png",
-              "label": "Fire / FRP"},
-    "waste": {"url": "https://img.icons8.com/color/48/000000/biohazard.png",
-              "label": "Waste hotspot"},
-    "crowd": {"url": "https://img.icons8.com/color/48/000000/conference-call.png",
-              "label": "Crowd / gathering"},
-    "flood": {"url": "https://img.icons8.com/color/48/000000/wave.png",
-              "label": "Flood risk"},
+    "fire":         {"url": "https://img.icons8.com/color/48/000000/fire-element.png",
+                     "label": "Fire / FRP"},
+    "waste":        {"url": "https://img.icons8.com/color/48/000000/biohazard.png",
+                     "label": "Waste hotspot"},
+    "crowd":        {"url": "https://img.icons8.com/color/48/000000/conference-call.png",
+                     "label": "Crowd / gathering"},
+    "flood":        {"url": "https://img.icons8.com/color/48/000000/wave.png",
+                     "label": "Flood risk"},
+    "construction": {"url": "https://img.icons8.com/color/48/000000/under-construction.png",
+                     "label": "Construction"},
+    "industrial":   {"url": "https://img.icons8.com/color/48/000000/factory.png",
+                     "label": "Industrial cluster"},
+    "wind":         {"url": "https://img.icons8.com/ios-filled/50/0e62b8/up--v1.png",
+                     "label": "Wind direction"},
 }
+
+# Pixel size for every map icon — fixed so they stay readable but never
+# dominate at high zoom-out (the IGP airshed view at zoom 5).
+_ICON_PIXEL_SIZE = 18
 
 
 def _db_path() -> str:
@@ -368,7 +380,152 @@ def _load_event_points(aoi_id: str) -> pd.DataFrame:
             "lon":      float(lon),
             "magnitude": "high flood risk",
         })
+
+    # Construction + industrial point markers — from POI counts already
+    # ingested per-city. Threshold keeps the icon density manageable.
+    out.extend(_poi_hotspot_points(bbox, threshold=3))
+
+    # Wind direction arrows — one per AOI member city's centroid,
+    # rotated by the latest WIND_DIR_DEG for that cell.
+    out.extend(_wind_arrow_points(aoi_id, bbox))
+
     return pd.DataFrame(out)
+
+
+def _poi_hotspot_points(bbox: dict, *, threshold: int = 3) -> list[dict]:
+    """Return construction + industrial icon points where POI counts
+    exceed `threshold` in any cell inside the bbox. Helps the airshed
+    view show structural emission sources alongside fires."""
+    conn = sqlite3.connect(_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.h3_id, s.signal, s.value,
+                   m.centroid_lat, m.centroid_lon
+            FROM h3_signals s
+            INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+            INNER JOIN (
+                SELECT h3_id, signal, MAX(hour_bucket) AS hb
+                FROM h3_signals
+                WHERE signal IN ('POI_CONSTRUCTION_COUNT', 'POI_INDUSTRIAL_COUNT')
+                GROUP BY h3_id, signal
+            ) latest ON latest.h3_id = s.h3_id
+                    AND latest.signal = s.signal
+                    AND latest.hb = s.hour_bucket
+            WHERE s.value >= ?
+              AND m.centroid_lat BETWEEN ? AND ?
+              AND m.centroid_lon BETWEEN ? AND ?
+            """,
+            (float(threshold),
+             bbox["lat_min"], bbox["lat_max"],
+             bbox["lon_min"], bbox["lon_max"]),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    out: list[dict] = []
+    for r in rows:
+        sig_to_domain = {
+            "POI_CONSTRUCTION_COUNT": "construction",
+            "POI_INDUSTRIAL_COUNT":   "industrial",
+        }
+        domain = sig_to_domain.get(r["signal"])
+        if domain is None:
+            continue
+        out.append({
+            "h3_id":    r["h3_id"],
+            "domain":   domain,
+            "lat":      float(r["centroid_lat"]),
+            "lon":      float(r["centroid_lon"]),
+            "magnitude": f"{r['signal']}={r['value']:.0f}",
+        })
+    return out
+
+
+def _wind_arrow_points(aoi_id: str, bbox: dict) -> list[dict]:
+    """One wind-direction arrow per AOI member city (or the AOI itself
+    if it's a city). The arrow icon rotates by WIND_DIR_DEG so the
+    operator can see prevailing advection at the airshed scale.
+
+    Wind is city-broadcast (one OpenMeteo point per city) so we get
+    one arrow per ingested wind source — typically 3-5 arrows across
+    an airshed AOI, which is exactly the right density to read.
+    """
+    from airos.os.aoi_registry import get_aoi
+    try:
+        cfg = get_aoi(aoi_id)
+    except KeyError:
+        return []
+
+    # For city AOI: arrow at the city centroid. For airshed/etc.: arrows
+    # at every member city's centroid (or sampled grid if no members).
+    if cfg["kind"] == "city":
+        city_aois = [aoi_id]
+    else:
+        city_aois = cfg.get("member_aois") or []
+    if not city_aois:
+        return []
+
+    conn = sqlite3.connect(_db_path())
+    conn.row_factory = sqlite3.Row
+    out: list[dict] = []
+    try:
+        for cid in city_aois:
+            try:
+                ccfg = get_aoi(cid)
+            except KeyError:
+                continue
+            cbbox = ccfg["bbox"]
+            centre_lat = (cbbox["lat_min"] + cbbox["lat_max"]) / 2
+            centre_lon = (cbbox["lon_min"] + cbbox["lon_max"]) / 2
+            if not (bbox["lat_min"] <= centre_lat <= bbox["lat_max"]
+                    and bbox["lon_min"] <= centre_lon <= bbox["lon_max"]):
+                continue
+            # Latest WIND_DIR_DEG + WIND_SPEED_KMH near this city centroid
+            row = conn.execute(
+                """
+                SELECT s.signal, s.value
+                FROM h3_signals s
+                INNER JOIN h3_metadata m ON m.h3_id = s.h3_id
+                WHERE s.signal IN ('WIND_DIR_DEG', 'WIND_SPEED_KMH')
+                  AND s.value IS NOT NULL
+                  AND m.centroid_lat BETWEEN ? AND ?
+                  AND m.centroid_lon BETWEEN ? AND ?
+                  AND s.hour_bucket >= datetime('now', '-6 hours')
+                ORDER BY s.hour_bucket DESC
+                """,
+                (cbbox["lat_min"], cbbox["lat_max"],
+                 cbbox["lon_min"], cbbox["lon_max"]),
+            ).fetchall()
+            wind_dir, wind_speed = None, None
+            for r in row:
+                if wind_dir is None and r["signal"] == "WIND_DIR_DEG":
+                    wind_dir = float(r["value"])
+                elif wind_speed is None and r["signal"] == "WIND_SPEED_KMH":
+                    wind_speed = float(r["value"])
+                if wind_dir is not None and wind_speed is not None:
+                    break
+            if wind_dir is None:
+                continue
+            # Meteorological wind_dir is the direction the wind is COMING
+            # FROM. We want the arrow to point in the direction the wind
+            # is GOING — so rotate by (wind_dir + 180) mod 360. The icon
+            # asset is an upward-pointing arrow (north), so applying this
+            # angle directly gives the downwind heading.
+            arrow_angle = (wind_dir + 180.0) % 360.0
+            ws_label = f" @ {wind_speed:.1f} km/h" if wind_speed is not None else ""
+            out.append({
+                "h3_id":    f"wind_{cid}",
+                "domain":   "wind",
+                "lat":      centre_lat,
+                "lon":      centre_lon,
+                "magnitude": f"wind from {wind_dir:.0f}°{ws_label}",
+                "angle":    arrow_angle,
+            })
+    finally:
+        conn.close()
+    return out
 
 
 # ── Layer assembly ───────────────────────────────────────────────────────────
@@ -488,22 +645,31 @@ def _build_layers(
             id="insight_border",
         ))
 
-    # 3. Event icons — Fire / Waste / Crowd / Flood
+    # 3. Event icons — Fire / Waste / Crowd / Flood / Construction /
+    #    Industrial / Wind. Fixed pixel size so no icon dominates at
+    #    airshed zoom levels (the IGP-North view at zoom 5).
     if show_event_icons and not event_df.empty:
         event_df = event_df.copy()
         event_df["icon_data"] = event_df["domain"].map(
             lambda d: {
                 "url": _ICON_ATLAS.get(d, _ICON_ATLAS["fire"])["url"],
-                "width": 96, "height": 96, "anchorY": 96,
+                "width": 96, "height": 96, "anchorY": 48,
             }
         )
+        # Wind icons rotate by their `angle` column (degrees, deck.gl
+        # convention: 0 = up/north, clockwise positive). Other icons
+        # default to 0 (no rotation).
+        if "angle" not in event_df.columns:
+            event_df["angle"] = 0.0
+        event_df["angle"] = event_df["angle"].fillna(0.0)
         layers.append(pdk.Layer(
             "IconLayer",
             data=event_df,
             get_icon="icon_data",
             get_position=["lon", "lat"],
-            get_size=4,
-            size_scale=8,
+            get_size=_ICON_PIXEL_SIZE,
+            size_units="pixels",       # fixed pixel size at any zoom
+            get_angle="angle",
             pickable=True,
             id="event_icons",
         ))
